@@ -17,6 +17,9 @@ npx hardhat ignition deploy ./ignition/modules/Lock.ts
 
 //Test
 npx hardhat test
+npx hardhat test --verbose
+npx hardhat coverage
+
 
 //Compile after a change
 npx hardhat compile
