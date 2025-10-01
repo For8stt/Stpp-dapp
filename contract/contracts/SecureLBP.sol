@@ -2,12 +2,17 @@
 pragma solidity ^0.8.28;
 
 /*
- SecureLBP.sol
+ SecureLBP.sol (Oracle-integrated)
 
- Policy: commit-reveal LBP with adaptive fees, oracle-driven pauses, vesting registration,
- caps, penalty for unrevealed commits, pull-based payments, SafeERC20, events, chunked finalize.
+Policy: commit-reveal LBP with adaptive fees, oracle-driven pauses,
+vesting registration, caps, penalty for unrevealed commits,
+pull-based payments, SafeERC20, events, chunked finalize.
+Intended for integration in STPP pipeline (DutchAuction -> LBP -> Vesting).
 
- Intended for integration in STPP pipeline (DutchAuction -> LBP -> Vesting).
+ Commit-reveal LBP with adaptive fees and oracle-driven pauses.
+ - Integrates with an external Oracle via ILBPOracle interface.
+ - If oracle is set, commit/reveal check oracle.isPaused() and
+   use oracle.viewAdaptiveFee() for adaptive fees.
 */
 
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -17,8 +22,17 @@ import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 interface IVesting {
-/// @notice Vesting contract must allow registration of an array of beneficiaries and allocations
-function registerAllocations(address[] calldata beneficiaries, uint256[] calldata amounts) external;
+    /// @notice Vesting contract must allow registration of an array of beneficiaries and allocations
+    function registerAllocations(address[] calldata beneficiaries, uint256[] calldata amounts) external;
+}
+
+/// Minimal interface that SecureLBP expects from the Oracle
+interface ILBPOracle {
+    /// @notice Returns whether oracle has signaled pause (true => paused)
+    function isPaused() external view returns (bool);
+
+    /// @notice Returns adaptive fee in BP (10000 == 100%). Must be view.
+    function viewAdaptiveFee() external view returns (uint256);
 }
 
 contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
@@ -31,17 +45,16 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
     uint256 public immutable revealEnd;      // end of reveal phase (end of LBP)
     address public treasury;                 // destination for collected funds after finalize (pull)
 
-
     // basis points: 10000 == 100%
-    uint256 public initialFeeBP = 1000; // 10% -> may be changed by oracleGuardian
-    uint256 public finalFeeBP   = 100;  // 1%
+    uint256 public initialFeeBP = 1000; // 10% -> fallback linear schedule
+    uint256 public finalFeeBP   = 100;  // 1%  -> fallback linear schedule
     uint256 public collectedETH;        // total ETH collected (including unrevealed commits)
     uint256 public constant BP_SCALE = 10000;
 
     uint256 public maxContributionPerAddress = 5 ether; // per-address cap (can be changed by onlyOwner)
 
-    // oracle / guardian for adaptive fee / pause
-    address public oracleGuardian;
+    // Oracle that drives adaptive fees and pause signals. Optional.
+    ILBPOracle public oracle;
 
     // ============ DATA STRUCTURES ============
     struct Commit {
@@ -55,7 +68,7 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
     mapping(address => mapping(bytes32 => Commit)) private _commits;
     mapping(address => uint256) public totalCommittedBy;     // total ETH committed by user (for caps)
 
-    mapping(address => uint256) public allocations;          // tokens user will get after reveal (in natural token units)
+    mapping(address => uint256) public allocations;          // tokens user will get after reveal (in token units)
     mapping(address => uint256) public pendingRefunds;       // ETH scheduled for withdrawal (e.g., after penalty)
 
     // events
@@ -68,6 +81,7 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
     event WithdrawnETH(address to, uint256 amount);
     event RefundWithdrawn(address user, uint256 amount);
     event TreasurySet(address treasury);
+    event OracleSet(address oracleAddr);
 
     // ============ CONSTRUCTOR ============
     constructor(
@@ -90,8 +104,11 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
     }
 
     // ============ MODIFIERS ============
-    modifier onlyOracle() {
-        require(msg.sender == oracleGuardian || msg.sender == owner(), "not oracle");
+    /// Check oracle pause state before executing (if oracle is set).
+    modifier checkOracle() {
+        if (address(oracle) != address(0)) {
+            require(!oracle.isPaused(), "paused by oracle");
+        }
         _;
     }
 
@@ -99,7 +116,7 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
 
     /// @notice Commit: adds a hash and ETH. User may create multiple different commitHashes
     /// Recommended hash format: keccak256(abi.encodePacked(msg.sender, amountETH, nonce, address(this)))
-    function commitBid(bytes32 commitHash) external payable whenNotPaused nonReentrant {
+    function commitBid(bytes32 commitHash) external payable whenNotPaused checkOracle nonReentrant {
         require(block.timestamp >= startTime && block.timestamp <= commitEnd, "not in commit window");
         require(msg.value > 0, "zero bid");
         require(totalCommittedBy[msg.sender] + msg.value <= maxContributionPerAddress, "exceeds per-address cap");
@@ -122,14 +139,14 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
     /// @param amountETH - the ETH amount that was hashed
     /// @param nonce - secret nonce
     /// Hash should be: keccak256(abi.encodePacked(msg.sender, amountETH, nonce, address(this)))
-    function revealBid(uint256 amountETH, uint256 nonce) external whenNotPaused nonReentrant {
+    function revealBid(uint256 amountETH, uint256 nonce) external whenNotPaused checkOracle nonReentrant {
         require(block.timestamp > commitEnd && block.timestamp <= revealEnd, "not in reveal window");
         bytes32 expected = keccak256(abi.encodePacked(msg.sender, amountETH, nonce, address(this)));
         Commit storage c = _commits[msg.sender][expected];
         require(!c.processed, "already processed");
         require(c.amountETH == amountETH && amountETH > 0, "amount mismatch or zero");
 
-        // fee in BP at current moment (linear between initialFeeBP and finalFeeBP based on reveal window)
+        // fee in BP at current moment: prefer oracle-driven adaptive fee if oracle is set
         uint256 feeBP = _currentFeeBP();
 
         // calculate fee
@@ -137,7 +154,7 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
         uint256 net = amountETH - fee;
 
         // --- PRICE MODEL ---
-        // PLACEHOLDER: here we should put real LBP price math or call oracle/pool logic
+        // PLACEHOLDER: here you should call real LBP price math or oracle/pool logic
         // For demo: 1 ETH = 100 tokens (as before). In production: use Uniswap/Pool pricing math.
         uint256 tokensBought = net * 100;
 
@@ -154,9 +171,9 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
 
     // ============ PENALTY for non-revealed ============
 
-    /// @notice After revealEnd, oracle-owner may penalize unrevealed commits: keep penaltyBP% and refund the rest
+    /// @notice After revealEnd, owner may penalize unrevealed commits: keep penaltyBP% and refund the rest
     /// penaltyBP is in BP scale (e.g. 1000 == 10%)
-    function penalizeNonRevealed(address user, bytes32 commitHash, uint256 penaltyBP) external onlyOracle nonReentrant {
+    function penalizeNonRevealed(address user, bytes32 commitHash, uint256 penaltyBP) external onlyOwner nonReentrant {
         require(block.timestamp > revealEnd, "reveal not ended");
         Commit storage c = _commits[user][commitHash];
         require(!c.processed && c.amountETH > 0, "nothing to penalize");
@@ -188,10 +205,23 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
         emit RefundWithdrawn(msg.sender, amt);
     }
 
-    // ============ FEE LOGIC (adaptive) ============
-
-    /// @notice Current base fee (linear change between initialFeeBP and finalFeeBP over reveal period)
+    // ============ FEE LOGIC (adaptive + fallback) ============
+    /// @notice Return current fee BP. If oracle set, prefer oracle.viewAdaptiveFee() (view).
     function _currentFeeBP() internal view returns (uint256) {
+        if (address(oracle) != address(0)) {
+            // oracle should implement viewAdaptiveFee() as view
+            try oracle.viewAdaptiveFee() returns (uint256 oracleFeeBP) {
+                // sanity bound: fee must be <= BP_SCALE
+                if (oracleFeeBP > BP_SCALE) {
+                    return BP_SCALE;
+                }
+                return oracleFeeBP;
+            } catch {
+                // if oracle call reverts for some reason, fallback to local schedule
+            }
+        }
+
+        // fallback: linear schedule between initialFeeBP and finalFeeBP over reveal period
         if (block.timestamp <= startTime) {
             return initialFeeBP;
         }
@@ -200,40 +230,31 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
         }
         uint256 elapsed = block.timestamp - startTime;
         uint256 duration = revealEnd - startTime;
-        uint256 drop = 0;
-        if (initialFeeBP > finalFeeBP) {
-            drop = initialFeeBP - finalFeeBP;
-            return initialFeeBP - (drop * elapsed) / duration;
-        } else {
-            // safeguard
+        if (initialFeeBP <= finalFeeBP) {
             return finalFeeBP;
         }
+        uint256 drop = initialFeeBP - finalFeeBP;
+        return initialFeeBP - (drop * elapsed) / duration;
     }
 
-    /// @notice Oracle/guardian may update the base initialFeeBP (adaptive fee)
-    function updateInitialFeeBP(uint256 newInitialBP) external onlyOracle {
-        initialFeeBP = newInitialBP;
-        emit OracleFeeUpdated(newInitialBP);
+    // ============ ORACLE / PAUSE INTEGRATION ============
+    /// @notice Set oracle contract (onlyOwner)
+    function setOracle(address _oracle) external onlyOwner {
+        oracle = ILBPOracle(_oracle);
+        emit OracleSet(_oracle);
     }
 
-    function updateFinalFeeBP(uint256 newFinalBP) external onlyOracle {
-        finalFeeBP = newFinalBP;
-        emit OracleFeeUpdated(newFinalBP);
-    }
-
-    /// @notice In case of anomaly, oracleGuardian may pause the contract.
-    /// Normal pause/unpause calls are used, event logs timestamp of pause.
-    function oraclePause() external onlyOracle {
+    /// @notice Owner can still manually pause if necessary
+    function ownerPause() external onlyOwner {
         _pause();
         emit OraclePaused(block.timestamp);
     }
 
-    function oracleUnpause() external onlyOracle {
+    function ownerUnpause() external onlyOwner {
         _unpause();
     }
 
     // ============ FINALIZE / VESTING ============
-
     /// @notice Transfer tokens to vesting contract and register all allocations (array of beneficiaries).
     /// To avoid OOG, finalizeToVesting must be called in chunks (e.g., 100–200 beneficiaries per call)
     function finalizeToVesting(address vestingContract, address[] calldata beneficiaries) external onlyOwner nonReentrant {
@@ -262,7 +283,8 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
 
         emit FinalizedToVesting(vestingContract, totalTokens);
     }
-// ============ WITHDRAWALS / TREASURY ============
+
+    // ============ WITHDRAWALS / TREASURY ============
     /// @notice Owner can withdraw ETH (fees + revealed amounts) to treasury or given address.
     /// It is recommended to do this ONLY after finalize.
     function withdrawETH(address payable to, uint256 amount) external onlyOwner nonReentrant {
@@ -281,10 +303,6 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
     }
 
     // ============ ADMIN / CONFIG ============
-    function setOracleGuardian(address _g) external onlyOwner {
-        oracleGuardian = _g;
-    }
-
     function setMaxContributionPerAddress(uint256 _cap) external onlyOwner {
         maxContributionPerAddress = _cap;
     }
@@ -298,6 +316,9 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
     // ============ GETTERS (view helpers) ============
     function getCommit(address user, bytes32 commitHash) external view returns (Commit memory) {
         return _commits[user][commitHash];
+    }
+    function currentFeeBP() external view returns (uint256) {
+        return _currentFeeBP();
     }
 
     // fallback to accept ETH (commits should use commitBid)
