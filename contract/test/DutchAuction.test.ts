@@ -3,7 +3,7 @@ import { ethers } from "hardhat";
 import { DutchAuction, IERC20 } from "../typechain-types";
 import { Signer } from "ethers";
 
-//npx hardhat test test/DutchAuction.test.ts
+// npx hardhat test test/DutchAuction.test.ts
 describe("DutchAuction", () => {
     let token: IERC20;
     let auction: DutchAuction;

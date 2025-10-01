@@ -41,7 +41,7 @@ async function main() {
     console.log("TestVesting deployed at:", await vesting.getAddress());
 
     // 7. Set oracle guardian
-    await lbp.connect(owner).setOracleGuardian(oracle.address);
+    await lbp.connect(owner).setOracle(oracle.address);
     console.log("Oracle guardian set:", oracle.address);
 
     console.log("Deployment complete!");

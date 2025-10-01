@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.20;
 
-import "./LBPOracle.sol"; // щоб підтягнути інтерфейс IChainlinkPriceFeed
+import "../LBPOracle.sol"; // щоб підтягнути інтерфейс IChainlinkPriceFeed
 
 contract MockPriceFeed is IChainlinkPriceFeed {
     int256 private price;
