@@ -11,12 +11,14 @@
   "license": "ISC",
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^6.1.0",
+    "@types/seedrandom": "^3.0.8",
     "chai": "^4.3.6",
     "ethers": "^6.15.0",
     "hardhat": "^2.26.3",
     "prettier": "^3.3.2"
   },
   "dependencies": {
-    "@openzeppelin/contracts": "^4.9.6"
+    "@openzeppelin/contracts": "^4.9.6",
+    "seedrandom": "^3.0.5"
   }
 }
