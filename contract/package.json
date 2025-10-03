@@ -19,6 +19,8 @@
   },
   "dependencies": {
     "@openzeppelin/contracts": "^4.9.6",
+    "@prb/math": "^4.1.0",
+    "prb-math": "^2.4.3",
     "seedrandom": "^3.0.5"
   }
 }

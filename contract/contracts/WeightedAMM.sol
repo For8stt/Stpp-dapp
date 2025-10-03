@@ -1,0 +1,209 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import "prb-math/contracts/PRBMathUD60x18.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/security/Pausable.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+
+contract LBPWeightedAMM is ReentrancyGuard, Pausable, Ownable {
+    using SafeERC20 for IERC20;
+
+    IERC20 public immutable token;
+    uint256 public reserveToken;
+    uint256 public reserveETH;
+
+    uint256 public immutable swapFee; // in 1e18 fixed-point, e.g., 3e15 = 0.3%
+
+    // LP simple
+    uint256 public totalSupplyLP;
+    mapping(address => uint256) public balanceLP;
+
+    // ========== LBP dynamic weights ==========
+    uint256 public startTime;
+    uint256 public endTime;
+    uint256 public startWeightToken; // e.g., 7e17
+    uint256 public endWeightToken;   // e.g., 5e17
+
+    uint256 public constant SCALE = 1e18;
+
+    event LiquidityAdded(address indexed user, uint256 tokenAmount, uint256 ethAmount, uint256 lpMinted);
+    event LiquidityRemoved(address indexed user, uint256 tokenAmount, uint256 ethAmount, uint256 lpBurned);
+    event SwapTokenForETH(address indexed user, uint256 tokenIn, uint256 ethOut, uint256 feeAmount);
+    event SwapETHForToken(address indexed user, uint256 ethIn, uint256 tokenOut, uint256 feeAmount);
+
+    constructor(
+        address _token,
+        uint256 _startWeightToken,
+        uint256 _endWeightToken,
+        uint256 _startTime,
+        uint256 _endTime,
+        uint256 _swapFee
+    ) {
+        require(_token != address(0), "zero token");
+        require(_startTime < _endTime, "invalid times");
+        require(_startWeightToken > 0 && _endWeightToken > 0, "weights>0");
+        require(_startWeightToken <= SCALE && _endWeightToken <= SCALE, "weight >1");
+        require(_startWeightToken + _endWeightToken <= SCALE * 2, "invalid weights sum"); // Allow sum <=2 for flexibility, but ideally ==SCALE
+
+        token = IERC20(_token);
+        startWeightToken = _startWeightToken;
+        endWeightToken = _endWeightToken;
+        startTime = _startTime;
+        endTime = _endTime;
+        swapFee = _swapFee;
+    }
+
+    // ========= Helper =========
+    function currentWeights() public view returns (uint256 weightTokenCurr, uint256 weightETHCurr) {
+        if (block.timestamp <= startTime) {
+            weightTokenCurr = startWeightToken;
+        } else if (block.timestamp >= endTime) {
+            weightTokenCurr = endWeightToken;
+        } else {
+            uint256 elapsed = block.timestamp - startTime;
+            uint256 duration = endTime - startTime;
+
+            uint256 weightDiff = startWeightToken > endWeightToken
+                ? startWeightToken - endWeightToken
+                : endWeightToken - startWeightToken;
+
+            bool isDecreasing = startWeightToken > endWeightToken;
+
+            unchecked {
+                uint256 change = (weightDiff * elapsed) / duration;
+                weightTokenCurr = isDecreasing
+                    ? startWeightToken - change
+                    : startWeightToken + change;
+            }
+        }
+        weightETHCurr = SCALE - weightTokenCurr;
+    }
+
+    // ========= Add / Remove Liquidity =========
+    function addLiquidity(uint256 tokenAmount) external payable whenNotPaused nonReentrant returns (uint256 lpMinted) {
+        require(tokenAmount > 0 && msg.value > 0, "zero amounts");
+
+        token.safeTransferFrom(msg.sender, address(this), tokenAmount);
+
+        if (totalSupplyLP == 0) {
+            lpMinted = _sqrt(tokenAmount * msg.value);
+        } else {
+            uint256 liqFromToken = (tokenAmount * totalSupplyLP) / reserveToken;
+            uint256 liqFromEth = (msg.value * totalSupplyLP) / reserveETH;
+            lpMinted = liqFromToken < liqFromEth ? liqFromToken : liqFromEth;
+        }
+
+        require(lpMinted > 0, "zero lp minted");
+
+        reserveToken += tokenAmount;
+        reserveETH += msg.value;
+
+        balanceLP[msg.sender] += lpMinted;
+        totalSupplyLP += lpMinted;
+
+        emit LiquidityAdded(msg.sender, tokenAmount, msg.value, lpMinted);
+    }
+
+    function removeLiquidity(uint256 lpAmount) external nonReentrant whenNotPaused {
+        require(lpAmount > 0 && balanceLP[msg.sender] >= lpAmount, "invalid lp");
+
+        uint256 tokenOut = (reserveToken * lpAmount) / totalSupplyLP;
+        uint256 ethOut = (reserveETH * lpAmount) / totalSupplyLP;
+
+        reserveToken -= tokenOut;
+        reserveETH -= ethOut;
+
+        balanceLP[msg.sender] -= lpAmount;
+        totalSupplyLP -= lpAmount;
+
+        token.safeTransfer(msg.sender, tokenOut);
+        (bool ok,) = payable(msg.sender).call{value: ethOut}("");
+        require(ok, "eth transfer failed");
+
+        emit LiquidityRemoved(msg.sender, tokenOut, ethOut, lpAmount);
+    }
+
+    // ========= Swaps =========
+    function swapTokenForETH(uint256 tokenIn, uint256 minEthOut) external nonReentrant whenNotPaused returns (uint256 ethOut) {
+        require(tokenIn > 0, "zero in");
+        token.safeTransferFrom(msg.sender, address(this), tokenIn);
+
+        unchecked {
+            uint256 feeAmount = (tokenIn * swapFee) / SCALE;
+            uint256 tokenInAfterFee = tokenIn - feeAmount;
+            if (tokenInAfterFee == 0) revert("zero after fee"); // Early revert
+
+            (uint256 wToken, uint256 wETH) = currentWeights();
+
+            ethOut = _calcOutGivenIn(reserveToken, reserveETH, wToken, wETH, tokenInAfterFee);
+
+            require(ethOut >= minEthOut, "slippage");
+
+            reserveToken += tokenIn;
+            reserveETH -= ethOut;
+
+            (bool ok,) = payable(msg.sender).call{value: ethOut}("");
+            require(ok, "eth transfer failed");
+
+            emit SwapTokenForETH(msg.sender, tokenIn, ethOut, feeAmount);
+        }
+    }
+
+    function swapETHForToken(uint256 minTokenOut) external payable nonReentrant whenNotPaused returns (uint256 tokenOut) {
+        require(msg.value > 0, "zero eth");
+        unchecked {
+            uint256 feeAmount = (msg.value * swapFee) / SCALE;
+            uint256 ethInAfterFee = msg.value - feeAmount;
+            if (ethInAfterFee == 0) revert("zero after fee");
+
+            (uint256 wToken, uint256 wETH) = currentWeights();
+
+            tokenOut = _calcOutGivenIn(reserveETH, reserveToken, wETH, wToken, ethInAfterFee);
+
+            require(tokenOut >= minTokenOut, "slippage");
+
+            reserveETH += msg.value;
+            reserveToken -= tokenOut;
+
+            token.safeTransfer(msg.sender, tokenOut);
+
+            emit SwapETHForToken(msg.sender, msg.value, tokenOut, feeAmount);
+        }
+    }
+
+    // ========= Core math =========
+    function _calcOutGivenIn(
+        uint256 balanceIn,
+        uint256 balanceOut,
+        uint256 weightIn,
+        uint256 weightOut,
+        uint256 amountIn
+    ) internal view returns (uint256) {
+        require(balanceIn > 0 && balanceOut > 0, "empty pool");
+
+        // Rewritten to avoid log2 on value <1: use b = (balIn + in)/balIn >1, then 1 - 1/b^y
+        uint256 b = (balanceIn + amountIn) * SCALE / balanceIn;
+        uint256 y = (weightIn * SCALE) / weightOut;
+        uint256 power = PRBMathUD60x18.pow(b, y);
+        uint256 invPower = PRBMathUD60x18.div(SCALE, power);
+        uint256 factor = SCALE - invPower;
+
+        return (balanceOut * factor) / SCALE;
+    }
+
+    // ========= Utilities =========
+    function _sqrt(uint256 x) internal pure returns (uint256 y) {
+        if (x == 0) return 0;
+        uint256 z = (x + 1) / 2;
+        y = x;
+        while (z < y) {
+            y = z;
+            z = (x / z + z) / 2;
+        }
+    }
+
+    receive() external payable {}
+}
