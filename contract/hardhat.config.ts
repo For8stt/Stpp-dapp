@@ -9,6 +9,7 @@ const config: HardhatUserConfig = {
       accounts: {
         count: 20,
       },
+      allowUnlimitedContractSize: true,
     },
     localhost: {
       url: "http://127.0.0.1:8545",

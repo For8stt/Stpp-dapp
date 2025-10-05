@@ -46,7 +46,7 @@ contract LBPWeightedAMM is ReentrancyGuard, Pausable, Ownable {
         require(_startTime < _endTime, "invalid times");
         require(_startWeightToken > 0 && _endWeightToken > 0, "weights>0");
         require(_startWeightToken <= SCALE && _endWeightToken <= SCALE, "weight >1");
-        require(_startWeightToken + _endWeightToken <= SCALE * 2, "invalid weights sum"); // Allow sum <=2 for flexibility, but ideally ==SCALE
+        require(_startWeightToken + _endWeightToken <= SCALE * 2, "invalid weights sum");
 
         token = IERC20(_token);
         startWeightToken = _startWeightToken;
@@ -134,12 +134,11 @@ contract LBPWeightedAMM is ReentrancyGuard, Pausable, Ownable {
         unchecked {
             uint256 feeAmount = (tokenIn * swapFee) / SCALE;
             uint256 tokenInAfterFee = tokenIn - feeAmount;
-            if (tokenInAfterFee == 0) revert("zero after fee"); // Early revert
+            if (tokenInAfterFee == 0) revert("zero after fee");
 
             (uint256 wToken, uint256 wETH) = currentWeights();
 
             ethOut = _calcOutGivenIn(reserveToken, reserveETH, wToken, wETH, tokenInAfterFee);
-
             require(ethOut >= minEthOut, "slippage");
 
             reserveToken += tokenIn;
@@ -164,6 +163,7 @@ contract LBPWeightedAMM is ReentrancyGuard, Pausable, Ownable {
             tokenOut = _calcOutGivenIn(reserveETH, reserveToken, wETH, wToken, ethInAfterFee);
 
             require(tokenOut >= minTokenOut, "slippage");
+            require(token.balanceOf(address(this)) >= tokenOut, "insufficient token balance");
 
             reserveETH += msg.value;
             reserveToken -= tokenOut;
@@ -172,6 +172,26 @@ contract LBPWeightedAMM is ReentrancyGuard, Pausable, Ownable {
 
             emit SwapETHForToken(msg.sender, msg.value, tokenOut, feeAmount);
         }
+    }
+
+
+    // ========= Quote Functions (for external use, e.g., SecureLBP) =========
+    /// @notice Quote tokens out for ETH in (includes pool fee, view).
+    function quoteETHForToken(uint256 ethIn) external view returns (uint256 tokenOut) {
+        if (ethIn == 0) return 0;
+        uint256 feeAmount = PRBMathUD60x18.mul(ethIn, swapFee) / SCALE;
+        uint256 ethInAfterFee = ethIn - feeAmount;
+        (uint256 wETH, uint256 wToken) = currentWeights();
+        return _calcOutGivenIn(reserveETH, reserveToken, wETH, wToken, ethInAfterFee);
+    }
+
+    /// @notice Quote ETH out for token in (includes pool fee, view).
+    function quoteTokenForETH(uint256 tokenIn) external view returns (uint256 ethOut) {
+        if (tokenIn == 0) return 0;
+        uint256 feeAmount = PRBMathUD60x18.mul(tokenIn, swapFee) / SCALE;
+        uint256 tokenInAfterFee = tokenIn - feeAmount;
+        (uint256 wToken, uint256 wETH) = currentWeights();
+        return _calcOutGivenIn(reserveToken, reserveETH, wToken, wETH, tokenInAfterFee);
     }
 
     // ========= Core math =========
@@ -193,6 +213,19 @@ contract LBPWeightedAMM is ReentrancyGuard, Pausable, Ownable {
 
         return (balanceOut * factor) / SCALE;
     }
+
+    /// @notice Return current token weight in 1e18 fixed-point
+    function getCurrentWeightToken() external view returns (uint256) {
+        (uint256 wToken, ) = currentWeights();
+        return wToken;
+    }
+
+    /// @notice Return current ETH weight in 1e18 fixed-point
+    function getCurrentWeightETH() external view returns (uint256) {
+        (, uint256 wETH) = currentWeights();
+        return wETH;
+    }
+
 
     // ========= Utilities =========
     function _sqrt(uint256 x) internal pure returns (uint256 y) {

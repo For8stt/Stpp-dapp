@@ -1,9 +1,9 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
-import { DutchAuction, IERC20 } from "../typechain-types";
+import { DutchAuction, IERC20, MockPresaleManager } from "../../typechain-types";
 import { Signer } from "ethers";
 
-// npx hardhat test test/DutchAuction.test.ts
+// npx hardhat test test/DutchAuction/DutchAuction.test.ts
 describe("DutchAuction", () => {
     let token: IERC20;
     let auction: DutchAuction;
@@ -22,20 +22,16 @@ describe("DutchAuction", () => {
     beforeEach(async () => {
         [owner, alice, bob] = await ethers.getSigners();
 
-        // Deploy the token
         const Token = await ethers.getContractFactory("TestToken");
         token = (await Token.deploy(TOTAL_SUPPLY)) as IERC20;
         await token.waitForDeployment();
 
-        // Get the timestamp of the latest Hardhat block
         const latestBlock = await ethers.provider.getBlock("latest");
         if (!latestBlock) throw new Error("Failed to fetch latest block");
 
-        // Set START_TIME and END_TIME relative to the block timestamp
-        START_TIME = latestBlock.timestamp + 20; // 20 seconds in the future
-        END_TIME = START_TIME + 120; // auction duration 120 seconds
+        START_TIME = latestBlock.timestamp + 20;
+        END_TIME = START_TIME + 120;
 
-        // Deploy the auction
         const Auction = await ethers.getContractFactory("DutchAuction");
         auction = (await Auction.deploy(
             await token.getAddress(),
@@ -45,11 +41,12 @@ describe("DutchAuction", () => {
             RESERVE_PRICE,
             TOTAL_TOKENS_FOR_SALE,
             SOFT_CAP,
-            EARLY_BONUS_DURATION
+            EARLY_BONUS_DURATION,
+            ethers.ZeroAddress // "0x0000000000000000000000000000000000000000"
         )) as DutchAuction;
+
         await auction.waitForDeployment();
 
-        // Transfer tokens to the auction
         await token.transfer(await auction.getAddress(), TOTAL_TOKENS_FOR_SALE);
     });
 
@@ -87,7 +84,6 @@ describe("DutchAuction", () => {
     });
 
     it("should settle a batch and allocate tokens", async () => {
-        // Get the latest block
         const latestBlock = await ethers.provider.getBlock("latest");
         if (!latestBlock) throw new Error("Failed to fetch latest block");
 
@@ -108,20 +104,16 @@ describe("DutchAuction", () => {
     });
 
     it("should finalize with success if softCap reached", async () => {
-        // Get the latest block
         const latestBlock = await ethers.provider.getBlock("latest");
         if (!latestBlock) throw new Error("Failed to fetch latest block");
 
-        // Move to auction phase
         const bidTime = Math.max(latestBlock.timestamp + 1, START_TIME + 1);
         await ethers.provider.send("evm_setNextBlockTimestamp", [bidTime]);
         await ethers.provider.send("evm_mine", []);
 
-        // Place bids
         await auction.connect(alice).placeBid({ value: ethers.parseEther("3") });
         await auction.connect(bob).placeBid({ value: ethers.parseEther("2") });
 
-        // Move time to auction end
         const latestBlock2 = await ethers.provider.getBlock("latest");
         if (!latestBlock2) throw new Error("Failed to fetch latest block");
         const auctionEndTime = Math.max(latestBlock2.timestamp + 1, END_TIME + 1);
@@ -134,29 +126,23 @@ describe("DutchAuction", () => {
     });
 
     it("should finalize with fail if softCap not reached", async () => {
-        // 1. Get the latest block
         const latestBlock = await ethers.provider.getBlock("latest");
         if (!latestBlock) throw new Error("Failed to fetch latest block");
 
-        // 2. Move to auction phase (+5 seconds buffer)
         const bidTime = Math.max(latestBlock.timestamp + 5, START_TIME + 1);
         await ethers.provider.send("evm_setNextBlockTimestamp", [bidTime]);
         await ethers.provider.send("evm_mine", []);
 
-        // 3. Place a bid
         await auction.connect(alice).placeBid({ value: ethers.parseEther("1") });
 
-        // 4. Move time to auction end (+1 second buffer)
         const latestBlock2 = await ethers.provider.getBlock("latest");
         if (!latestBlock2) throw new Error("Failed to fetch latest block2");
         const auctionEndTime = Math.max(latestBlock2.timestamp + 1, END_TIME + 1);
         await ethers.provider.send("evm_setNextBlockTimestamp", [auctionEndTime]);
         await ethers.provider.send("evm_mine", []);
 
-        // 5. Finalize auction
         await auction.finalize();
 
-        // 6. Check refundable flag
         expect(await auction.refundable()).to.equal(true);
     });
 
@@ -188,29 +174,23 @@ describe("DutchAuction", () => {
     });
 
     it("should refund ETH after failure", async () => {
-        // Get the latest block
         const latestBlock = await ethers.provider.getBlock("latest");
         if (!latestBlock) throw new Error("Failed to fetch latest block");
 
-        // Move time to auction phase
         const bidTime = Math.max(latestBlock.timestamp + 1, START_TIME + 1);
         await ethers.provider.send("evm_setNextBlockTimestamp", [bidTime]);
         await ethers.provider.send("evm_mine", []);
 
-        // Place a bid
         await auction.connect(alice).placeBid({ value: ethers.parseEther("1") });
 
-        // Move time to auction end
         const latestBlock2 = await ethers.provider.getBlock("latest");
         if (!latestBlock2) throw new Error("Failed to fetch latest block2");
         const auctionEndTime = Math.max(latestBlock2.timestamp + 1, END_TIME + 1);
         await ethers.provider.send("evm_setNextBlockTimestamp", [auctionEndTime]);
         await ethers.provider.send("evm_mine", []);
 
-        // Finalize auction
         await auction.finalize();
 
-        // Check ETH refund
         await expect(
             auction.connect(alice).processRefunds(0, 10)
         ).to.changeEtherBalances(
@@ -220,33 +200,72 @@ describe("DutchAuction", () => {
     });
 
     it("should let owner withdraw proceeds after success", async () => {
-        // 1. Move time to auction phase
         const latestBlock = await ethers.provider.getBlock("latest");
         const bidTime = Math.max(latestBlock!.timestamp + 1, START_TIME + 1);
         await ethers.provider.send("evm_setNextBlockTimestamp", [bidTime]);
         await ethers.provider.send("evm_mine", []);
 
-        // 2. Place bids
         await auction.connect(alice).placeBid({ value: ethers.parseEther("3") });
         await auction.connect(bob).placeBid({ value: ethers.parseEther("3") });
 
-        // 3. Settle batches if necessary
         await auction.settleBatch(10);
 
-        // 4. Move time to auction end
         const latestBlock2 = await ethers.provider.getBlock("latest");
         const auctionEndTime = Math.max(latestBlock2!.timestamp + 1, END_TIME + 1);
         await ethers.provider.send("evm_setNextBlockTimestamp", [auctionEndTime]);
         await ethers.provider.send("evm_mine", []);
 
-        // 5. Finalize auction
         await auction.finalize();
 
-        // 6. Check owner withdrawal
         await expect(auction.withdrawProceeds()).to.changeEtherBalances(
             [auction, owner],
             [ethers.parseEther("-6"), ethers.parseEther("6")]
         );
     });
+
+    it("should prevent non-whitelisted users from bidding when whitelist enabled", async () => {
+        await auction.setWhitelistEnabled(true);
+
+        await ethers.provider.send("evm_setNextBlockTimestamp", [START_TIME + 1]);
+        await ethers.provider.send("evm_mine", []);
+
+        await expect(
+            auction.connect(alice).placeBid({ value: ethers.parseEther("1") })
+        ).to.be.revertedWith("Not whitelisted");
+    });
+
+    it("should apply early bonus correctly", async () => {
+        await ethers.provider.send("evm_setNextBlockTimestamp", [START_TIME + 1]);
+        await ethers.provider.send("evm_mine", []);
+
+        await auction.connect(alice).placeBid({ value: ethers.parseEther("1") });
+        await auction.settleBatch(10);
+
+        const tokens = await auction.allocations(await alice.getAddress());
+
+        const expectedTokensWithoutBonus = (ethers.parseEther("1") * 1_000_000_000_000_000_000n) / (await auction.getCurrentPrice());
+        const expectedTokensWithBonus = expectedTokensWithoutBonus + (expectedTokensWithoutBonus * 5n / 100n);
+
+        expect(tokens).to.be.gte(expectedTokensWithBonus);
+    });
+
+    it("should decrease price linearly over time", async () => {
+        await ethers.provider.send("evm_setNextBlockTimestamp", [START_TIME]);
+        await ethers.provider.send("evm_mine", []);
+        expect(await auction.getCurrentPrice()).to.equal(START_PRICE);
+
+        const midTime = START_TIME + (END_TIME - START_TIME) / 2;
+        await ethers.provider.send("evm_setNextBlockTimestamp", [midTime]);
+        await ethers.provider.send("evm_mine", []);
+        const midPrice = await auction.getCurrentPrice();
+        expect(midPrice).to.be.lt(START_PRICE);
+        expect(midPrice).to.be.gt(RESERVE_PRICE);
+
+        await ethers.provider.send("evm_setNextBlockTimestamp", [END_TIME]);
+        await ethers.provider.send("evm_mine", []);
+        expect(await auction.getCurrentPrice()).to.equal(RESERVE_PRICE);
+    });
+
+
 
 });

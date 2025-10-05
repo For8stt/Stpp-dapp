@@ -2,18 +2,21 @@
 pragma solidity ^0.8.20;
 
 /// @title DutchAuction with batch settlements, early bonuses, whitelist, soft cap and batch distribution/refunds
-/// @notice Designed for presale usage (STPP). Batch processing avoids gas explosion on many bidders.
+/// @notice Designed for presale usage (STTP). Batch processing avoids gas explosion on many bidders.
 /// @dev Use token decimals = 18 for simple math, or adapt calculations if token has different decimals.
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";  // ДОДАНО: для safeTransfer
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
+import "./interfaces/IPresaleManager.sol";
+
 contract DutchAuction is ReentrancyGuard {
-    using SafeERC20 for IERC20;  // ДОДАНО: для безпечного трансферу
+    using SafeERC20 for IERC20;
 
     IERC20 public immutable token;      // token being sold
     address public owner;               // project owner / beneficiary
+    IPresaleManager public presaleManager; // Callback to PresaleManager for auto-transition
 
     uint256 public startTime;
     uint256 public endTime;
@@ -61,6 +64,8 @@ contract DutchAuction is ReentrancyGuard {
     event BonusParamsUpdated(uint256 bonusPercent, uint256 bonusEndTime);
     event BatchDurationUpdated(uint256 batchDuration);
     event ReserveAdjusted(uint256 oldReserve, uint256 newReserve);
+    event AutoTransitionToLBP(uint256 collectedETH, uint256 remainingTokens);
+    event AutoFailedAuction(uint256 collectedETH);
 
     modifier onlyOwner() {
         require(msg.sender == owner, "Not owner");
@@ -85,7 +90,8 @@ contract DutchAuction is ReentrancyGuard {
         uint256 _reservePrice,
         uint256 _totalTokens,
         uint256 _softCap,
-        uint256 _earlyBonusDurationSeconds
+        uint256 _earlyBonusDurationSeconds,
+        address _presaleManager // New: Callback to PresaleManager
     ) {
         require(_token != address(0), "Zero token");
         require(_startTime < _endTime, "Invalid times");
@@ -101,6 +107,7 @@ contract DutchAuction is ReentrancyGuard {
         totalTokens = _totalTokens;
         softCap = _softCap;
         bonusEndTime = _startTime + _earlyBonusDurationSeconds;
+        presaleManager = IPresaleManager(_presaleManager); // Optional, check in finalize
     }
 
     // ---------------------------
@@ -212,7 +219,7 @@ contract DutchAuction is ReentrancyGuard {
                     tokensBought += (tokensBought * bonusPercent) / 100;
                 }
 
-                // ВИПРАВЛЕННЯ: Обмежити алокацію, щоб не перевищити totalTokens
+                // Обмежити алокацію, щоб не перевищити totalTokens
                 uint256 availableTokens = totalTokens - totalAllocatedTokens;
                 if (tokensBought > availableTokens) {
                     tokensBought = availableTokens;
@@ -308,18 +315,41 @@ contract DutchAuction is ReentrancyGuard {
             refundable = true;
             distributable = false;
             emit AuctionFinalized(false, collected);
+
+            // Auto-fail: Call PresaleManager if set
+            if (address(presaleManager) != address(0)) {
+                presaleManager.handleFailedAuction(collected);
+                emit AutoFailedAuction(collected);
+            }
+
+            return 0; // No remaining
         } else {
             refundable = false;
             distributable = true;
             emit AuctionFinalized(true, collected);
-        }
 
-        // ВИПРАВЛЕННЯ: Обчислити та трансферувати залишок токенів (невикористані) назад у msg.sender
-        uint256 remainingTokens = totalTokens - totalAllocatedTokens;
-        if (remainingTokens > 0) {
-            token.safeTransfer(msg.sender, remainingTokens);  // Безпечний трансфер
+            // Auto-success: Transfer ETH/tokens to PresaleManager, call transition
+            if (address(presaleManager) != address(0)) {
+                // Transfer remainingTokens to PresaleManager
+                uint256 remainingTokens = totalTokens - totalAllocatedTokens;
+                token.safeTransfer(address(presaleManager), remainingTokens);
+
+                // Transfer collected ETH to PresaleManager (forward or transfer)
+                payable(address(presaleManager)).transfer(collected);
+
+                // Callback
+                presaleManager.transitionToLBP(collected, remainingTokens);
+                emit AutoTransitionToLBP(collected, remainingTokens);
+            }
+
+            // Transfer remainingTokens back to msg.sender (owner) if no PresaleManager
+            uint256 remainingTokens = totalTokens - totalAllocatedTokens;
+            if (remainingTokens > 0) {
+                token.safeTransfer(msg.sender, remainingTokens);
+            }
+
+            return remainingTokens;
         }
-        return remainingTokens;
     }
 
     // ---------------------------
