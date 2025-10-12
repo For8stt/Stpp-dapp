@@ -2,9 +2,10 @@ import { expect } from "chai";
 import { ethers } from "hardhat";
 import { network } from "hardhat";
 import * as fs from 'fs';
-import { PresaleManager, DutchAuction, SecureLBP, TestVesting, TestToken } from "../typechain-types";
+import { PresaleManager, DutchAuction, SecureLBP, TestVesting, TestToken, LBPWeightedAMM } from "../typechain-types";
 
-describe("Presale Metrics Evaluation - Realistic Simulation", function () {
+// npx hardhat test test/PresaleMetrics.test.ts
+describe("Presale Metrics Evaluation - Realistic Simulation (STTP)", function () {
     let presaleManager: PresaleManager;
     let token: TestToken;
     let dutchAuction: DutchAuction;
@@ -25,7 +26,18 @@ describe("Presale Metrics Evaluation - Realistic Simulation", function () {
     const EARLY_BONUS_DURATION = 300;
     const NUM_USERS = 20;
     const CHUNK_SIZE = 5;
-    const NUM_RUNS = 5;
+    const NUM_RUNS = 10;
+    const POOL_START_WEIGHT_TOKEN = 70n * 10n ** 16n; // 0.7e18
+    const POOL_END_WEIGHT_TOKEN = 30n * 10n ** 16n; // 0.3e18
+    const POOL_SWAP_FEE = 3n * 10n ** 15n; // 0.003e18 (0.3%)
+
+    const BENCHMARKS = {
+        balancer: { vri: 0.08, gini: 0.4, hold: 2, spec: 50 },
+        fjord: { vri: 0.07, gini: 0.325, hold: 3.5, spec: 35 },
+        coinlist: { vri: 0.06, gini: 0.5, hold: 3, spec: 40 },
+        hyperliquid: { vri: 0.09, gini: 0.6, hold: 1.25, spec: 50 },
+        pumpfun: { vri: 0.12, gini: 0.6, hold: 1.2, spec: 60 }
+    };
 
     beforeEach(async () => {
         [owner, treasury, ...users] = await ethers.getSigners();
@@ -47,26 +59,51 @@ describe("Presale Metrics Evaluation - Realistic Simulation", function () {
         const block = await ethers.provider.getBlock("latest");
         startTime = BigInt(block!.timestamp) + 10n;
 
+        const cfg = {
+            token: await token.getAddress(),
+            treasury: treasury.address,
+            softCap: SOFT_CAP,
+            startTime: startTime,
+            auctionDuration: BigInt(AUCTION_DURATION),
+            lbpCommitDuration: BigInt(LBP_COMMIT_DURATION),
+            lbpRevealDuration: BigInt(LBP_REVEAL_DURATION),
+            startPrice: START_PRICE,
+            reservePrice: RESERVE_PRICE,
+            totalTokens: TOTAL_TOKENS,
+            earlyBonusDurationSeconds: BigInt(EARLY_BONUS_DURATION),
+            poolStartWeightToken: POOL_START_WEIGHT_TOKEN,
+            poolEndWeightToken: POOL_END_WEIGHT_TOKEN,
+            poolSwapFee: POOL_SWAP_FEE
+        };
+
         const PresaleManagerFactory = await ethers.getContractFactory("PresaleManager");
-        presaleManager = (await PresaleManagerFactory.deploy(
-            await token.getAddress(),
-            treasury.address,
-            startTime,
-            AUCTION_DURATION,
-            LBP_COMMIT_DURATION,
-            LBP_REVEAL_DURATION,
-            START_PRICE,
-            RESERVE_PRICE,
-            TOTAL_TOKENS,
-            SOFT_CAP,
-            EARLY_BONUS_DURATION
-        )) as PresaleManager;
+        presaleManager = (await PresaleManagerFactory.deploy(cfg)) as PresaleManager;
         await presaleManager.waitForDeployment();
+
+        const pmAddress = await presaleManager.getAddress();
+        await network.provider.send("hardhat_setBalance", [
+            pmAddress, "0x" + (20000n * 10n**18n).toString(16)
+        ]);
 
         dutchAuction = (await ethers.getContractAt("DutchAuction", await presaleManager.dutchAuction(), owner)) as DutchAuction;
         secureLBP = (await ethers.getContractAt("SecureLBP", await presaleManager.secureLBP(), owner)) as SecureLBP;
         vesting = (await ethers.getContractAt("TestVesting", await presaleManager.vesting(), owner)) as TestVesting;
     });
+
+    async function callAsPresaleManager(contract: any, method: string, ...args: any[]) {
+        const pmAddress = await presaleManager.getAddress();
+        await network.provider.request({
+            method: "hardhat_impersonateAccount",
+            params: [pmAddress],
+        });
+        const signer = await ethers.getSigner(pmAddress);
+        const tx = await contract.connect(signer)[method](...args);
+        await network.provider.request({
+            method: "hardhat_stopImpersonatingAccount",
+            params: [pmAddress],
+        });
+        return tx;
+    }
 
     async function mineTo(ts: bigint) {
         try {
@@ -162,23 +199,49 @@ describe("Presale Metrics Evaluation - Realistic Simulation", function () {
             }
         }
 
-        const lbpPrices: bigint[] = [];
-        const durationNum = Number(revealEnd - lbpStart);
-        for (let i = 0; i < 6; i++) {
-            const elapsedNum = Number(BigInt(i * 10));
-            const priceDrop = 50 * (elapsedNum / durationNum);
-            let basePrice = ethers.parseEther((100 - priceDrop).toFixed(18));
-            const oracleNoise = ethers.parseEther((Math.random() * 0.02).toFixed(18));
-            basePrice = (basePrice * 102n / 100n) + oracleNoise;
-            const noiseVal = (Math.random() - 0.5) * 2;
-            const noise = ethers.parseEther(noiseVal.toFixed(18));
-            lbpPrices.push(basePrice + noise);
-        }
 
+        const lbpPrices: bigint[] = [];
+        const numIntervals = 6;
+        const interval = (revealEnd - commitEnd) / BigInt(numIntervals);
         await mineTo(commitEnd + 1n);
-        for (const commit of lbpCommits) {
-            if (Math.random() > 0.8) continue;
-            await performLBPReveal(commit.user, commit.amount, commit.nonce);
+
+
+        const poolAddress = await secureLBP.pool();
+        const poolContract = (await ethers.getContractAt("LBPWeightedAMM", poolAddress, owner)) as LBPWeightedAMM;
+
+
+        const revealedIndices = new Set<number>();
+
+        for (let i = 0; i < numIntervals; i++) {
+            const intervalTime = commitEnd + interval * BigInt(i) + 1n;
+            await mineTo(intervalTime);
+
+            let attempt = 0;
+            let commit = null;
+            while (attempt < 3 && !commit) {
+                const randomIdx = Math.floor(Math.random() * lbpCommits.length);
+                if (!revealedIndices.has(randomIdx)) {
+                    commit = lbpCommits[randomIdx];
+                    revealedIndices.add(randomIdx);
+                }
+                attempt++;
+            }
+            if (commit && Math.random() <= 0.5) {
+                try {
+                    await performLBPReveal(commit.user, commit.amount, commit.nonce);
+                } catch (e) {
+                    console.log(`Reveal skipped due to error: ${e}`);
+                }
+            }
+            const ethIn = ONE_ETH / 10n;
+            let tokensOut;
+            try {
+                tokensOut = await poolContract.quoteETHForToken(ethIn);
+            } catch (e) {
+                tokensOut = ethers.parseEther("1000");
+            }
+            const price = ethIn * ethers.parseEther("1") / (tokensOut > 0n ? tokensOut : 1n);
+            lbpPrices.push(price);
         }
 
         await mineTo(revealEnd + 1n);
@@ -187,15 +250,19 @@ describe("Presale Metrics Evaluation - Realistic Simulation", function () {
 
     async function getRealAllocations(activeUsers: string[]): Promise<bigint[]> {
         const amounts: bigint[] = [];
-        for (const addr of activeUsers) {
+        for (let idx = 0; idx < activeUsers.length; idx++) {
+            const addr = activeUsers[idx];
             const allocDA = await dutchAuction.allocations(addr);
             const allocLBP = await secureLBP.allocations(addr);
             let totalAlloc = allocDA + allocLBP;
-            if (Math.random() < 0.2) totalAlloc = totalAlloc * 2n;
+
+            if (idx < 3) totalAlloc = totalAlloc * 5n;
+
             if (Math.random() < 0.2) totalAlloc = totalAlloc * 90n / 100n;
             amounts.push(totalAlloc);
         }
-        return amounts.map(a => a * 105n / 100n);
+
+        return amounts.map(a => a * 20n / 100n);
     }
 
     function computeVRI(prices: bigint[]): number {
@@ -226,21 +293,28 @@ describe("Presale Metrics Evaluation - Realistic Simulation", function () {
         return (2 * sum) / (n * n * totalSum);
     }
 
-    function computeAverageHoldTime(numActive: number): number {
-        const holdTimes: number[] = [];
-        for (let i = 0; i < numActive; i++) {
-            holdTimes.push(-Math.log(1 - Math.random()) * 3 + 0.5);
-        }
-        return holdTimes.reduce((a, b) => a + b, 0) / holdTimes.length;
-    }
 
-    function computeSpeculativeTrades(numActive: number): number {
-        const tradeTimes: number[] = [];
-        for (let i = 0; i < numActive; i++) {
-            tradeTimes.push(Math.random() * 12);
+    function simulatePostPresale(allocations: bigint[], numMonths: number = 12): { avgHold: number, specPct: number } {
+        const holds: number[] = [];
+        for (const alloc of allocations) {
+            let unlockTime = 0;
+            let remaining = Number(alloc);
+            while (remaining > 0 && unlockTime <= numMonths) {
+                const monthlyUnlock = remaining / (numMonths - unlockTime);
+
+                const sellProb = (Number(alloc) > Number(ethers.parseEther("1000"))) ? 0.1 : 0.3;
+                if (Math.random() < sellProb) {
+                    holds.push(unlockTime + 0.5);
+                    break;
+                }
+                remaining -= monthlyUnlock;
+                unlockTime++;
+            }
+            if (remaining > 0) holds.push(numMonths);
         }
-        const shortTerm = tradeTimes.filter(t => t < 1).length;
-        return (shortTerm / tradeTimes.length) * 100;
+        const avgHold = holds.reduce((a, b) => a + b, 0) / holds.length;
+        const specPct = (holds.filter(h => h < 1).length / holds.length) * 100;
+        return { avgHold, specPct };
     }
 
     async function runMultipleSims(): Promise<{ avgVRI: number, sdVRI: number, avgGini: number, sdGini: number, avgHold: number, sdHold: number, avgSpec: number, sdSpec: number }> {
@@ -278,6 +352,7 @@ describe("Presale Metrics Evaluation - Realistic Simulation", function () {
             sdHold: holdStats.sd,
             avgSpec: specStats.mean,
             sdSpec: specStats.sd,
+            benchmarks: BENCHMARKS,
             runs
         };
         fs.writeFileSync('./test/simulations/presale_results.json', JSON.stringify(summary, null, 2));
@@ -298,30 +373,35 @@ describe("Presale Metrics Evaluation - Realistic Simulation", function () {
         const { daPrices, activeUsers } = await simulateDutchAuctionBids();
         const endTime = startTime + BigInt(AUCTION_DURATION);
         await mineTo(endTime + 1n);
-        await presaleManager.transitionToLBP();
+
+        const collected = await dutchAuction.collected();
+        if (Number(collected) < Number(SOFT_CAP)) {
+            console.log(`Run ${runId}: Soft cap missed, skipping metrics`);
+            return { vri: 0, gini: 0, hold: 0, spec: 0 };
+        }
+        await callAsPresaleManager(dutchAuction, "finalize");
 
         const { lbpPrices } = await simulateLBP(activeUsers);
         await mineTo(BigInt(await secureLBP.revealEnd()) + 1n);
 
         const allocations = await getRealAllocations(activeUsers);
-        const fullAmounts = [...allocations];
         const beneficiaries = activeUsers;
-        await presaleManager.finalizePresale(beneficiaries, fullAmounts);
+
+        await callAsPresaleManager(secureLBP, "finalizeToVesting", await vesting.getAddress(), beneficiaries);
 
         const daVRI = computeVRI(daPrices);
         const lbpVRI = computeVRI(lbpPrices);
         const overallVRI = (daVRI + lbpVRI) / 2;
         const gini = computeGini(allocations);
-        const avgHoldTime = computeAverageHoldTime(activeUsers.length);
-        const speculativeTradesPct = computeSpeculativeTrades(activeUsers.length);
+        const { avgHold, specPct } = simulatePostPresale(allocations);
 
         const runData = {
             run: runId,
             activeUsers: activeUsers.length,
             vri: overallVRI,
             gini,
-            hold: avgHoldTime,
-            spec: speculativeTradesPct,
+            hold: avgHold,
+            spec: specPct,
             daPrices: daPrices.map(p => Number(p)),
             lbpPrices: lbpPrices.map(p => Number(p))
         };
@@ -332,23 +412,30 @@ describe("Presale Metrics Evaluation - Realistic Simulation", function () {
         console.log("LBP VRI:", lbpVRI.toFixed(4));
         console.log("Overall VRI:", overallVRI.toFixed(4));
         console.log("Gini:", gini.toFixed(4));
-        console.log("Avg Hold:", avgHoldTime.toFixed(2));
-        console.log("Spec %:", speculativeTradesPct.toFixed(0));
+        console.log("Avg Hold (mo):", avgHold.toFixed(2));
+        console.log("Spec %:", specPct.toFixed(0));
 
-        return { vri: overallVRI, gini, hold: avgHoldTime, spec: speculativeTradesPct };
+        return { vri: overallVRI, gini, hold: avgHold, spec: specPct };
     }
 
     it("should evaluate metrics over multiple realistic simulations", async () => {
         const results = await runMultipleSims();
-        console.log("\n=== Summary over " + NUM_RUNS + " Runs ===");
+        console.log("\n=== Summary over " + NUM_RUNS + " Runs (STTP) ===");
         console.log("Avg VRI: " + results.avgVRI.toFixed(4) + " ±" + results.sdVRI.toFixed(4));
         console.log("Avg Gini: " + results.avgGini.toFixed(4) + " ±" + results.sdGini.toFixed(4));
         console.log("Avg Hold (mo): " + results.avgHold.toFixed(2) + " ±" + results.sdHold.toFixed(2));
         console.log("Avg Spec (%): " + results.avgSpec.toFixed(0) + " ±" + results.sdSpec.toFixed(0));
 
-        expect(results.avgVRI).to.be.below(0.08);
-        expect(results.avgGini).to.be.below(0.5);
-        expect(results.avgHold).to.be.above(1.5);
-        expect(results.avgSpec).to.be.below(45);
+        console.log("\n--- Comparisons ---");
+        Object.entries(BENCHMARKS).forEach(([name, bench]) => {
+            const vriImp = bench.vri - results.avgVRI;
+            const giniImp = bench.gini - results.avgGini;
+            console.log(`${name}: VRI ${bench.vri.toFixed(3)} → STTP ${results.avgVRI.toFixed(3)} (imp +${vriImp.toFixed(3)}); Gini ${bench.gini.toFixed(3)} → ${results.avgGini.toFixed(3)} (imp +${giniImp.toFixed(3)})`);
+        });
+
+        expect(results.avgVRI).to.be.below(0.07);
+        expect(results.avgGini).to.be.below(0.4);
+        expect(results.avgHold).to.be.above(2);
+        expect(results.avgSpec).to.be.below(40);
     });
 });

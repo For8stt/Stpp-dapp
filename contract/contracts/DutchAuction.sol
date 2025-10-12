@@ -340,15 +340,17 @@ contract DutchAuction is ReentrancyGuard {
                 // Callback
                 presaleManager.transitionToLBP(collected, remainingTokens);
                 emit AutoTransitionToLBP(collected, remainingTokens);
-            }
 
-            // Transfer remainingTokens back to msg.sender (owner) if no PresaleManager
-            uint256 remainingTokens = totalTokens - totalAllocatedTokens;
-            if (remainingTokens > 0) {
-                token.safeTransfer(msg.sender, remainingTokens);
+                // Return remainingTokens (for consistency, even if transferred to PM)
+                return remainingTokens;
+            } else {
+                // Transfer remainingTokens back to msg.sender (owner) if no PresaleManager
+                uint256 remainingTokens = totalTokens - totalAllocatedTokens;
+                if (remainingTokens > 0) {
+                    token.safeTransfer(msg.sender, remainingTokens);
+                }
+                return remainingTokens;
             }
-
-            return remainingTokens;
         }
     }
 

@@ -261,8 +261,6 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
     }
 
     // ============ FINALIZE / VESTING ============
-    event DebugLog(string message, uint256 value1, uint256 value2);
-
     function finalizeToVesting(address vestingContract, address[] calldata beneficiaries) external onlyOwner nonReentrant {
         require(block.timestamp > revealEnd, "not ended");
         require(vestingContract != address(0), "zero vesting");
@@ -287,9 +285,11 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
         // Calculate minOut for slippage protection (1% tolerance)
         uint256 minOut = totalTokens * 99 / 100; // 1% slippage max
 
-        pool.swapETHForToken{value: totalETH}(minOut); // Swap in pool, tokens to this contract
-
-        token.safeTransfer(vestingContract, totalTokens);
+        if (totalETH > 0) {
+            pool.swapETHForToken{value: totalETH}(minOut);
+        }
+//        pool.swapETHForToken{value: totalETH}(minOut);
+         token.safeTransfer(vestingContract, totalTokens);
 
         IVesting(vestingContract).registerAllocations(beneficiaries, amounts);
 
@@ -304,7 +304,7 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
     }
 
     // ============ WITHDRAWALS / TREASURY ============
-    function withdrawETH(address payable to, uint256 amount) external onlyOwner nonReentrant {
+    function withdrawETH(address payable to, uint256 amount) external onlyOwner {
         require(to != address(0), "zero addr");
         require(amount <= address(this).balance, "insufficient balance");
         (bool ok,) = to.call{value: amount}("");

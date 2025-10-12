@@ -168,10 +168,6 @@ contract PresaleManager is Ownable {
         require(_treasury != address(0), "zero treasury");
         treasury = _treasury;
     }
+    receive() external payable {}
 
-//    /// @notice Emergency pause (onlyOwner)
-//    function emergencyPause() external onlyOwner {
-//        dutchAuction.emergencyPause(); // Assume Dutch has this
-//        secureLBP.ownerPause();
-//    }
 }
