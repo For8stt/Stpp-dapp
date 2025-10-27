@@ -1,394 +1,659 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-/// @title DutchAuction with batch settlements, early bonuses, whitelist, soft cap and batch distribution/refunds
-/// @notice Designed for presale usage (STTP). Batch processing avoids gas explosion on many bidders.
-/// @dev Use token decimals = 18 for simple math, or adapt calculations if token has different decimals.
-
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 
-import "./interfaces/IPresaleManager.sol";
-
-contract DutchAuction is ReentrancyGuard {
+/// @title Commit–Reveal Dutch auction with dynamic reserve management and LBP transition
+/// @notice Implements a production oriented Dutch auction with commit / reveal flow, per
+/// participant caps, early participation bonuses, soft-cap handling, vesting and optional
+/// transition of the remaining inventory into an LBP.
+/// @dev Workflow: initialize with auction parameters → bidders commit with deposits → bidders
+/// reveal to populate price buckets → optional dynamic reserve adjustment → finalize to determine
+/// clearing price and LBP transition → participants claim vested tokens / refunds → losers and
+/// unrevealed deposits withdraw → owner pulls treasury proceeds.
+contract DutchAuction is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
-    IERC20 public immutable token;      // token being sold
-    address public owner;               // project owner / beneficiary
-    IPresaleManager public presaleManager; // Callback to PresaleManager for auto-transition
+    uint256 private constant BPS_DENOMINATOR = 10_000;
+
+    struct Commit {
+        bytes32 commitHash;
+        uint200 deposit;
+        uint48 commitTime;
+        bool revealed;
+        bool withdrawn;
+    }
+
+    struct RevealedBid {
+        address bidder;
+        uint32 priceTickIndex;
+        uint224 qty;
+        uint32 bonusPct;
+        bool allocationComputed;
+        uint224 allocatedQty;
+    }
+
+    struct AuctionConfig {
+        uint256 startTime;
+        uint256 commitDuration;
+        uint256 revealDuration;
+        uint256 perAddressCap;
+        uint256 softCap;
+        uint256 tokensForSale;
+        uint256 bonusReserve;
+        uint256 earlyBonusWindow;
+        uint256 earlyBonusPct;
+        uint256 nonRevealPenaltyBps;
+        uint256 lbpStableShareBps;
+        uint256 thresholdLow;
+        uint256 maxDecayMultiplier;
+        uint256 minCommitDuration;
+        uint256 vestingStart;
+        uint256 vestingCliff;
+        uint256 vestingDuration;
+        address treasury;
+        address lbpTokenRecipient;
+        address payable lbpStableRecipient;
+        bytes32 merkleRoot;
+        uint256[] priceTicks;
+    }
+
+    struct AllocationData {
+        uint256 totalQty;
+        uint256 bonusQty;
+        uint256 paymentDue;
+        bool computed;
+    }
+
+    IERC20 public immutable saleToken;
+
+    uint256 public tokensForSale;
+    uint256 public bonusReserve;
+    uint256 public bonusReserveRemaining;
 
     uint256 public startTime;
-    uint256 public endTime;
-    uint256 public startPrice;          // price in wei per token unit (assumes token decimals = 18)
-    uint256 public reservePrice;        // minimum price in wei per token unit
-    uint256 public totalTokens;         // number of tokens supplied for sale (token units)
-    uint256 public softCap;             // minimum ETH to consider auction successful (wei)
-    uint256 public collected;           // ETH collected (sum of bids not yet refunded)
+    uint256 public commitEndTime;
+    uint256 public revealEndTime;
+    uint256 public initialCommitEndTime;
+
+    uint256 public perAddressCap;
+    uint256 public softCap;
+
+    uint256 public earlyBonusWindow;
+    uint256 public earlyBonusPct;
+
+    uint256 public nonRevealPenaltyBps;
+
+    uint256 public lbpStableShareBps;
+
+    uint256 public thresholdLow;
+    uint256 public maxDecayMultiplier;
+    uint256 public minCommitDuration;
+
+    uint256 public vestingStart;
+    uint256 public vestingCliff;
+    uint256 public vestingDuration;
+
+    address public treasury;
+    address public lbpTokenRecipient;
+    address payable public lbpStableRecipient;
+
+    bytes32 public merkleRoot;
+
+    uint256[] public priceTicks;
+    mapping(uint256 => uint256) public priceBucketTotals;
+
+    uint256 public decayMultiplier;
+    uint256 public dynamicAdjustmentCount;
+
+    mapping(address => Commit[]) public commits;
+    mapping(address => RevealedBid[]) public revealedBids;
+    mapping(address => uint256) public committedQty;
+    mapping(address => uint256) public revealedQty;
+    mapping(address => uint256) public revealedDeposit;
+
+    uint256 public totalDepositCommitted;
+    uint256 public totalDepositsRevealed;
+    uint256 public totalCommitsCount;
+    uint256 public totalQtyRevealed;
+
+    bool public initialized;
     bool public finalized;
+    bool public successful;
+    bool public lbpLaunched;
 
-    // batch settlement parameters
-    uint256 public batchDuration = 5 minutes; // batch time window for settlement grouping
-    uint256 public batchPointer;              // pointer index for processing bids in increments
+    uint256 public clearingPrice;
+    uint256 public clearingTickIndex;
+    uint256 public filledAboveClearing;
+    uint256 public totalAtClearingTick;
+    uint256 public proRataNumerator;
+    uint256 public proRataDenominator;
+    uint256 public tokensSold;
+    uint256 public totalRaised;
+    uint256 public ethForTreasury;
+    uint256 public penaltyCollected;
 
-    // early bonus
-    uint256 public bonusPercent = 5;          // default 5% bonus for early participants
-    uint256 public bonusEndTime;              // timestamp when bonus period ends
+    mapping(address => AllocationData) public accountAllocations;
+    mapping(address => uint256) public refundedAmount;
+    mapping(address => uint256) public tokensClaimed;
 
-    // whitelist control
-    bool public whitelistEnabled = false;
-    mapping(address => bool) public whitelist;
+    event AuctionInitialized(uint256 startTime, uint256 commitEndTime, uint256 revealEndTime, uint256 tokensForSale);
+    event CommitSubmitted(address indexed bidder, bytes32 indexed commitHash, uint256 deposit, uint256 impliedQty);
+    event BidRevealed(address indexed bidder, uint256 indexed commitIndex, uint256 priceTickIndex, uint256 qty, uint256 bonusPct);
+    event DynamicAdjustment(uint256 decayMultiplier, uint256 newCommitEndTime, uint256 totalDepositCommitted, uint256 totalCommitsCount);
+    event AuctionFinalized(bool success, uint256 clearingPrice, uint256 tokensSold, uint256 totalRaised);
+    event RefundIssued(address indexed bidder, uint256 amount);
+    event BonusAllocated(address indexed bidder, uint256 bonusAmount);
+    event LBPLaunched(address indexed tokenRecipient, address indexed stableRecipient, uint256 tokenAmount, uint256 stableAmount);
+    event VestingUpdated(uint256 vestingStart, uint256 vestingCliff, uint256 vestingDuration);
 
-    struct Bid {
-        address bidder;
-        uint256 amountETH;
-        uint256 timestamp;
-        bool processed; // whether this bid has been included in allocations/refunds
+    error AuctionNotInitialized();
+    error AuctionNotActive();
+    error CommitPhaseComplete();
+    error RevealPhaseClosed();
+    error InvalidProof();
+    error CapExceeded();
+    error AlreadyRevealed();
+    error InvalidCommit();
+    error AuctionNotFinalized();
+    error AuctionFinalizedAlready();
+    error NothingToClaim();
+    error InvalidPriceTicks();
+
+    /// @notice Sets the ERC20 token being auctioned and initializes decay multiplier baseline.
+    constructor(IERC20 saleToken_) {
+        require(address(saleToken_) != address(0), "saleToken zero");
+        saleToken = saleToken_;
+        decayMultiplier = 1e18;
     }
 
-    Bid[] public bids;
-    mapping(address => uint256) public allocations; // token units allocated (not yet claimed)
-    uint256 public totalAllocatedTokens;
-
-    // flags after finalize
-    bool public refundable;    // true if auction failed softCap => refunds required
-    bool public distributable; // true if auction succeeded => tokens can be distributed
-
-    // events for frontend
-    event BidPlaced(address indexed bidder, uint256 amountETH, uint256 timestamp);
-    event BatchSettled(uint256 indexed batchStart, uint256 indexed batchEnd, uint256 clearingPrice, uint256 processed);
-    event RefundsProcessed(uint256 processed);
-    event TokensDistributed(uint256 processed);
-    event AuctionFinalized(bool success, uint256 collected);
-    event WhitelistUpdated(address indexed user, bool allowed);
-    event BonusParamsUpdated(uint256 bonusPercent, uint256 bonusEndTime);
-    event BatchDurationUpdated(uint256 batchDuration);
-    event ReserveAdjusted(uint256 oldReserve, uint256 newReserve);
-    event AutoTransitionToLBP(uint256 collectedETH, uint256 remainingTokens);
-    event AutoFailedAuction(uint256 collectedETH);
-
-    modifier onlyOwner() {
-        require(msg.sender == owner, "Not owner");
-        _;
+    /// @notice Returns the number of discrete price ticks configured for the auction.
+    function priceTicksLength() external view returns (uint256) {
+        return priceTicks.length;
     }
 
-    modifier auctionActive() {
-        require(block.timestamp >= startTime && block.timestamp <= endTime, "Auction not active");
-        _;
+    /// @notice Reads how many commits a bidder has submitted.
+    function commitsCount(address account) external view returns (uint256) {
+        return commits[account].length;
     }
 
-    modifier auctionEnded() {
-        require(block.timestamp > endTime, "Auction not ended");
-        _;
+    /// @notice Reads how many bids a bidder revealed successfully.
+    function revealedBidsCount(address account) external view returns (uint256) {
+        return revealedBids[account].length;
     }
 
-    constructor(
-        address _token,
-        uint256 _startTime,
-        uint256 _endTime,
-        uint256 _startPrice,
-        uint256 _reservePrice,
-        uint256 _totalTokens,
-        uint256 _softCap,
-        uint256 _earlyBonusDurationSeconds,
-        address _presaleManager // New: Callback to PresaleManager
-    ) {
-        require(_token != address(0), "Zero token");
-        require(_startTime < _endTime, "Invalid times");
-        require(_startPrice > _reservePrice, "Start > reserve required");
-        require(_totalTokens > 0, "totalTokens>0");
+    /// @notice One-time setup for the auction windows, caps, pricing ticks, and vesting details.
+    /// @dev Validates timing bounds and descending price ticks before storing configuration.
+    function initializeAuction(AuctionConfig calldata config) external onlyOwner {
+        if (initialized) revert AuctionFinalizedAlready();
+        require(config.treasury != address(0), "treasury zero");
+        require(config.tokensForSale > 0, "tokensForSale zero");
+        require(config.commitDuration >= config.minCommitDuration, "commit duration");
+        require(config.revealDuration > 0, "reveal duration");
+        require(config.priceTicks.length > 0, "ticks empty");
+        require(config.nonRevealPenaltyBps <= BPS_DENOMINATOR, "penalty bps");
+        require(config.earlyBonusPct <= BPS_DENOMINATOR, "bonus pct");
+        require(config.lbpStableShareBps <= BPS_DENOMINATOR, "lbp share");
+        require(config.maxDecayMultiplier >= 1e18, "decay range");
 
-        token = IERC20(_token);
-        owner = msg.sender;
-        startTime = _startTime;
-        endTime = _endTime;
-        startPrice = _startPrice;
-        reservePrice = _reservePrice;
-        totalTokens = _totalTokens;
-        softCap = _softCap;
-        bonusEndTime = _startTime + _earlyBonusDurationSeconds;
-        presaleManager = IPresaleManager(_presaleManager); // Optional, check in finalize
-    }
-
-    // ---------------------------
-    // Getters / helpers
-    // ---------------------------
-
-    /// @notice current linear price from startPrice -> reservePrice over duration
-    function getCurrentPrice() public view returns (uint256) {
-        if (block.timestamp <= startTime) return startPrice;
-        if (block.timestamp >= endTime) return reservePrice;
-
-        uint256 elapsed = block.timestamp - startTime;
-        uint256 duration = endTime - startTime;
-        uint256 priceDrop = startPrice - reservePrice;
-        return startPrice - (priceDrop * elapsed) / duration;
-    }
-
-    /// @notice number of bids stored
-    function bidsCount() external view returns (uint256) {
-        return bids.length;
-    }
-
-    // ---------------------------
-    // Owner controls
-    // ---------------------------
-
-    function setWhitelistEnabled(bool enabled) external onlyOwner {
-        whitelistEnabled = enabled;
-    }
-
-    function addToWhitelist(address[] calldata users) external onlyOwner {
-        for (uint i = 0; i < users.length; i++) {
-            whitelist[users[i]] = true;
-            emit WhitelistUpdated(users[i], true);
+        for (uint256 i = 1; i < config.priceTicks.length; i++) {
+            if (config.priceTicks[i - 1] <= config.priceTicks[i]) revert InvalidPriceTicks();
         }
+
+        tokensForSale = config.tokensForSale;
+        bonusReserve = config.bonusReserve;
+        bonusReserveRemaining = config.bonusReserve;
+
+        startTime = config.startTime;
+        commitEndTime = config.startTime + config.commitDuration;
+        revealEndTime = commitEndTime + config.revealDuration;
+        initialCommitEndTime = commitEndTime;
+
+        perAddressCap = config.perAddressCap;
+        softCap = config.softCap;
+
+        earlyBonusWindow = config.earlyBonusWindow;
+        earlyBonusPct = config.earlyBonusPct;
+
+        nonRevealPenaltyBps = config.nonRevealPenaltyBps;
+        lbpStableShareBps = config.lbpStableShareBps;
+
+        thresholdLow = config.thresholdLow;
+        maxDecayMultiplier = config.maxDecayMultiplier;
+        minCommitDuration = config.minCommitDuration;
+
+        vestingStart = config.vestingStart;
+        vestingCliff = config.vestingCliff;
+        vestingDuration = config.vestingDuration;
+
+        treasury = config.treasury;
+        lbpTokenRecipient = config.lbpTokenRecipient;
+        lbpStableRecipient = config.lbpStableRecipient;
+
+        merkleRoot = config.merkleRoot;
+
+        priceTicks = config.priceTicks;
+
+        initialized = true;
+
+        emit AuctionInitialized(startTime, commitEndTime, revealEndTime, tokensForSale);
+        emit VestingUpdated(vestingStart, vestingCliff, vestingDuration);
     }
 
-    function removeFromWhitelist(address[] calldata users) external onlyOwner {
-        for (uint i = 0; i < users.length; i++) {
-            whitelist[users[i]] = false;
-            emit WhitelistUpdated(users[i], false);
+    /// @notice Submits a sealed bid commitment backed by ETH deposit during the commit window.
+    /// @dev Checks whitelist proof, per-address cap, and ensures deposit maps to integer quantity.
+    function commit(bytes32 commitHash, bytes32[] calldata merkleProof) external payable nonReentrant {
+        if (!initialized) revert AuctionNotInitialized();
+        if (block.timestamp < startTime || block.timestamp > commitEndTime) revert AuctionNotActive();
+        if (msg.value == 0) revert InvalidCommit();
+
+        if (merkleRoot != bytes32(0)) {
+            bool verified = MerkleProof.verify(merkleProof, merkleRoot, keccak256(abi.encodePacked(msg.sender)));
+            if (!verified) revert InvalidProof();
         }
+
+        uint256 impliedQty = msg.value / priceTicks[0];
+        require(impliedQty > 0, "deposit too small");
+        require(impliedQty * priceTicks[0] == msg.value, "deposit mismatch");
+
+        if (committedQty[msg.sender] + impliedQty > perAddressCap) revert CapExceeded();
+
+        commits[msg.sender].push(
+            Commit({
+                commitHash: commitHash,
+                deposit: uint200(msg.value),
+                commitTime: uint48(block.timestamp),
+                revealed: false,
+                withdrawn: false
+            })
+        );
+
+        committedQty[msg.sender] += impliedQty;
+        totalDepositCommitted += msg.value;
+        totalCommitsCount += 1;
+
+        emit CommitSubmitted(msg.sender, commitHash, msg.value, impliedQty);
     }
 
-    function updateBonusParams(uint256 _bonusPercent, uint256 _bonusEndTime) external onlyOwner {
-        require(_bonusPercent <= 100, "bonus<=100");
-        bonusPercent = _bonusPercent;
-        bonusEndTime = _bonusEndTime;
-        emit BonusParamsUpdated(_bonusPercent, _bonusEndTime);
-    }
+    /// @notice Opens a committed bid by revealing its parameters and recording demand.
+    /// @dev Verifies the original hash, applies bonuses, and aggregates quantity into buckets.
+    function reveal(uint256 priceTickIndex, uint256 qty, bytes32 nonce, uint256 commitIndex) external nonReentrant {
+        if (!initialized) revert AuctionNotInitialized();
+        if (block.timestamp <= commitEndTime || block.timestamp > revealEndTime) revert RevealPhaseClosed();
+        if (priceTickIndex >= priceTicks.length) revert InvalidCommit();
+        if (qty == 0) revert InvalidCommit();
 
-    function updateBatchDuration(uint256 _seconds) external onlyOwner {
-        require(_seconds > 0, "non-zero");
-        batchDuration = _seconds;
-        emit BatchDurationUpdated(_seconds);
-    }
+        Commit storage userCommit = commits[msg.sender][commitIndex];
+        if (userCommit.revealed) revert AlreadyRevealed();
 
-    /// owner can adjust reserve price downward under low uptake; callable by owner before auction end
-    function adjustReservePrice(uint256 newReserve) external onlyOwner {
-        require(newReserve <= reservePrice, "can only lower");
-        emit ReserveAdjusted(reservePrice, newReserve);
-        reservePrice = newReserve;
-    }
+        bytes32 expectedHash = keccak256(abi.encode(priceTickIndex, qty, nonce));
+        if (expectedHash != userCommit.commitHash) revert InvalidCommit();
 
-    // ---------------------------
-    // Bidding
-    // ---------------------------
+        uint256 deposit = uint256(userCommit.deposit);
+        require(deposit == qty * priceTicks[0], "deposit/qty mismatch");
 
-    /// @notice Place a bid in ETH (any non-zero amount). If whitelistEnabled, sender must be whitelisted.
-    function placeBid() external payable nonReentrant auctionActive {
-        if (whitelistEnabled) {
-            require(whitelist[msg.sender], "Not whitelisted");
-        }
-        require(msg.value > 0, "Zero bid");
+        if (revealedQty[msg.sender] + qty > perAddressCap) revert CapExceeded();
 
-        bids.push(Bid({bidder: msg.sender, amountETH: msg.value, timestamp: block.timestamp, processed: false}));
-        collected += msg.value;
-
-        emit BidPlaced(msg.sender, msg.value, block.timestamp);
-    }
-
-    // ---------------------------
-    // Batch settlement (group bids that fall into batch window)
-    // Process in chunks by calling settleBatch(maxProcess) to avoid gas blow-up
-    // ---------------------------
-
-    /// @notice Settle bids that fall into current batch window. Processes up to maxProcess bids from batchPointer.
-    /// @param maxProcess maximum number of bids to iterate in this call (gas safety)
-    function settleBatch(uint256 maxProcess) external nonReentrant auctionActive {
-        require(maxProcess > 0, "maxProcess>0");
-
-        uint256 batchStart = (block.timestamp / batchDuration) * batchDuration;
-        uint256 batchEnd = batchStart + batchDuration;
-        uint256 clearingPrice = getCurrentPrice();
-
-        uint256 processed = 0;
-        uint256 i = batchPointer;
-
-        while (i < bids.length && processed < maxProcess) {
-            Bid storage b = bids[i];
-
-            // only consider bids in this batch window and not yet processed
-            if (!b.processed && b.timestamp >= batchStart && b.timestamp < batchEnd && b.amountETH > 0) {
-                // tokensBought = amountETH / clearingPrice, with 1e18 factor (token decimals assumed 18)
-                uint256 tokensBought = (b.amountETH * 1e18) / clearingPrice;
-
-                // early bonus
-                if (b.timestamp <= bonusEndTime) {
-                    tokensBought += (tokensBought * bonusPercent) / 100;
-                }
-
-                // Обмежити алокацію, щоб не перевищити totalTokens
-                uint256 availableTokens = totalTokens - totalAllocatedTokens;
-                if (tokensBought > availableTokens) {
-                    tokensBought = availableTokens;
-                }
-
-                allocations[b.bidder] += tokensBought;
-                totalAllocatedTokens += tokensBought;
-
-                b.amountETH = 0;
-                b.processed = true;
+//        uint256 bonusPct = userCommit.commitTime <= startTime + earlyBonusWindow ? earlyBonusPct : 0;
+//        if (bonusPct > 0) {
+//            uint256 potentialBonus = (qty * bonusPct) / BPS_DENOMINATOR;
+//            require(potentialBonus <= bonusReserveRemaining, "bonus exhausted");
+//        }
+        uint256 bonusPct = 0;
+        if (userCommit.commitTime <= startTime + earlyBonusWindow && earlyBonusPct > 0) {
+            uint256 potentialBonus = (qty * earlyBonusPct) / BPS_DENOMINATOR;
+            if (potentialBonus <= bonusReserveRemaining) {
+                bonusPct = earlyBonusPct;
+            } else if (bonusReserveRemaining > 0) {
+                bonusPct = (bonusReserveRemaining * BPS_DENOMINATOR) / qty;
+            } else {
+                bonusPct = 0;
             }
-            processed++;
-            i++;
         }
 
-        batchPointer = i;
 
-        emit BatchSettled(batchStart, batchEnd, clearingPrice, processed);
+    userCommit.revealed = true;
+
+        revealedBids[msg.sender].push(
+            RevealedBid({
+                bidder: msg.sender,
+                priceTickIndex: uint32(priceTickIndex),
+                qty: uint224(qty),
+                bonusPct: uint32(bonusPct),
+                allocationComputed: false,
+                allocatedQty: 0
+            })
+        );
+
+        revealedQty[msg.sender] += qty;
+        revealedDeposit[msg.sender] += deposit;
+        totalDepositsRevealed += deposit;
+        totalQtyRevealed += qty;
+        priceBucketTotals[priceTickIndex] += qty;
+
+        emit BidRevealed(msg.sender, commitIndex, priceTickIndex, qty, bonusPct);
     }
 
-    // ---------------------------
-    // Distribution & Refunds (batch)
-    // After auction ended, owner/facilitator can call distributeTokens / processRefunds in chunks
-    // ---------------------------
+    /// @notice Adjusts decay multiplier and commit end time if deposits lag behind expectations.
+    /// @dev Callable once; shortens commit phase while respecting minimum duration.
+    function updateDynamicReserve() external {
+        if (!initialized) revert AuctionNotInitialized();
+        if (block.timestamp > commitEndTime) revert CommitPhaseComplete();
+        if (dynamicAdjustmentCount > 0) revert CommitPhaseComplete();
 
-    /// @notice Process token transfers for allocated users in batches to avoid gas issues.
-    /// @param startIndex start index in bids array to process (inclusive)
-    /// @param maxProcess max number of entries to process in this call
-    function distributeTokens(uint256 startIndex, uint256 maxProcess) external nonReentrant {
-        require(finalized, "Finalize first");
-        require(distributable, "Not distributable");
-        require(maxProcess > 0, "maxProcess>0");
-        uint256 processed = 0;
-        uint256 i = startIndex;
-
-        while (i < bids.length && processed < maxProcess) {
-            address user = bids[i].bidder;
-            uint256 tokens = allocations[user];
-
-            if (tokens > 0) {
-                // check token balance available
-                require(token.balanceOf(address(this)) >= tokens, "Insufficient tokens in contract");
-                allocations[user] = 0; // prevent re-entrancy double transfer
-                totalAllocatedTokens = totalAllocatedTokens > tokens ? totalAllocatedTokens - tokens : 0;
-                token.transfer(user, tokens);
+        if (totalDepositCommitted < thresholdLow) {
+            if (decayMultiplier < maxDecayMultiplier) {
+                decayMultiplier = maxDecayMultiplier;
             }
 
-            processed++;
-            i++;
-        }
-
-        emit TokensDistributed(processed);
-    }
-
-    /// @notice Process refunds in batches (for auction failure). Caller can be anyone.
-    /// @param startIndex start index in bids array to process (inclusive)
-    /// @param maxProcess max number of entries to process
-    function processRefunds(uint256 startIndex, uint256 maxProcess) external nonReentrant {
-        require(finalized, "Finalize first");
-        require(refundable, "Not refundable");
-        require(maxProcess > 0, "maxProcess>0");
-        uint256 processed = 0;
-        uint256 i = startIndex;
-
-        while (i < bids.length && processed < maxProcess) {
-            Bid storage b = bids[i];
-            if (b.amountETH > 0) {
-                uint256 amt = b.amountETH;
-                b.amountETH = 0;
-                (bool ok, ) = b.bidder.call{value: amt}("");
-                require(ok, "Refund failed");
+            uint256 reduction = ((initialCommitEndTime - startTime) * 25) / 100;
+            uint256 targetEnd = commitEndTime > reduction ? commitEndTime - reduction : startTime + minCommitDuration;
+            uint256 minEndTime = startTime + minCommitDuration;
+            if (targetEnd < minEndTime) {
+                targetEnd = minEndTime;
             }
-            processed++;
-            i++;
-        }
+            if (targetEnd < commitEndTime) {
+                commitEndTime = targetEnd;
+                revealEndTime = commitEndTime + (revealEndTime - initialCommitEndTime);
+            }
 
-        emit RefundsProcessed(processed);
+            dynamicAdjustmentCount += 1;
+            emit DynamicAdjustment(decayMultiplier, commitEndTime, totalDepositCommitted, totalCommitsCount);
+        }
     }
 
-    // ---------------------------
-    // Finalization
-    // ---------------------------
+    /// @notice Concludes the auction, calculating clearing price, settlements, and LBP flow.
+    /// @dev Reverts until reveal window closes; marks success or failure based on soft cap.
+    function finalize() external nonReentrant {
+        if (!initialized) revert AuctionNotInitialized();
+        if (finalized) revert AuctionFinalizedAlready();
+        if (block.timestamp <= revealEndTime) revert RevealPhaseClosed();
 
-    /// @notice Finalize auction state after endTime. Sets flags distributable/refundable.
-    /// Owner must ensure tokens have been transferred to this contract before calling finalize() if auction succeeded.
-    function finalize() external nonReentrant onlyOwner auctionEnded returns (uint256) {
-        require(!finalized, "Already finalized");
+        _determineClearingPrice();
 
+        if (tokensSold == 0 || totalRaised < softCap) {
+            successful = false;
+            finalized = true;
+            clearingPrice = 0;
+            emit AuctionFinalized(false, 0, 0, 0);
+            return;
+        }
+
+        successful = true;
         finalized = true;
 
-        // Auction success if collected >= softCap
-        if (collected < softCap) {
-            refundable = true;
-            distributable = false;
-            emit AuctionFinalized(false, collected);
+        uint256 unsoldTokens = tokensForSale - tokensSold;
+        uint256 totalPaymentsDue = tokensSold * clearingPrice;
+        uint256 stableForLBP;
 
-            // Auto-fail: Call PresaleManager if set
-            if (address(presaleManager) != address(0)) {
-                presaleManager.handleFailedAuction(collected);
-                emit AutoFailedAuction(collected);
-            }
-
-            return 0; // No remaining
-        } else {
-            refundable = false;
-            distributable = true;
-            emit AuctionFinalized(true, collected);
-
-            // Auto-success: Transfer ETH/tokens to PresaleManager, call transition
-            if (address(presaleManager) != address(0)) {
-                // Transfer remainingTokens to PresaleManager
-                uint256 remainingTokens = totalTokens - totalAllocatedTokens;
-                token.safeTransfer(address(presaleManager), remainingTokens);
-
-                // Transfer collected ETH to PresaleManager (forward or transfer)
-                payable(address(presaleManager)).transfer(collected);
-
-                // Callback
-                presaleManager.transitionToLBP(collected, remainingTokens);
-                emit AutoTransitionToLBP(collected, remainingTokens);
-
-                // Return remainingTokens (for consistency, even if transferred to PM)
-                return remainingTokens;
-            } else {
-                // Transfer remainingTokens back to msg.sender (owner) if no PresaleManager
-                uint256 remainingTokens = totalTokens - totalAllocatedTokens;
-                if (remainingTokens > 0) {
-                    token.safeTransfer(msg.sender, remainingTokens);
+        if (unsoldTokens > 0 && lbpTokenRecipient != address(0)) {
+            saleToken.safeTransfer(lbpTokenRecipient, unsoldTokens);
+            if (lbpStableRecipient != address(0) && lbpStableShareBps > 0) {
+                stableForLBP = (totalPaymentsDue * lbpStableShareBps) / BPS_DENOMINATOR;
+                if (stableForLBP > 0) {
+                    (bool sent, ) = lbpStableRecipient.call{value: stableForLBP}("");
+                    require(sent, "lbp stable transfer failed");
                 }
-                return remainingTokens;
             }
+            lbpLaunched = true;
+            emit LBPLaunched(lbpTokenRecipient, lbpStableRecipient, unsoldTokens, stableForLBP);
+        }
+
+        ethForTreasury = totalPaymentsDue - stableForLBP;
+
+        emit AuctionFinalized(true, clearingPrice, tokensSold, totalRaised);
+    }
+
+    /// @dev Walks price buckets top-down to establish clearing tick and pro-rata parameters.
+    function _determineClearingPrice() internal {
+        uint256 cumulative;
+        uint256 clearingIdx = type(uint256).max;
+        uint256 ticksLength = priceTicks.length;
+
+        for (uint256 i = 0; i < ticksLength; i++) {
+            cumulative += priceBucketTotals[i];
+            if (cumulative >= tokensForSale && clearingIdx == type(uint256).max) {
+                clearingIdx = i;
+                filledAboveClearing = cumulative - priceBucketTotals[i];
+                totalAtClearingTick = priceBucketTotals[i];
+            }
+        }
+
+        if (clearingIdx == type(uint256).max) {
+            tokensSold = cumulative;
+            if (ticksLength == 0) {
+                clearingTickIndex = 0;
+                clearingPrice = 0;
+            } else {
+                clearingTickIndex = ticksLength - 1;
+                clearingPrice = priceTicks[ticksLength - 1];
+            }
+            totalRaised = tokensSold * clearingPrice;
+            proRataNumerator = 0;
+            proRataDenominator = 0;
+        } else {
+            clearingTickIndex = clearingIdx;
+            clearingPrice = priceTicks[clearingIdx];
+            tokensSold = tokensForSale;
+            uint256 remaining = tokensForSale - filledAboveClearing;
+            proRataNumerator = remaining;
+            proRataDenominator = totalAtClearingTick;
+            totalRaised = tokensSold * clearingPrice;
         }
     }
 
-    // ---------------------------
-    // Owner withdraw: withdraw collected ETH after successful distribution
-    // It's recommended to call distributeTokens fully first, then withdraw.
-    // ---------------------------
-    function withdrawProceeds() external nonReentrant onlyOwner {
-        require(finalized, "Finalize first");
-        require(distributable, "Not distributable");
-        // After tokens distribution, contract will hold leftover ETH (if any) to send to owner.
-        uint256 bal = address(this).balance;
-        require(bal > 0, "No ETH to withdraw");
-        (bool ok, ) = owner.call{value: bal}("");
-        require(ok, "Withdraw failed");
+    /// @notice Claims vested tokens and outstanding refunds for a winning participant.
+    /// @dev Lazily computes allocation, transfers the vested portion, and returns surplus ETH.
+    function claim() external nonReentrant {
+        if (!finalized) revert AuctionNotFinalized();
+        if (!successful) revert AuctionNotFinalized();
+
+        if (!accountAllocations[msg.sender].computed) {
+            _computeAllocation(msg.sender);
+        }
+        AllocationData storage allocation = accountAllocations[msg.sender];
+
+        uint256 unlocked = _vestedFraction();
+        uint256 totalTokensDue = allocation.totalQty + allocation.bonusQty;
+        uint256 vestedTokens = (totalTokensDue * unlocked) / BPS_DENOMINATOR;
+
+        uint256 tokensToSend = vestedTokens - tokensClaimed[msg.sender];
+        if (tokensToSend > 0) {
+            tokensClaimed[msg.sender] += tokensToSend;
+            saleToken.safeTransfer(msg.sender, tokensToSend);
+            if (allocation.bonusQty > 0) {
+                uint256 bonusPortion = (tokensToSend * allocation.bonusQty) / (allocation.totalQty + allocation.bonusQty);
+                if (bonusPortion > 0) {
+                    emit BonusAllocated(msg.sender, bonusPortion);
+                }
+            }
+        }
+
+        uint256 refundDue = allocation.paymentDue <= revealedDeposit[msg.sender]
+            ? revealedDeposit[msg.sender] - allocation.paymentDue
+            : 0;
+
+        uint256 alreadyRefunded = refundedAmount[msg.sender];
+        if (refundDue > alreadyRefunded) {
+            uint256 refundValue = refundDue - alreadyRefunded;
+            refundedAmount[msg.sender] = refundDue;
+            (bool sent, ) = payable(msg.sender).call{value: refundValue}("");
+            require(sent, "refund failed");
+            emit RefundIssued(msg.sender, refundValue);
+        }
+
+        if (tokensToSend == 0 && refundDue == alreadyRefunded) revert NothingToClaim();
     }
 
-    // ---------------------------
-    // Helpers for front-end / safety
-    // ---------------------------
+    /// @dev Calculates filled quantity, bonuses, and payment owed for a bidder, caching results.
+    function _computeAllocation(address account) internal returns (AllocationData memory) {
+        RevealedBid[] storage bids = revealedBids[account];
+        uint256 len = bids.length;
+        AllocationData memory allocation;
 
-    /// @notice emergency function to let owner recover ERC20 mistakenly sent (except the sale token).
-    function recoverERC20(address _erc20, uint256 amount) external onlyOwner {
-        require(_erc20 != address(token), "Cannot recover sale token");
-        IERC20(_erc20).transfer(owner, amount);
+        if (len == 0) {
+            allocation.computed = true;
+            accountAllocations[account] = allocation;
+            return allocation;
+        }
+
+        uint256 clearingIdx = clearingTickIndex;
+        uint256 remainingAtClearing = proRataNumerator;
+        uint256 totalAtClearing = proRataDenominator;
+
+        uint256 allocated;
+        uint256 bonusTotal;
+
+        for (uint256 i = 0; i < len; i++) {
+            RevealedBid storage bid = bids[i];
+            if (!bid.allocationComputed) {
+                uint256 qty = bid.qty;
+                uint256 allocatedQty;
+
+                if (tokensSold == totalQtyRevealed && totalQtyRevealed < tokensForSale) {
+                    allocatedQty = qty;
+                } else if (bid.priceTickIndex < clearingIdx) {
+                    allocatedQty = qty;
+                } else if (bid.priceTickIndex == clearingIdx) {
+                    if (totalAtClearing == 0 || remainingAtClearing == 0) {
+                        allocatedQty = 0;
+                    } else {
+                        allocatedQty = (qty * remainingAtClearing) / totalAtClearing;
+                    }
+                } else {
+                    allocatedQty = 0;
+                }
+
+                bid.allocatedQty = uint224(allocatedQty);
+                bid.allocationComputed = true;
+            }
+
+            allocated += bid.allocatedQty;
+            if (bid.bonusPct > 0) {
+                bonusTotal += (bid.allocatedQty * bid.bonusPct) / BPS_DENOMINATOR;
+            }
+        }
+
+        if (bonusTotal > bonusReserveRemaining) {
+            bonusTotal = bonusReserveRemaining;
+        }
+        bonusReserveRemaining -= bonusTotal;
+
+        uint256 paymentDue = allocated * clearingPrice;
+
+        allocation = AllocationData({
+            totalQty: allocated,
+            bonusQty: bonusTotal,
+            paymentDue: paymentDue,
+            computed: true
+        });
+
+        accountAllocations[account] = allocation;
+        return allocation;
     }
 
-    /// @notice emergency withdrawal of ETH by owner if auction finalized as distributable and after tokens distributed
-    function emergencyWithdrawETH(uint256 amount) external onlyOwner {
-        (bool ok, ) = owner.call{value: amount}("");
-        require(ok, "Emergency withdraw failed");
+    /// @notice Recovers deposits when the auction fails or sells no tokens.
+    /// @dev Returns both revealed deposits and unrevealed commitments, marking them withdrawn.
+    function refundUnsuccessful() external nonReentrant {
+        if (!finalized) revert AuctionNotFinalized();
+        if (successful) revert AuctionNotFinalized();
+
+        uint256 totalRefund = revealedDeposit[msg.sender];
+        Commit[] storage userCommits = commits[msg.sender];
+        uint256 len = userCommits.length;
+        for (uint256 i = 0; i < len; i++) {
+            Commit storage c = userCommits[i];
+            if (!c.revealed && !c.withdrawn) {
+                totalRefund += c.deposit;
+                c.withdrawn = true;
+            }
+        }
+
+        if (totalRefund == 0) revert NothingToClaim();
+
+        revealedDeposit[msg.sender] = 0;
+
+        (bool sent, ) = payable(msg.sender).call{value: totalRefund}("");
+        require(sent, "refund failed");
+        emit RefundIssued(msg.sender, totalRefund);
     }
 
-    receive() external payable {
-        revert("Use placeBid()");
+    /// @notice Withdraws an unrevealed commit after finalization, applying penalties if successful.
+    /// @dev Ensures each commit is only withdrawn once and accounts for treasury penalties.
+    function withdrawUnrevealed(uint256 commitIndex) external nonReentrant {
+        if (!finalized) revert AuctionNotFinalized();
+
+        Commit storage userCommit = commits[msg.sender][commitIndex];
+        if (userCommit.revealed || userCommit.withdrawn) revert NothingToClaim();
+
+        uint256 deposit = userCommit.deposit;
+        uint256 penalty;
+        if (successful) {
+            penalty = (deposit * nonRevealPenaltyBps) / BPS_DENOMINATOR;
+            if (penalty > 0) {
+                penaltyCollected += penalty;
+                ethForTreasury += penalty;
+            }
+        }
+
+        userCommit.withdrawn = true;
+
+        uint256 refundAmount = deposit - penalty;
+        if (refundAmount > 0) {
+            (bool sent, ) = payable(msg.sender).call{value: refundAmount}("");
+            require(sent, "refund failed");
+            emit RefundIssued(msg.sender, refundAmount);
+        }
     }
 
-    fallback() external payable {
-        revert("Use placeBid()");
+    /// @notice Transfers accumulated ETH proceeds to the treasury once the auction succeeds.
+    /// @dev Zeroes the tracked amount before sending to guard against reentrancy.
+    function withdrawTreasury(address payable recipient) external onlyOwner {
+        if (!finalized || !successful) revert AuctionNotFinalized();
+        if (recipient == address(0)) revert InvalidCommit();
+
+        uint256 amount = ethForTreasury;
+        ethForTreasury = 0;
+        if (amount > 0) {
+            (bool sent, ) = recipient.call{value: amount}("");
+            require(sent, "treasury transfer failed");
+        }
     }
+
+    /// @dev Computes vesting progress as basis points relative to start, cliff, and duration.
+    function _vestedFraction() internal view returns (uint256) {
+        if (block.timestamp < vestingStart + vestingCliff) {
+            return 0;
+        }
+        if (vestingDuration == 0) {
+            return BPS_DENOMINATOR;
+        }
+        if (block.timestamp >= vestingStart + vestingDuration) {
+            return BPS_DENOMINATOR;
+        }
+        uint256 elapsed = block.timestamp - vestingStart;
+        return (elapsed * BPS_DENOMINATOR) / vestingDuration;
+    }
+
+    /// @notice Adds more tokens to the bonus reserve used for early participation rewards.
+    function updateBonusReserve(uint256 additionalReserve) external onlyOwner {
+        require(additionalReserve > 0, "invalid reserve");
+        bonusReserve += additionalReserve;
+        bonusReserveRemaining += additionalReserve;
+    }
+
+    /// @notice Updates vesting configuration that gates token unlocks during claims.
+    function updateVesting(uint256 newStart, uint256 newCliff, uint256 newDuration) external onlyOwner {
+        vestingStart = newStart;
+        vestingCliff = newCliff;
+        vestingDuration = newDuration;
+        emit VestingUpdated(newStart, newCliff, newDuration);
+    }
+
+    /// @notice Accepts direct ETH transfers (e.g., manual top-ups or keeper refunds).
+    receive() external payable {}
 }

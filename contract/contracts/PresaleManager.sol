@@ -70,17 +70,7 @@ contract PresaleManager is Ownable {
         softCap = cfg.softCap;
 
         // Deploy DutchAuction with callback to this PresaleManager
-        dutchAuction = new DutchAuction(
-            cfg.token,
-            cfg.startTime,
-            cfg.startTime + cfg.auctionDuration,
-            cfg.startPrice,
-            cfg.reservePrice,
-            cfg.totalTokens,
-            cfg.softCap,
-            cfg.earlyBonusDurationSeconds,
-            address(this)  // Pass PresaleManager as callback for auto-transition
-        );
+        dutchAuction = new DutchAuction(IERC20(cfg.token));
 
 
         // Deploy SecureLBP with LBP times and pool params + callback to this
