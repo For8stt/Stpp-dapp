@@ -52,7 +52,8 @@ describe("SecureLBP Deployment", function () {
             POOL_START_WEIGHT,
             POOL_END_WEIGHT,
             POOL_SWAP_FEE,
-            presaleManager.address
+            ethers.ZeroAddress,
+            ethers.ZeroAddress
         )) as SecureLBP;
         await lbp.waitForDeployment();
 
@@ -77,7 +78,8 @@ describe("SecureLBP Deployment", function () {
                 POOL_START_WEIGHT,
                 POOL_END_WEIGHT,
                 POOL_SWAP_FEE,
-                presaleManager.address
+                ethers.ZeroAddress,
+                ethers.ZeroAddress
             )) as SecureLBP;
             await newLbp.waitForDeployment();
 
@@ -114,7 +116,8 @@ describe("SecureLBP Deployment", function () {
                     POOL_START_WEIGHT,
                     POOL_END_WEIGHT,
                     POOL_SWAP_FEE,
-                    presaleManager.address
+                    ethers.ZeroAddress,
+                    ethers.ZeroAddress
                 )
             ).to.be.revertedWith("zero token");
         });
@@ -136,7 +139,8 @@ describe("SecureLBP Deployment", function () {
                     POOL_START_WEIGHT,
                     POOL_END_WEIGHT,
                     POOL_SWAP_FEE,
-                    presaleManager.address
+                    presaleManager.address,
+                    owner.address
                 )
             ).to.be.revertedWith("invalid times");
         });
@@ -158,7 +162,8 @@ describe("SecureLBP Deployment", function () {
                     POOL_START_WEIGHT,
                     POOL_END_WEIGHT,
                     POOL_SWAP_FEE,
-                    presaleManager.address
+                    presaleManager.address,
+                    owner.address
                 )
             ).to.be.revertedWith("zero treasury");
         });

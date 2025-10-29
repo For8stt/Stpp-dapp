@@ -7,8 +7,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "test:securelbp": "npx hardhat test test/SecureLBP/deployment.test.ts test/SecureLBP/pool.test.ts test/SecureLBP/core.test.ts test/SecureLBP/oracle.test.ts test/SecureLBP/admin.test.ts test/SecureLBP/flow.test.ts test/SecureLBP/security.test.ts test/SecureLBP/gas.test.ts",
     "test:weightedamm": "npx hardhat test test/test-WeightedAMM/WeightedAMM.economic.test.ts test/test-WeightedAMM/WeightedAMM.gas.test.ts test/test-WeightedAMM/WeightedAMM.property.test.ts test/test-WeightedAMM/WeightedAMM.test.ts",
-    "test:dutchauction": "npx hardhat test test/DutchAuction/DutchAuction.test.ts test/DutchAuction/DutchAuctionGeneral.test.ts",
-    "test:presalemanager": "npx hardhat test test/PresaleManager/PresaleManagerFinalize.test.ts test/PresaleManager/PresaleManagerFullFlow.test.ts test/PresaleManager/PresaleManagerTransaction.test.ts test/PresaleManager/PresaleManager.test.ts"
+    "test:dutchauction": "npx hardhat test test/DutchAuctionCommitReveal/CommitRevealFlow.test.ts test/DutchAuction-Behaviors/ExtendedBehaviors.test.ts",
+    "test:presalemanager": "npx hardhat test test/PresaleManager/PresaleManagerManager.test.ts"
   },
   "keywords": [],
   "author": "",

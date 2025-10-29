@@ -54,7 +54,8 @@ describe("SecureLBP Core", function () {
             POOL_START_WEIGHT,
             POOL_END_WEIGHT,
             POOL_SWAP_FEE,
-            presaleManager.address
+            ethers.ZeroAddress,
+            ethers.ZeroAddress
         )) as SecureLBP;
         await lbp.waitForDeployment();
 
@@ -238,7 +239,8 @@ describe("SecureLBP Core", function () {
                 POOL_START_WEIGHT,
                 POOL_END_WEIGHT,
                 POOL_SWAP_FEE,
-                presaleManager.address
+                ethers.ZeroAddress,
+                ethers.ZeroAddress
             )) as SecureLBP;
             await lbpNoPool.waitForDeployment();
 

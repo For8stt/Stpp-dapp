@@ -54,7 +54,8 @@ describe("SecureLBP Full Flow", function () {
             POOL_START_WEIGHT,
             POOL_END_WEIGHT,
             POOL_SWAP_FEE,
-            presaleManager.address
+            ethers.ZeroAddress,
+            ethers.ZeroAddress
         );
         await lbp.waitForDeployment();
 
@@ -177,7 +178,8 @@ describe("SecureLBP Full Flow", function () {
                     POOL_START_WEIGHT,
                     POOL_END_WEIGHT,
                     POOL_SWAP_FEE,
-                    (await ethers.getSigners())[4].address
+                    ethers.ZeroAddress,
+                    ethers.ZeroAddress
                 );
                 await lbp.waitForDeployment();
                 await lbp.connect(owner).setOracle(await oracle.getAddress());

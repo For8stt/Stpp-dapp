@@ -26,19 +26,38 @@ async function main() {
     await token.mint(deployer.address, TOTAL_SUPPLY);
     console.log("✅ Minted", TOTAL_SUPPLY.toString(), "tokens to deployer");
 
-    // --- 2. Deploy DutchAuction ---
+    // --- 2. Deploy DutchAuction-Behaviors ---
     const Auction = await ethers.getContractFactory("DutchAuction");
-    const auction = await Auction.deploy(
-        token.address,
-        START_TIME,
-        END_TIME,
-        START_PRICE,
-        RESERVE_PRICE,
-        TOTAL_TOKENS_FOR_SALE,
-        SOFT_CAP,
-        EARLY_BONUS_DURATION
-    );
+    const auction = await Auction.deploy(token.address, deployer.address);
     await auction.deployed();
+    console.log("✅ Auction deployed at:", auction.address);
+
+    const config = {
+        startTime: START_TIME,
+        commitDuration: END_TIME - START_TIME,
+        revealDuration: 600,
+        perAddressCap: TOTAL_TOKENS_FOR_SALE,
+        softCap: SOFT_CAP,
+        tokensForSale: TOTAL_TOKENS_FOR_SALE,
+        bonusReserve: ethers.utils.parseEther("0"),
+        earlyBonusWindow: EARLY_BONUS_DURATION,
+        earlyBonusPct: 0,
+        nonRevealPenaltyBps: 0,
+        lbpStableShareBps: 0,
+        thresholdLow: ethers.utils.parseEther("0"),
+        maxDecayMultiplier: ethers.utils.parseEther("1"),
+        minCommitDuration: 60,
+        vestingStart: START_TIME,
+        vestingCliff: 0,
+        vestingDuration: 0,
+        treasury: deployer.address,
+        lbpTokenRecipient: deployer.address,
+        lbpStableRecipient: deployer.address,
+        merkleRoot: ethers.constants.HashZero,
+        priceTicks: [START_PRICE, RESERVE_PRICE]
+    };
+
+    await (await auction.initializeAuction(config)).wait();
     console.log("✅ Auction deployed at:", auction.address);
 
     // --- 3. Передаємо токени в контракт ---

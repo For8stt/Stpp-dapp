@@ -7,7 +7,7 @@ pragma solidity ^0.8.20;
 Policy: commit-reveal LBP with adaptive fees, oracle-driven pauses,
 vesting registration, caps, penalty for unrevealed commits,
 pull-based payments, SafeERC20, events, chunked finalize.
-Intended for integration in STTP pipeline (DutchAuction -> LBP -> Vesting).
+Intended for integration in STTP pipeline (DutchAuction-Behaviors -> LBP -> Vesting).
 
 Supports dynamic pool init from auction proceeds: initPoolFromAuction(eth, tokens) deploys/adds to LBPWeightedAMM.
 - During reveal: Quotes tokens from pool using net ETH (after fee).
@@ -31,7 +31,7 @@ interface ILBPOracle {
     function viewAdaptiveFee() external view returns (uint256);
 }
 
-// Interface for PresaleManager callback (moved from here to avoid duplicate; import from DutchAuction if needed)
+// Interface for PresaleManager callback (moved from here to avoid duplicate; import from DutchAuction-Behaviors if needed)
 import "./interfaces/IPresaleManager.sol";
 
 contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
@@ -64,7 +64,9 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
     LBPWeightedAMM public pool; // Use full type for new
     bool public poolInitialized; // Flag to prevent re-init
 
-    address public presaleManager; // Callback to PresaleManager for auto-finalize
+    IPresaleManager public presaleManager; // Callback manager
+    address public auction; // Originating Dutch auction
+    bool public finalized; // Guard to prevent double finalization
 
     // ============ DATA STRUCTURES ============
     struct Commit {
@@ -103,7 +105,8 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
         uint256 _poolStartWeightToken, // 0.7e18
         uint256 _poolEndWeightToken,   // 0.3e18
         uint256 _poolSwapFee,           // 0.003e18
-        address _presaleManager // New: for auto callback
+        address _presaleManager,
+        address _auction
     ) {
         require(_token != address(0), "zero token");
         require(_startTime < _commitEnd && _commitEnd < _revealEnd, "invalid times");
@@ -117,8 +120,11 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
         poolStartWeightToken = _poolStartWeightToken;
         poolEndWeightToken = _poolEndWeightToken;
         poolSwapFee = _poolSwapFee;
+        if (_presaleManager != address(0) && _auction != address(0)) {
+            presaleManager = IPresaleManager(_presaleManager);
+            auction = _auction;
+        }
         transferOwnership(msg.sender);
-        presaleManager = _presaleManager;
     }
 
     // ============ MODIFIERS ============
@@ -127,6 +133,14 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
             require(!oracle.isPaused(), "paused by oracle");
         }
         _;
+    }
+
+    /// @notice Configures the presale manager and originating auction metadata (one-time operation).
+    function configurePresaleContext(address presaleManager_, address auction_) external onlyOwner {
+        require(address(presaleManager) == address(0) && auction == address(0), "context already set");
+        require(presaleManager_ != address(0) && auction_ != address(0), "zero context");
+        presaleManager = IPresaleManager(presaleManager_);
+        auction = auction_;
     }
 
     // ============ AUCTION INIT FROM DUTCH ============
@@ -265,6 +279,8 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
         require(block.timestamp > revealEnd, "not ended");
         require(vestingContract != address(0), "zero vesting");
         require(poolInitialized, "pool not init");
+        require(!finalized, "already finalized");
+        finalized = true;
 
         uint256 len = beneficiaries.length;
         require(len > 0, "no beneficiaries");
@@ -288,19 +304,22 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
         if (totalETH > 0) {
             pool.swapETHForToken{value: totalETH}(minOut);
         }
-//        pool.swapETHForToken{value: totalETH}(minOut);
-         token.safeTransfer(vestingContract, totalTokens);
+        token.safeTransfer(vestingContract, totalTokens);
 
         IVesting(vestingContract).registerAllocations(beneficiaries, amounts);
 
         emit FinalizedToVesting(vestingContract, totalTokens);
 
-        // Auto-callback to PresaleManager for finalizePresale (if set)
-        if (presaleManager != address(0) && address(presaleManager).code.length > 0) {
-            IPresaleManager(presaleManager).finalizePresale(beneficiaries, amounts);
+        if (address(presaleManager) != address(0) && auction != address(0)) {
+            presaleManager.finalizePresale(
+                auction,
+                vestingContract,
+                beneficiaries,
+                amounts,
+                totalETH,
+                totalTokens
+            );
         }
-
-
     }
 
     // ============ WITHDRAWALS / TREASURY ============

@@ -44,6 +44,7 @@ describe("SecureLBP Security & Reverts", function () {
         const revealEnd = commitEnd + 60;
 
         const zeroPresaleManager = ethers.ZeroAddress;
+        const zeroAuction = ethers.ZeroAddress;
 
         const LBP = await ethers.getContractFactory("SecureLBP");
         lbp = (await LBP.deploy(
@@ -55,7 +56,8 @@ describe("SecureLBP Security & Reverts", function () {
             POOL_START_WEIGHT,
             POOL_END_WEIGHT,
             POOL_SWAP_FEE,
-            zeroPresaleManager
+            zeroPresaleManager,
+            zeroAuction
         )) as SecureLBP;
         await lbp.waitForDeployment();
 
@@ -155,6 +157,7 @@ describe("SecureLBP Security & Reverts", function () {
                 POOL_START_WEIGHT,
                 POOL_END_WEIGHT,
                 POOL_SWAP_FEE,
+                ethers.ZeroAddress,
                 ethers.ZeroAddress
             )) as SecureLBP;
             await lbpNoPool.waitForDeployment();

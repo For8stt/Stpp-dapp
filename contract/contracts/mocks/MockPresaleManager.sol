@@ -1,22 +1,26 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-contract MockPresaleManager {
-    event AuctionFinalized(address auction);
-    event TransitionToLBPCalled(uint256 collected, uint256 remainingTokens);
+import "../interfaces/IPresaleManager.sol";
 
-    // Ця функція викликається DutchAuction при успішному завершенні
-    function transitionToLBP(uint256 collectedETH, uint256 remainingTokens) external payable {
-        // Проста емуляція: приймаємо ETH і емітимо подію
-        emit TransitionToLBPCalled(collectedETH, remainingTokens);
+contract MockPresaleManager is IPresaleManager {
+    event FinalizeCalled(
+        address auction,
+        address vesting,
+        uint256 ethAmount,
+        uint256 tokenAmount
+    );
+
+    function finalizePresale(
+        address auction,
+        address vestingContract,
+        address[] calldata,
+        uint256[] calldata,
+        uint256 ethAmount,
+        uint256 tokenAmount
+    ) external override {
+        emit FinalizeCalled(auction, vestingContract, ethAmount, tokenAmount);
     }
 
-    // Функція для провалу аукціону
-    function handleFailedAuction(uint256 collectedETH) external {
-        // Можна емінтити подію для перевірки
-        emit AuctionFinalized(address(0));
-    }
-
-    // Щоб контракт міг отримувати ETH через transfer()
     receive() external payable {}
 }

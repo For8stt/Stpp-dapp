@@ -63,7 +63,7 @@ async function deployAuctionFixture(overrides: Partial<AuctionTestConfig> = {}) 
     await token.waitForDeployment();
 
     const auctionFactory = await ethers.getContractFactory("DutchAuction");
-    const auction = await auctionFactory.deploy(await token.getAddress());
+    const auction = await auctionFactory.deploy(await token.getAddress(), await deployer.getAddress());
     await auction.waitForDeployment();
 
     const latestBlock = await ethers.provider.getBlock("latest");
@@ -155,7 +155,7 @@ async function softCapFixture() {
 }
 
 // npx hardhat test test/DutchAuctionCommitReveal/CommitRevealFlow.test.ts
-describe("DutchAuction commit–reveal flow", function () {
+describe("DutchAuction-Behaviors commit–reveal flow", function () {
     it("accepts commits and enforces per-address participation caps", async function () {
         const ctx = await loadFixture(deployAuctionFixture);
         const { auction, alice, priceTicks, startTime } = ctx;

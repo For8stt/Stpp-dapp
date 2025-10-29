@@ -13,8 +13,8 @@ import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 /// transition of the remaining inventory into an LBP.
 /// @dev Workflow: initialize with auction parameters → bidders commit with deposits → bidders
 /// reveal to populate price buckets → optional dynamic reserve adjustment → finalize to determine
-/// clearing price and LBP transition → participants claim vested tokens / refunds → losers and
-/// unrevealed deposits withdraw → owner pulls treasury proceeds.
+/// clearing price → manager optionally calls `launchLbp` for residual inventory → participants claim
+/// vested tokens / refunds → losers and unrevealed deposits withdraw → manager withdraws proceeds.
 contract DutchAuction is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -70,6 +70,7 @@ contract DutchAuction is Ownable, ReentrancyGuard {
     }
 
     IERC20 public immutable saleToken;
+    address public immutable presaleManager;
 
     uint256 public tokensForSale;
     uint256 public bonusReserve;
@@ -163,11 +164,21 @@ contract DutchAuction is Ownable, ReentrancyGuard {
     error AuctionFinalizedAlready();
     error NothingToClaim();
     error InvalidPriceTicks();
+    error NotManager();
+    error LBPAlreadyLaunched();
+    error NoInventoryForLBP();
 
-    /// @notice Sets the ERC20 token being auctioned and initializes decay multiplier baseline.
-    constructor(IERC20 saleToken_) {
+    modifier onlyManager() {
+        if (msg.sender != presaleManager) revert NotManager();
+        _;
+    }
+
+    /// @notice Sets the ERC20 token being auctioned, presale manager, and initializes decay multiplier baseline.
+    constructor(IERC20 saleToken_, address presaleManager_) {
         require(address(saleToken_) != address(0), "saleToken zero");
+        require(presaleManager_ != address(0), "manager zero");
         saleToken = saleToken_;
+        presaleManager = presaleManager_;
         decayMultiplier = 1e18;
     }
 
@@ -188,7 +199,7 @@ contract DutchAuction is Ownable, ReentrancyGuard {
 
     /// @notice One-time setup for the auction windows, caps, pricing ticks, and vesting details.
     /// @dev Validates timing bounds and descending price ticks before storing configuration.
-    function initializeAuction(AuctionConfig calldata config) external onlyOwner {
+    function initializeAuction(AuctionConfig calldata config) external onlyManager {
         if (initialized) revert AuctionFinalizedAlready();
         require(config.treasury != address(0), "treasury zero");
         require(config.tokensForSale > 0, "tokensForSale zero");
@@ -298,11 +309,7 @@ contract DutchAuction is Ownable, ReentrancyGuard {
 
         if (revealedQty[msg.sender] + qty > perAddressCap) revert CapExceeded();
 
-//        uint256 bonusPct = userCommit.commitTime <= startTime + earlyBonusWindow ? earlyBonusPct : 0;
-//        if (bonusPct > 0) {
-//            uint256 potentialBonus = (qty * bonusPct) / BPS_DENOMINATOR;
-//            require(potentialBonus <= bonusReserveRemaining, "bonus exhausted");
-//        }
+
         uint256 bonusPct = 0;
         if (userCommit.commitTime <= startTime + earlyBonusWindow && earlyBonusPct > 0) {
             uint256 potentialBonus = (qty * earlyBonusPct) / BPS_DENOMINATOR;
@@ -368,7 +375,7 @@ contract DutchAuction is Ownable, ReentrancyGuard {
 
     /// @notice Concludes the auction, calculating clearing price, settlements, and LBP flow.
     /// @dev Reverts until reveal window closes; marks success or failure based on soft cap.
-    function finalize() external nonReentrant {
+    function finalize() external onlyManager nonReentrant {
         if (!initialized) revert AuctionNotInitialized();
         if (finalized) revert AuctionFinalizedAlready();
         if (block.timestamp <= revealEndTime) revert RevealPhaseClosed();
@@ -386,26 +393,38 @@ contract DutchAuction is Ownable, ReentrancyGuard {
         successful = true;
         finalized = true;
 
-        uint256 unsoldTokens = tokensForSale - tokensSold;
         uint256 totalPaymentsDue = tokensSold * clearingPrice;
-        uint256 stableForLBP;
-
-        if (unsoldTokens > 0 && lbpTokenRecipient != address(0)) {
-            saleToken.safeTransfer(lbpTokenRecipient, unsoldTokens);
-            if (lbpStableRecipient != address(0) && lbpStableShareBps > 0) {
-                stableForLBP = (totalPaymentsDue * lbpStableShareBps) / BPS_DENOMINATOR;
-                if (stableForLBP > 0) {
-                    (bool sent, ) = lbpStableRecipient.call{value: stableForLBP}("");
-                    require(sent, "lbp stable transfer failed");
-                }
-            }
-            lbpLaunched = true;
-            emit LBPLaunched(lbpTokenRecipient, lbpStableRecipient, unsoldTokens, stableForLBP);
-        }
-
-        ethForTreasury = totalPaymentsDue - stableForLBP;
+        ethForTreasury = totalPaymentsDue;
 
         emit AuctionFinalized(true, clearingPrice, tokensSold, totalRaised);
+    }
+
+    /// @notice Transfers unsold tokens and optional ETH share to the configured LBP recipients.
+    /// @dev Callable once after a successful finalize; deducts ETH share from treasury balance.
+    function launchLbp() external onlyManager nonReentrant {
+        if (!finalized || !successful) revert AuctionNotFinalized();
+        if (lbpLaunched) revert LBPAlreadyLaunched();
+
+        uint256 unsoldTokens = tokensForSale - tokensSold;
+        if (unsoldTokens == 0) revert NoInventoryForLBP();
+        uint256 stableForLBP = (totalRaised * lbpStableShareBps) / BPS_DENOMINATOR;
+        if (stableForLBP > ethForTreasury) {
+            stableForLBP = ethForTreasury;
+        }
+
+        require(lbpTokenRecipient != address(0), "lbp token recipient zero");
+
+        saleToken.safeTransfer(lbpTokenRecipient, unsoldTokens);
+
+        if (stableForLBP > 0) {
+            require(lbpStableRecipient != address(0), "lbp stable recipient zero");
+            ethForTreasury -= stableForLBP;
+            (bool sent, ) = lbpStableRecipient.call{value: stableForLBP}("");
+            require(sent, "lbp stable transfer failed");
+        }
+
+        lbpLaunched = true;
+        emit LBPLaunched(lbpTokenRecipient, lbpStableRecipient, unsoldTokens, stableForLBP);
     }
 
     /// @dev Walks price buckets top-down to establish clearing tick and pro-rata parameters.
