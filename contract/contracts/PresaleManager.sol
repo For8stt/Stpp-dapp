@@ -7,7 +7,10 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./DutchAuction.sol";
 import "./SecureLBP.sol";
 import "./interfaces/IPresaleManager.sol";
-import "./TwoStageVesting.sol";
+
+interface ITokenVestingEscrow {
+    function token() external view returns (address);
+}
 
 interface IAutomationCompatible {
     function checkUpkeep(bytes calldata checkData) external view returns (bool upkeepNeeded, bytes memory performData);
@@ -81,8 +84,6 @@ contract PresaleManager is Ownable, IPresaleManager, IAutomationCompatible {
         uint256 poolStartWeightToken;
         uint256 poolEndWeightToken;
         uint256 poolSwapFee;
-        address vesting;
-        bool deployVesting;
         uint256 vestingStartTime;
         uint256 vestingCliffDuration;
         uint256 vestingFinalDuration;
@@ -93,10 +94,10 @@ contract PresaleManager is Ownable, IPresaleManager, IAutomationCompatible {
         address saleToken;
         address treasury;
         address payable lbp;
-        address vesting;
+        address vestingEscrow;
         bool finalized;
         bool lbpInitialized;
-        bool vestingFinalized;
+        bool lbpFinalized;
         uint256 tokensForSale;
         uint256 bonusReserve;
         uint256 clearingPrice;
@@ -106,7 +107,6 @@ contract PresaleManager is Ownable, IPresaleManager, IAutomationCompatible {
         uint256 lbpEthProvided;
         uint256 lbpTokensProvided;
         uint256 ethRaisedDuringLBP;
-        uint256 tokensDeliveredToVesting;
         uint256 demandCheckTime;
         bool demandCheckTriggered;
     }
@@ -246,46 +246,28 @@ contract PresaleManager is Ownable, IPresaleManager, IAutomationCompatible {
         IERC20(record.saleToken).safeTransfer(deployedLbp, tokensReceived);
         SecureLBP(deployedLbp).initPoolFromAuction{value: ethReceived}(tokensReceived);
 
-        address vestingTarget = cfg.vesting;
-        if (cfg.deployVesting) {
-            require(vestingTarget == address(0), "vesting preset");
-            TwoStageVesting vestingInstance = new TwoStageVesting(
-                record.saleToken,
-                cfg.vestingStartTime,
-                cfg.vestingCliffDuration,
-                cfg.vestingFinalDuration,
-                cfg.vestingCliffPercentBP
-            );
-            vestingInstance.setRegistrar(deployedLbp);
-            vestingTarget = address(vestingInstance);
-        }
-
-        require(vestingTarget != address(0), "vesting zero");
-
-        // Attempt to wire registrar automatically for compatible vesting contracts.
-        if (!cfg.deployVesting) {
-            try TwoStageVesting(vestingTarget).setRegistrar(deployedLbp) {} catch {}
-        }
-
         record.lbp = deployedLbp;
-        record.vesting = vestingTarget;
         record.lbpInitialized = true;
         record.lbpTokensProvided = tokensReceived;
         record.lbpEthProvided = ethReceived;
 
         lbpAddress = address(deployedLbp);
-        emit LBPInitialized(auctionAddress, lbpAddress, vestingTarget, tokensReceived, ethReceived);
+        emit LBPInitialized(auctionAddress, lbpAddress, address(0), tokensReceived, ethReceived);
     }
 
-    /// @notice Finalizes the LBP phase and routes allocations to the configured vesting contract.
-    function finalizeLbp(address auctionAddress, address[] calldata beneficiaries) external onlyOwner {
+    /// @notice Finalizes the LBP phase and seals allocations.
+    function finalizeLbp(address auctionAddress, address vestingEscrow_) external onlyOwner {
         AuctionRecord storage record = _records[auctionAddress];
         require(isManagedAuction[auctionAddress], "unknown auction");
         require(record.lbpInitialized, "lbp not launched");
-        require(!record.vestingFinalized, "already finalized");
-        require(record.vesting != address(0), "vesting not set");
+        require(!record.lbpFinalized, "already finalized");
+        require(vestingEscrow_ != address(0), "escrow zero");
+        require(ITokenVestingEscrow(vestingEscrow_).token() == record.saleToken, "escrow token mismatch");
 
-        SecureLBP(record.lbp).finalizeToVesting(record.vesting, beneficiaries);
+        record.vestingEscrow = vestingEscrow_;
+
+        SecureLBP(record.lbp).finalizeToVesting(vestingEscrow_);
+        record.lbpFinalized = true;
     }
 
     /// @notice Burns all remaining LP tokens and returns ETH + tokens to SecureLBP.
@@ -384,29 +366,18 @@ contract PresaleManager is Ownable, IPresaleManager, IAutomationCompatible {
     /// @inheritdoc IPresaleManager
     function finalizePresale(
         address auctionAddress,
-        address vestingContract,
-        address[] calldata beneficiaries,
-        uint256[] calldata amounts,
         uint256 ethAmount,
         uint256 tokenAmount
     ) external override {
         AuctionRecord storage record = _records[auctionAddress];
         require(msg.sender == record.lbp, "unauthorised caller");
         require(record.lbpInitialized, "lbp not launched");
-        require(!record.vestingFinalized, "already finalized");
-        require(beneficiaries.length == amounts.length, "length mismatch");
+        require(!record.lbpFinalized, "already finalized");
 
-        if (record.vesting == address(0)) {
-            record.vesting = vestingContract;
-        } else {
-            require(record.vesting == vestingContract, "vesting mismatch");
-        }
-
-        record.vestingFinalized = true;
         record.ethRaisedDuringLBP = ethAmount;
-        record.tokensDeliveredToVesting = tokenAmount;
+        record.lbpFinalized = true;
 
-        emit LBPFinalized(auctionAddress, msg.sender, vestingContract, ethAmount, tokenAmount);
+        emit LBPFinalized(auctionAddress, msg.sender, record.vestingEscrow, ethAmount, tokenAmount);
     }
 
     /// @notice Checks auction demand and triggers dynamic reserve adjustment if needed.
@@ -504,6 +475,12 @@ contract PresaleManager is Ownable, IPresaleManager, IAutomationCompatible {
             cfg.poolSwapFee,
             address(this),
             auctionAddress
+        );
+        lbp.configureVesting(
+            cfg.vestingStartTime,
+            cfg.vestingCliffDuration,
+            cfg.vestingFinalDuration,
+            cfg.vestingCliffPercentBP
         );
         return payable(address(lbp));
     }

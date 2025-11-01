@@ -5,16 +5,15 @@ pragma solidity ^0.8.20;
  SecureLBP.sol (Integrated with LBPWeightedAMM Pool + Direct-Bid Flow + Auto-Finalize Callback)
 
 Policy: real-time bidding LBP with adaptive fees, oracle-driven pauses,
-vesting registration, per-address caps, pull-based payments, SafeERC20,
-events, chunked finalize. Intended for integration in STTP pipeline
-(DutchAuction-Behaviors -> LBP -> Vesting).
+per-address caps, pull-based claims, SafeERC20 events, chunked finalize.
+Intended for integration in STTP pipeline (DutchAuction-Behaviors -> LBP).
 
 Supports dynamic pool init from auction proceeds: initPoolFromAuction(eth, tokens)
 deploys/adds to LBPWeightedAMM.
 - During trading: placeBid() pushes ETH through the pool using current weights,
   enforcing user-defined slippage tolerance and adaptive fees.
-- During finalize: Aggregates purchased tokens, routes them to vesting, and
-  auto-calls back to PresaleManager.finalizePresale.
+- During finalize: Locks allocations, notifies the PresaleManager, and allows
+  distributed claiming via claim / claimFor.
 */
 
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -25,10 +24,6 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
 
 import "./WeightedAMM.sol"; // Import for dynamic deployment
-
-interface IVesting {
-    function registerAllocations(address[] calldata beneficiaries, uint256[] calldata amounts) external;
-}
 
 interface ILBPOracle {
     function isPaused() external view returns (bool);
@@ -58,6 +53,7 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
     uint256 public totalEthRaised;      // aggregate ETH supplied by bidders (gross, before fees)
     uint256 public feesAccumulated;     // total manager/oracle fees retained
     uint256 public constant BP_SCALE = 10000;
+    uint256 public totalTokensAllocated;
 
     uint256 public maxContributionPerAddress = 5 ether; // per-address cap (can be changed by onlyOwner)
 
@@ -71,6 +67,12 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
     IPresaleManager public presaleManager; // Callback manager
     address public auction; // Originating Dutch auction
     bool public finalized; // Guard to prevent double finalization
+    address public vestingEscrow; // Escrow contract holding purchased tokens post-finalize
+    uint256 public vestingStart;
+    uint256 public vestingCliffDuration;
+    uint256 public vestingFinalDuration;
+    uint256 public vestingCliffPercentBP;
+    bool public vestingConfigured;
 
     // ============ DATA STRUCTURES ============
     mapping(address => uint256) public totalContributed;     // total ETH provided by user (for caps)
@@ -189,6 +191,7 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
         require(tokensBought > 0, "zero tokens");
 
         allocations[msg.sender] += tokensBought;
+        totalTokensAllocated += tokensBought;
 
         emit BidPlaced(msg.sender, msg.value, netValue, feeBP, tokensBought);
     }
@@ -231,64 +234,46 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
         emit OracleResumed();
     }
 
+    function configureVesting(
+        uint256 start,
+        uint256 cliffDuration,
+        uint256 finalDuration,
+        uint256 cliffPercentBP
+    ) external onlyOwner {
+        require(!vestingConfigured, "vesting configured");
+        require(cliffPercentBP <= BP_SCALE, "cliff pct");
+        require(finalDuration >= cliffDuration, "invalid durations");
+
+        vestingStart = start;
+        vestingCliffDuration = cliffDuration;
+        vestingFinalDuration = finalDuration;
+        vestingCliffPercentBP = cliffPercentBP;
+        vestingConfigured = true;
+    }
+
     // ============ FINALIZE / VESTING ============
-    function finalizeToVesting(address vestingContract, address[] calldata beneficiaries) external onlyOwner nonReentrant {
+    function finalizeToVesting(address vestingEscrow_) external onlyOwner nonReentrant {
         require(block.timestamp > endTime, "not ended");
-        require(vestingContract != address(0), "zero vesting");
         require(poolInitialized, "pool not init");
         require(!finalized, "already finalized");
+        require(vestingEscrow_ != address(0), "escrow zero");
+
+        uint256 availableTokens = token.balanceOf(address(this));
+        require(availableTokens >= totalTokensAllocated, "insufficient tokens");
+
         finalized = true;
 
-        uint256 len = beneficiaries.length;
-        require(len > 0, "no beneficiaries");
+        vestingEscrow = vestingEscrow_;
 
-        uint256 totalTokens = 0;
-        uint256 positiveCount = 0;
-        for (uint256 i = 0; i < len; ++i) {
-            uint256 amt = allocations[beneficiaries[i]];
-            if (amt > 0) {
-                positiveCount += 1;
-                totalTokens += amt;
-            }
-        }
+        token.safeTransfer(vestingEscrow_, totalTokensAllocated);
 
-        address[] memory trimmedBeneficiaries = new address[](positiveCount);
-        uint256[] memory trimmedAmounts = new uint256[](positiveCount);
-        uint256 cursor = 0;
-        for (uint256 i = 0; i < len; ++i) {
-            address b = beneficiaries[i];
-            uint256 amt = allocations[b];
-            allocations[b] = 0;
-            if (amt > 0) {
-                trimmedBeneficiaries[cursor] = b;
-                trimmedAmounts[cursor] = amt;
-                cursor += 1;
-            }
-        }
-
-        uint256 totalETH = totalEthRaised;
-        uint256 balance = token.balanceOf(address(this));
-        require(balance >= totalTokens, "insufficient tokens");
-
-        if (totalTokens > 0) {
-            token.safeTransfer(vestingContract, totalTokens);
-            IVesting(vestingContract).registerAllocations(trimmedBeneficiaries, trimmedAmounts);
-        }
-
-        emit FinalizedToVesting(vestingContract, totalTokens);
+        emit FinalizedToVesting(vestingEscrow_, totalTokensAllocated);
 
         if (address(presaleManager) != address(0) && auction != address(0)) {
-            presaleManager.finalizePresale(
-                auction,
-                vestingContract,
-                trimmedBeneficiaries,
-                trimmedAmounts,
-                totalETH,
-                totalTokens
-            );
+            presaleManager.finalizePresale(auction, totalEthRaised, totalTokensAllocated);
         }
 
-        emit PoolFinalized(totalTokens, totalETH);
+        emit PoolFinalized(totalTokensAllocated, totalEthRaised);
     }
 
     // ============ POST-SALE CLEANUP ============
@@ -422,4 +407,30 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
 
     receive() external payable {}
     fallback() external payable {}
+
+    function getUserAllocation(address user) external view returns (uint256) {
+        return allocations[user];
+    }
+
+    // ============ VESTING CLAIMS ============
+    function vestedAmount(address user) public view returns (uint256) {
+        if (!finalized) return 0;
+        uint256 allocation = allocations[user];
+        if (allocation == 0) return 0;
+        if (!vestingConfigured) {
+            return allocation;
+        }
+        uint256 cliffTime = vestingStart + vestingCliffDuration;
+        uint256 finalTime = vestingStart + vestingFinalDuration;
+
+        if (block.timestamp < cliffTime) {
+            return 0;
+        }
+
+        if (vestingFinalDuration == 0 || block.timestamp >= finalTime) {
+            return allocation;
+        }
+
+        return (allocation * vestingCliffPercentBP) / BP_SCALE;
+    }
 }

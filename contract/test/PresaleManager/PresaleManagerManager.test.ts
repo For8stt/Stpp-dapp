@@ -13,10 +13,6 @@ async function deployFixture() {
     const token = await tokenFactory.deploy(totalSupply);
     await token.waitForDeployment();
 
-    const vestingFactory = await ethers.getContractFactory("TestVesting");
-    const vesting = await vestingFactory.deploy();
-    await vesting.waitForDeployment();
-
     const managerFactory = await ethers.getContractFactory("PresaleManager");
     const manager = await managerFactory.deploy();
     await manager.waitForDeployment();
@@ -41,8 +37,8 @@ async function deployFixture() {
         thresholdLow: ethers.parseEther("5"),
         maxDecayMultiplier: ethers.parseEther("2"),
         minCommitDuration: 120n,
+        demandCheckTime: now + 200n,
         vestingStart: now + 120n,
-        vestingCliff: 0n,
         vestingDuration: 0n,
         merkleRoot: ethers.ZeroHash,
         priceTicks: [2n, 1n]
@@ -61,7 +57,6 @@ async function deployFixture() {
         manager,
         auction,
         token,
-        vesting,
         owner,
         treasury,
         alice,
@@ -80,7 +75,7 @@ describe("PresaleManager", function () {
     });
 
     it("runs the full auction → LBP → vesting pipeline", async function () {
-        const { manager, auction, token, vesting, treasury, alice, config } = await loadFixture(deployFixture);
+        const { manager, auction, token, treasury, alice, config } = await loadFixture(deployFixture);
 
         const commitQty = ethers.parseUnits("10", 18);
         const priceTicks = await Promise.all([auction.priceTicks(0), auction.priceTicks(1)]);
@@ -102,14 +97,17 @@ describe("PresaleManager", function () {
             .withArgs(true, priceTicks[1], commitQty, commitQty * priceTicks[1]);
 
         const stableShare = (commitQty * priceTicks[1] * config.lbpStableShareBps) / BPS_DENOMINATOR;
+        const lbpStart = config.startTime + config.commitDuration + config.revealDuration + 600n;
         const launchConfig = {
-            startTime: config.startTime + config.commitDuration + config.revealDuration + 600n,
-            commitEnd: config.startTime + config.commitDuration + config.revealDuration + 900n,
-            revealEnd: config.startTime + config.commitDuration + config.revealDuration + 1_200n,
+            startTime: lbpStart,
+            endTime: config.startTime + config.commitDuration + config.revealDuration + 1_200n,
             poolStartWeightToken: 70n * 10n ** 16n,
             poolEndWeightToken: 30n * 10n ** 16n,
             poolSwapFee: 3n * 10n ** 15n,
-            vesting: await vesting.getAddress()
+            vestingStartTime: lbpStart,
+            vestingCliffDuration: 0n,
+            vestingFinalDuration: 0n,
+            vestingCliffPercentBP: 0n
         };
 
         const launchTx = await manager.launchLBP(await auction.getAddress(), launchConfig);
@@ -118,7 +116,7 @@ describe("PresaleManager", function () {
             .withArgs(
                 await auction.getAddress(),
                 anyValue,
-                await vesting.getAddress(),
+                anyValue,
                 config.tokensForSale - commitQty,
                 stableShare
             );
@@ -133,19 +131,77 @@ describe("PresaleManager", function () {
         expect(recordAfterLaunch.lbpTokensProvided).to.equal(config.tokensForSale - commitQty);
         expect(recordAfterLaunch.lbpEthProvided).to.equal(stableShare);
 
-        await time.increaseTo(launchConfig.revealEnd + 1n);
-        await expect(manager.finalizeLbp(await auction.getAddress(), [alice.address]))
-            .to.emit(lbp, "FinalizedToVesting");
+        const escrowFactory = await ethers.getContractFactory("TokenVestingEscrow");
+        const escrow = await escrowFactory.deploy(await token.getAddress(), lbpAddress);
+        await escrow.waitForDeployment();
+
+        await time.increaseTo(launchConfig.endTime + 1n);
+        const expectedAllocated = await lbp.totalTokensAllocated();
+        await expect(manager.finalizeLbp(await auction.getAddress(), await escrow.getAddress()))
+            .to.emit(lbp, "FinalizedToVesting")
+            .withArgs(await escrow.getAddress(), expectedAllocated);
 
         const recordAfterFinalize = await manager.getAuctionRecord(await auction.getAddress());
-        expect(recordAfterFinalize.vestingFinalized).to.equal(true);
-        expect(recordAfterFinalize.tokensDeliveredToVesting).to.equal(0n);
-        expect(await vesting.allocations(alice.address)).to.equal(0n);
+        expect(recordAfterFinalize.lbpFinalized).to.equal(true);
+        expect(recordAfterFinalize.vestingEscrow).to.equal(await escrow.getAddress());
+        const lbpEthRaised = await lbp.totalEthRaised();
+        expect(recordAfterFinalize.ethRaisedDuringLBP).to.equal(lbpEthRaised);
+        expect(await token.balanceOf(await escrow.getAddress())).to.equal(expectedAllocated);
 
         const withdrawable = await auction.ethForTreasury();
         await manager.withdrawAuctionProceeds(await auction.getAddress(), treasury.address);
         expect(await auction.ethForTreasury()).to.equal(0n);
         expect(await manager.getAuctionRecord(await auction.getAddress())).to.exist;
         expect(withdrawable).to.be.gt(0n);
+    });
+
+    it("reverts finalizeLbp when escrow token mismatches sale token", async function () {
+        const { manager, auction, token, treasury, alice, config } = await loadFixture(deployFixture);
+
+        const commitQty = ethers.parseUnits("10", 18);
+        const priceTicks = await Promise.all([auction.priceTicks(0), auction.priceTicks(1)]);
+        const deposit = commitQty * priceTicks[0];
+        const nonce = ethers.hexlify(ethers.randomBytes(32));
+        const commitHash = ethers.keccak256(
+            ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256", "bytes32"], [0, commitQty, nonce])
+        );
+
+        await time.increaseTo(config.startTime + 1n);
+        await auction.connect(alice).commit(commitHash, [], { value: deposit });
+
+        await time.increaseTo(config.startTime + config.commitDuration + 1n);
+        await auction.connect(alice).reveal(0, commitQty, nonce, 0);
+
+        await time.increaseTo(config.startTime + config.commitDuration + config.revealDuration + 1n);
+        await manager.finalizeAuction(await auction.getAddress());
+
+        const stableShare = (commitQty * priceTicks[1] * config.lbpStableShareBps) / BPS_DENOMINATOR;
+        const lbpStart = config.startTime + config.commitDuration + config.revealDuration + 600n;
+        const launchConfig = {
+            startTime: lbpStart,
+            endTime: config.startTime + config.commitDuration + config.revealDuration + 1_200n,
+            poolStartWeightToken: 70n * 10n ** 16n,
+            poolEndWeightToken: 30n * 10n ** 16n,
+            poolSwapFee: 3n * 10n ** 15n,
+            vestingStartTime: lbpStart,
+            vestingCliffDuration: 0n,
+            vestingFinalDuration: 0n,
+            vestingCliffPercentBP: 0n
+        };
+
+        await manager.launchLBP(await auction.getAddress(), launchConfig);
+        await time.increaseTo(launchConfig.endTime + 1n);
+
+        const otherTokenFactory = await ethers.getContractFactory("TestToken");
+        const otherToken = await otherTokenFactory.deploy(ethers.parseUnits("1000", 18));
+        await otherToken.waitForDeployment();
+
+        const fakeEscrowFactory = await ethers.getContractFactory("MockEscrowWrongToken");
+        const fakeEscrow = await fakeEscrowFactory.deploy(await otherToken.getAddress());
+        await fakeEscrow.waitForDeployment();
+
+        await expect(
+            manager.finalizeLbp(await auction.getAddress(), await fakeEscrow.getAddress())
+        ).to.be.revertedWith("escrow token mismatch");
     });
 });
