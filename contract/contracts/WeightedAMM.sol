@@ -30,6 +30,7 @@ contract LBPWeightedAMM is ReentrancyGuard, Pausable, Ownable {
     uint256 public constant SCALE = 1e18;
 
     event LiquidityAdded(address indexed user, uint256 tokenAmount, uint256 ethAmount, uint256 lpMinted);
+    event LiquidityAddedSingle(address indexed user, uint256 tokenAmount, uint256 ethAmount, uint256 lpMinted);
     event LiquidityRemoved(address indexed user, uint256 tokenAmount, uint256 ethAmount, uint256 lpBurned);
     event SwapTokenForETH(address indexed user, uint256 tokenIn, uint256 ethOut, uint256 feeAmount);
     event SwapETHForToken(address indexed user, uint256 ethIn, uint256 tokenOut, uint256 feeAmount);
@@ -107,6 +108,38 @@ contract LBPWeightedAMM is ReentrancyGuard, Pausable, Ownable {
         emit LiquidityAdded(msg.sender, tokenAmount, msg.value, lpMinted);
     }
 
+    function addLiquiditySingleETH() external payable onlyOwner whenNotPaused nonReentrant returns (uint256 lpMinted) {
+        require(msg.value > 0, "zero eth");
+        require(totalSupplyLP > 0 && reserveETH > 0, "pool empty");
+
+        lpMinted = (msg.value * totalSupplyLP) / reserveETH;
+        require(lpMinted > 0, "zero lp minted");
+
+        reserveETH += msg.value;
+
+        balanceLP[msg.sender] += lpMinted;
+        totalSupplyLP += lpMinted;
+
+        emit LiquidityAddedSingle(msg.sender, 0, msg.value, lpMinted);
+    }
+
+    function addLiquiditySingleToken(uint256 tokenAmount) external onlyOwner whenNotPaused nonReentrant returns (uint256 lpMinted) {
+        require(tokenAmount > 0, "zero token");
+        require(totalSupplyLP > 0 && reserveToken > 0, "pool empty");
+
+        token.safeTransferFrom(msg.sender, address(this), tokenAmount);
+
+        lpMinted = (tokenAmount * totalSupplyLP) / reserveToken;
+        require(lpMinted > 0, "zero lp minted");
+
+        reserveToken += tokenAmount;
+
+        balanceLP[msg.sender] += lpMinted;
+        totalSupplyLP += lpMinted;
+
+        emit LiquidityAddedSingle(msg.sender, tokenAmount, 0, lpMinted);
+    }
+
     function removeLiquidity(uint256 lpAmount) external nonReentrant whenNotPaused {
         require(lpAmount > 0 && balanceLP[msg.sender] >= lpAmount, "invalid lp");
 
@@ -152,6 +185,15 @@ contract LBPWeightedAMM is ReentrancyGuard, Pausable, Ownable {
     }
 
     function swapETHForToken(uint256 minTokenOut) external payable nonReentrant whenNotPaused returns (uint256 tokenOut) {
+        return _swapETHForToken(msg.sender, minTokenOut);
+    }
+
+    function swapETHForTokenTo(address to, uint256 minTokenOut) external payable nonReentrant whenNotPaused returns (uint256 tokenOut) {
+        require(to != address(0), "zero to");
+        return _swapETHForToken(to, minTokenOut);
+    }
+
+    function _swapETHForToken(address to, uint256 minTokenOut) internal returns (uint256 tokenOut) {
         require(msg.value > 0, "zero eth");
         unchecked {
             uint256 feeAmount = (msg.value * swapFee) / SCALE;
@@ -168,10 +210,11 @@ contract LBPWeightedAMM is ReentrancyGuard, Pausable, Ownable {
             reserveETH += msg.value;
             reserveToken -= tokenOut;
 
-            token.safeTransfer(msg.sender, tokenOut);
+            token.safeTransfer(to, tokenOut);
 
             emit SwapETHForToken(msg.sender, msg.value, tokenOut, feeAmount);
         }
+        return tokenOut;
     }
 
 
@@ -179,16 +222,16 @@ contract LBPWeightedAMM is ReentrancyGuard, Pausable, Ownable {
     /// @notice Quote tokens out for ETH in (includes pool fee, view).
     function quoteETHForToken(uint256 ethIn) external view returns (uint256 tokenOut) {
         if (ethIn == 0) return 0;
-        uint256 feeAmount = PRBMathUD60x18.mul(ethIn, swapFee) / SCALE;
+        uint256 feeAmount = (ethIn * swapFee) / SCALE;
         uint256 ethInAfterFee = ethIn - feeAmount;
-        (uint256 wETH, uint256 wToken) = currentWeights();
+        (uint256 wToken, uint256 wETH) = currentWeights();
         return _calcOutGivenIn(reserveETH, reserveToken, wETH, wToken, ethInAfterFee);
     }
 
     /// @notice Quote ETH out for token in (includes pool fee, view).
     function quoteTokenForETH(uint256 tokenIn) external view returns (uint256 ethOut) {
         if (tokenIn == 0) return 0;
-        uint256 feeAmount = PRBMathUD60x18.mul(tokenIn, swapFee) / SCALE;
+        uint256 feeAmount = (tokenIn * swapFee) / SCALE;
         uint256 tokenInAfterFee = tokenIn - feeAmount;
         (uint256 wToken, uint256 wETH) = currentWeights();
         return _calcOutGivenIn(reserveToken, reserveETH, wToken, wETH, tokenInAfterFee);
@@ -201,7 +244,7 @@ contract LBPWeightedAMM is ReentrancyGuard, Pausable, Ownable {
         uint256 weightIn,
         uint256 weightOut,
         uint256 amountIn
-    ) internal view returns (uint256) {
+    ) internal pure returns (uint256) {
         require(balanceIn > 0 && balanceOut > 0, "empty pool");
 
         // Rewritten to avoid log2 on value <1: use b = (balIn + in)/balIn >1, then 1 - 1/b^y

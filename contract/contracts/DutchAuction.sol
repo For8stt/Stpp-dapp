@@ -53,7 +53,6 @@ contract DutchAuction is Ownable, ReentrancyGuard {
         uint256 maxDecayMultiplier;
         uint256 minCommitDuration;
         uint256 vestingStart;
-        uint256 vestingCliff;
         uint256 vestingDuration;
         address treasury;
         address lbpTokenRecipient;
@@ -96,7 +95,6 @@ contract DutchAuction is Ownable, ReentrancyGuard {
     uint256 public minCommitDuration;
 
     uint256 public vestingStart;
-    uint256 public vestingCliff;
     uint256 public vestingDuration;
 
     address public treasury;
@@ -150,7 +148,7 @@ contract DutchAuction is Ownable, ReentrancyGuard {
     event RefundIssued(address indexed bidder, uint256 amount);
     event BonusAllocated(address indexed bidder, uint256 bonusAmount);
     event LBPLaunched(address indexed tokenRecipient, address indexed stableRecipient, uint256 tokenAmount, uint256 stableAmount);
-    event VestingUpdated(uint256 vestingStart, uint256 vestingCliff, uint256 vestingDuration);
+    event VestingUpdated(uint256 vestingStart, uint256 vestingDuration);
 
     error AuctionNotInitialized();
     error AuctionNotActive();
@@ -238,7 +236,6 @@ contract DutchAuction is Ownable, ReentrancyGuard {
         minCommitDuration = config.minCommitDuration;
 
         vestingStart = config.vestingStart;
-        vestingCliff = config.vestingCliff;
         vestingDuration = config.vestingDuration;
 
         treasury = config.treasury;
@@ -252,7 +249,7 @@ contract DutchAuction is Ownable, ReentrancyGuard {
         initialized = true;
 
         emit AuctionInitialized(startTime, commitEndTime, revealEndTime, tokensForSale);
-        emit VestingUpdated(vestingStart, vestingCliff, vestingDuration);
+        emit VestingUpdated(vestingStart, vestingDuration);
     }
 
     /// @notice Submits a sealed bid commitment backed by ETH deposit during the commit window.
@@ -347,7 +344,7 @@ contract DutchAuction is Ownable, ReentrancyGuard {
 
     /// @notice Adjusts decay multiplier and commit end time if deposits lag behind expectations.
     /// @dev Callable once; shortens commit phase while respecting minimum duration.
-    function updateDynamicReserve() external {
+    function updateDynamicReserve() external onlyManager {
         if (!initialized) revert AuctionNotInitialized();
         if (block.timestamp > commitEndTime) revert CommitPhaseComplete();
         if (dynamicAdjustmentCount > 0) revert CommitPhaseComplete();
@@ -645,17 +642,13 @@ contract DutchAuction is Ownable, ReentrancyGuard {
 
     /// @dev Computes vesting progress as basis points relative to start, cliff, and duration.
     function _vestedFraction() internal view returns (uint256) {
-        if (block.timestamp < vestingStart + vestingCliff) {
-            return 0;
-        }
         if (vestingDuration == 0) {
             return BPS_DENOMINATOR;
         }
         if (block.timestamp >= vestingStart + vestingDuration) {
             return BPS_DENOMINATOR;
         }
-        uint256 elapsed = block.timestamp - vestingStart;
-        return (elapsed * BPS_DENOMINATOR) / vestingDuration;
+        return 0;
     }
 
     /// @notice Adds more tokens to the bonus reserve used for early participation rewards.
@@ -666,11 +659,10 @@ contract DutchAuction is Ownable, ReentrancyGuard {
     }
 
     /// @notice Updates vesting configuration that gates token unlocks during claims.
-    function updateVesting(uint256 newStart, uint256 newCliff, uint256 newDuration) external onlyOwner {
+    function updateVesting(uint256 newStart, uint256 newDuration) external onlyOwner {
         vestingStart = newStart;
-        vestingCliff = newCliff;
         vestingDuration = newDuration;
-        emit VestingUpdated(newStart, newCliff, newDuration);
+        emit VestingUpdated(newStart, newDuration);
     }
 
     /// @notice Accepts direct ETH transfers (e.g., manual top-ups or keeper refunds).

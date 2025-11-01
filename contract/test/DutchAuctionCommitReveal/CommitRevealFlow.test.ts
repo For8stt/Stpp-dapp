@@ -21,7 +21,6 @@ interface AuctionTestConfig {
     maxDecayMultiplier: bigint;
     minCommitDuration: bigint;
     vestingStart: bigint;
-    vestingCliff: bigint;
     vestingDuration: bigint;
     treasury: string;
     lbpTokenRecipient: string;
@@ -93,7 +92,6 @@ async function deployAuctionFixture(overrides: Partial<AuctionTestConfig> = {}) 
         maxDecayMultiplier: overrides.maxDecayMultiplier ?? ethers.parseEther("2"),
         minCommitDuration: overrides.minCommitDuration ?? 300n,
         vestingStart: overrides.vestingStart ?? defaultStart,
-        vestingCliff: overrides.vestingCliff ?? 0n,
         vestingDuration: overrides.vestingDuration ?? 0n,
         treasury: overrides.treasury ?? treasurySigner.address,
         lbpTokenRecipient: overrides.lbpTokenRecipient ?? ethers.ZeroAddress,
@@ -118,7 +116,6 @@ async function deployAuctionFixture(overrides: Partial<AuctionTestConfig> = {}) 
         maxDecayMultiplier: finalConfig.maxDecayMultiplier,
         minCommitDuration: finalConfig.minCommitDuration,
         vestingStart: finalConfig.vestingStart,
-        vestingCliff: finalConfig.vestingCliff,
         vestingDuration: finalConfig.vestingDuration,
         treasury: finalConfig.treasury,
         lbpTokenRecipient: finalConfig.lbpTokenRecipient,

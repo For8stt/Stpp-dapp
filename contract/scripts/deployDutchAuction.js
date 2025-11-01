@@ -48,7 +48,6 @@ async function main() {
         maxDecayMultiplier: ethers.utils.parseEther("1"),
         minCommitDuration: 60,
         vestingStart: START_TIME,
-        vestingCliff: 0,
         vestingDuration: 0,
         treasury: deployer.address,
         lbpTokenRecipient: deployer.address,

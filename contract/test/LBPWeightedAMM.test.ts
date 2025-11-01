@@ -144,7 +144,7 @@ describe("LBPWeightedAMM — Dynamic Weighted Pool", function () {
         await time.increaseTo(endTime - 1n);
         const quoteLate = await pool.quoteETHForToken(ethers.parseEther("1"));
 
-        expect(quoteLate).to.be.lt(quoteEarly);
+        expect(quoteLate).to.be.gt(quoteEarly);
     });
 
     it("should remove liquidity correctly", async () => {

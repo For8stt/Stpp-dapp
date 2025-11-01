@@ -2,16 +2,19 @@
 pragma solidity ^0.8.20;
 
 /*
- SecureLBP.sol (Integrated with LBPWeightedAMM Pool + Auction Init + Auto-Finalize Callback)
+ SecureLBP.sol (Integrated with LBPWeightedAMM Pool + Direct-Bid Flow + Auto-Finalize Callback)
 
-Policy: commit-reveal LBP with adaptive fees, oracle-driven pauses,
-vesting registration, caps, penalty for unrevealed commits,
-pull-based payments, SafeERC20, events, chunked finalize.
-Intended for integration in STTP pipeline (DutchAuction-Behaviors -> LBP -> Vesting).
+Policy: real-time bidding LBP with adaptive fees, oracle-driven pauses,
+vesting registration, per-address caps, pull-based payments, SafeERC20,
+events, chunked finalize. Intended for integration in STTP pipeline
+(DutchAuction-Behaviors -> LBP -> Vesting).
 
-Supports dynamic pool init from auction proceeds: initPoolFromAuction(eth, tokens) deploys/adds to LBPWeightedAMM.
-- During reveal: Quotes tokens from pool using net ETH (after fee).
-- During finalize: Transfers total ETH to pool, executes swap, distributes tokens to vesting, auto-calls back to PresaleManager.finalizePresale.
+Supports dynamic pool init from auction proceeds: initPoolFromAuction(eth, tokens)
+deploys/adds to LBPWeightedAMM.
+- During trading: placeBid() pushes ETH through the pool using current weights,
+  enforcing user-defined slippage tolerance and adaptive fees.
+- During finalize: Aggregates purchased tokens, routes them to vesting, and
+  auto-calls back to PresaleManager.finalizePresale.
 */
 
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -19,6 +22,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/math/Math.sol";
 
 import "./WeightedAMM.sol"; // Import for dynamic deployment
 
@@ -39,9 +43,8 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
 
     // ============ IMMUTABLE/CONFIG ============
     IERC20 public immutable token;           // sale token
-    uint256 public immutable startTime;      // start of commit phase
-    uint256 public immutable commitEnd;      // end of commit phase (start of reveal)
-    uint256 public immutable revealEnd;      // end of reveal phase (end of LBP)
+    uint256 public immutable startTime;      // start of trading window
+    uint256 public immutable endTime;        // end of the LBP trading window
     address public treasury;                 // destination for collected funds after finalize (pull)
 
     // Pool params (for dynamic creation)
@@ -52,7 +55,8 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
     // basis points: 10000 == 100%
     uint256 public initialFeeBP = 1000; // 10% -> fallback linear schedule
     uint256 public finalFeeBP   = 100;  // 1%  -> fallback linear schedule
-    uint256 public collectedETH;        // total ETH collected (including unrevealed commits)
+    uint256 public totalEthRaised;      // aggregate ETH supplied by bidders (gross, before fees)
+    uint256 public feesAccumulated;     // total manager/oracle fees retained
     uint256 public constant BP_SCALE = 10000;
 
     uint256 public maxContributionPerAddress = 5 ether; // per-address cap (can be changed by onlyOwner)
@@ -69,38 +73,29 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
     bool public finalized; // Guard to prevent double finalization
 
     // ============ DATA STRUCTURES ============
-    struct Commit {
-        bytes32 hash;       // commit hash (key)
-        uint256 amountETH;  // accumulated ETH for this commit
-        uint256 timestamp;  // when first created
-        bool processed;     // marked as processed (revealed or penalized)
-    }
-
-    mapping(address => mapping(bytes32 => Commit)) private _commits;
-    mapping(address => uint256) public totalCommittedBy;     // total ETH committed by user (for caps)
-
-    mapping(address => uint256) public allocations;          // tokens user will get after reveal (in token units)
-    mapping(address => uint256) public pendingRefunds;       // ETH scheduled for withdrawal (e.g., after penalty)
+    mapping(address => uint256) public totalContributed;     // total ETH provided by user (for caps)
+    mapping(address => uint256) public allocations;          // tokens user purchased (in token units)
 
     // events
-    event Committed(address indexed user, bytes32 indexed commitHash, uint256 amountETH);
-    event Revealed(address indexed user, bytes32 indexed commitHash, uint256 amountETH, uint256 tokensBought, uint256 feeBP);
-    event Penalized(address indexed user, bytes32 indexed commitHash, uint256 penaltyAmount, uint256 refundAmount);
+    event BidPlaced(address indexed user, uint256 ethIn, uint256 netEth, uint256 feeBP, uint256 tokensBought);
     event PoolInitialized(address poolAddr);
     event OracleFeeUpdated(uint256 newFeeBP);
     event OraclePaused(uint256 untilTimestamp);
+    event OracleResumed();
     event FinalizedToVesting(address vestingContract, uint256 totalTokens);
     event WithdrawnETH(address to, uint256 amount);
-    event RefundWithdrawn(address user, uint256 amount);
     event TreasurySet(address treasury);
     event OracleSet(address oracleAddr);
+    event PoolFinalized(uint256 totalTokens, uint256 totalETH);
+    event FullUnwindExecuted(uint256 ethRemoved, uint256 tokensRemoved);
+    event PartialUnwindExecuted(uint256 percentBP, uint256 ethRemoved, uint256 tokensRemoved);
+    event PoolRebalancedTo5050(uint256 ethAdded, uint256 tokensAdded);
 
     // ============ CONSTRUCTOR ============
     constructor(
         address _token,
         uint256 _startTime,
-        uint256 _commitEnd,
-        uint256 _revealEnd,
+        uint256 _endTime,
         address _treasury,
         uint256 _poolStartWeightToken, // 0.7e18
         uint256 _poolEndWeightToken,   // 0.3e18
@@ -109,13 +104,12 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
         address _auction
     ) {
         require(_token != address(0), "zero token");
-        require(_startTime < _commitEnd && _commitEnd < _revealEnd, "invalid times");
+        require(_startTime < _endTime, "invalid times");
         require(_treasury != address(0), "zero treasury");
 
         token = IERC20(_token);
         startTime = _startTime;
-        commitEnd = _commitEnd;
-        revealEnd = _revealEnd;
+        endTime = _endTime;
         treasury = _treasury;
         poolStartWeightToken = _poolStartWeightToken;
         poolEndWeightToken = _poolEndWeightToken;
@@ -156,11 +150,12 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
             poolStartWeightToken,
             poolEndWeightToken,
             startTime,
-            revealEnd, // endTime = revealEnd for LBP duration
+            endTime,
             poolSwapFee
         );
 
         // Approve and add liquidity
+        token.safeApprove(address(newPool), 0);
         token.safeApprove(address(newPool), tokenAmount);
         newPool.addLiquidity{value: msg.value}(tokenAmount);
 
@@ -170,75 +165,32 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
         emit PoolInitialized(address(newPool));
     }
 
-    // ============ CORE: COMMIT / REVEAL ============
-    function commitBid(bytes32 commitHash) external payable whenNotPaused checkOracle nonReentrant {
-        require(block.timestamp >= startTime && block.timestamp <= commitEnd, "not in commit window");
-        require(msg.value > 0, "zero bid");
-        require(totalCommittedBy[msg.sender] + msg.value <= maxContributionPerAddress, "exceeds per-address cap");
-
-        Commit storage c = _commits[msg.sender][commitHash];
-        if (c.amountETH == 0) {
-            c.hash = commitHash;
-            c.timestamp = block.timestamp;
-            c.processed = false;
-        }
-
-        c.amountETH += msg.value;
-        totalCommittedBy[msg.sender] += msg.value;
-        collectedETH += msg.value;
-
-        emit Committed(msg.sender, commitHash, msg.value);
-    }
-
-    function revealBid(uint256 amountETH, uint256 nonce) external whenNotPaused checkOracle nonReentrant {
-        require(block.timestamp > commitEnd && block.timestamp <= revealEnd, "not in reveal window");
+    // ============ DIRECT BIDDING ============
+    /// @notice Execute a real-time bid by swapping ETH for tokens with slippage protection.
+    /// @param minTokensOut Minimum acceptable tokens based on caller's tolerance.
+    function placeBid(uint256 minTokensOut) external payable whenNotPaused checkOracle nonReentrant {
         require(poolInitialized, "pool not init");
-        bytes32 expected = keccak256(abi.encodePacked(msg.sender, amountETH, nonce, address(this)));
-        Commit storage c = _commits[msg.sender][expected];
-        require(!c.processed, "already processed");
-        require(c.amountETH == amountETH && amountETH > 0, "amount mismatch or zero");
+        require(block.timestamp >= startTime && block.timestamp <= endTime, "outside bid window");
+        require(msg.value > 0, "zero bid");
+
+        uint256 newContribution = totalContributed[msg.sender] + msg.value;
+        require(newContribution <= maxContributionPerAddress, "exceeds per-address cap");
 
         uint256 feeBP = _currentFeeBP();
-        uint256 fee = (amountETH * feeBP) / BP_SCALE;
-        uint256 net = amountETH - fee;
+        uint256 fee = (msg.value * feeBP) / BP_SCALE;
+        uint256 netValue = msg.value - fee;
+        require(netValue > 0, "net zero");
 
-        // Quote from pool
-        uint256 tokensBought = pool.quoteETHForToken(net);
+        totalContributed[msg.sender] = newContribution;
+        totalEthRaised += msg.value;
+        feesAccumulated += fee;
+
+        uint256 tokensBought = pool.swapETHForTokenTo{value: netValue}(address(this), minTokensOut);
+        require(tokensBought > 0, "zero tokens");
 
         allocations[msg.sender] += tokensBought;
 
-        c.processed = true;
-
-        emit Revealed(msg.sender, expected, amountETH, tokensBought, feeBP);
-    }
-
-    // ============ PENALTY for non-revealed ============
-    function penalizeNonRevealed(address user, bytes32 commitHash, uint256 penaltyBP) external onlyOwner nonReentrant {
-        require(block.timestamp > revealEnd, "reveal not ended");
-        Commit storage c = _commits[user][commitHash];
-        require(!c.processed && c.amountETH > 0, "nothing to penalize");
-
-        uint256 amount = c.amountETH;
-        uint256 penalty = (amount * penaltyBP) / BP_SCALE;
-        uint256 refund = amount - penalty;
-
-        c.amountETH = 0;
-        c.processed = true;
-        totalCommittedBy[user] -= amount;
-        collectedETH -= amount;
-
-        pendingRefunds[user] += refund;
-
-        emit Penalized(user, commitHash, penalty, refund);
-    }
-
-    function withdrawRefund() external nonReentrant {
-        uint256 amt = pendingRefunds[msg.sender];
-        require(amt > 0, "no refund");
-        pendingRefunds[msg.sender] = 0;
-        (bool ok,) = payable(msg.sender).call{value: amt}("");
-        require(ok, "refund transfer failed");
-        emit RefundWithdrawn(msg.sender, amt);
+        emit BidPlaced(msg.sender, msg.value, netValue, feeBP, tokensBought);
     }
 
     // ============ FEE LOGIC (adaptive + fallback) ============
@@ -251,9 +203,9 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
         }
 
         if (block.timestamp <= startTime) return initialFeeBP;
-        if (block.timestamp >= revealEnd) return finalFeeBP;
+        if (block.timestamp >= endTime) return finalFeeBP;
         uint256 elapsed = block.timestamp - startTime;
-        uint256 duration = revealEnd - startTime;
+        uint256 duration = endTime - startTime;
         if (initialFeeBP <= finalFeeBP) return finalFeeBP;
         uint256 drop = initialFeeBP - finalFeeBP;
         return initialFeeBP - (drop * elapsed) / duration;
@@ -265,18 +217,23 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
         emit OracleSet(_oracle);
     }
 
-    function ownerPause() external onlyOwner {
+    function oraclePause() external {
+        require(address(oracle) != address(0), "oracle not set");
+        require(msg.sender == address(oracle), "not oracle");
         _pause();
         emit OraclePaused(block.timestamp);
     }
 
-    function ownerUnpause() external onlyOwner {
+    function oracleUnpause() external {
+        require(address(oracle) != address(0), "oracle not set");
+        require(msg.sender == address(oracle), "not oracle");
         _unpause();
+        emit OracleResumed();
     }
 
     // ============ FINALIZE / VESTING ============
     function finalizeToVesting(address vestingContract, address[] calldata beneficiaries) external onlyOwner nonReentrant {
-        require(block.timestamp > revealEnd, "not ended");
+        require(block.timestamp > endTime, "not ended");
         require(vestingContract != address(0), "zero vesting");
         require(poolInitialized, "pool not init");
         require(!finalized, "already finalized");
@@ -286,27 +243,37 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
         require(len > 0, "no beneficiaries");
 
         uint256 totalTokens = 0;
-        uint256[] memory amounts = new uint256[](len);
+        uint256 positiveCount = 0;
+        for (uint256 i = 0; i < len; ++i) {
+            uint256 amt = allocations[beneficiaries[i]];
+            if (amt > 0) {
+                positiveCount += 1;
+                totalTokens += amt;
+            }
+        }
+
+        address[] memory trimmedBeneficiaries = new address[](positiveCount);
+        uint256[] memory trimmedAmounts = new uint256[](positiveCount);
+        uint256 cursor = 0;
         for (uint256 i = 0; i < len; ++i) {
             address b = beneficiaries[i];
             uint256 amt = allocations[b];
-            amounts[i] = amt;
-            totalTokens += amt;
             allocations[b] = 0;
+            if (amt > 0) {
+                trimmedBeneficiaries[cursor] = b;
+                trimmedAmounts[cursor] = amt;
+                cursor += 1;
+            }
         }
 
-        uint256 totalETH = collectedETH;
-        collectedETH = 0;
+        uint256 totalETH = totalEthRaised;
+        uint256 balance = token.balanceOf(address(this));
+        require(balance >= totalTokens, "insufficient tokens");
 
-        // Calculate minOut for slippage protection (1% tolerance)
-        uint256 minOut = totalTokens * 99 / 100; // 1% slippage max
-
-        if (totalETH > 0) {
-            pool.swapETHForToken{value: totalETH}(minOut);
+        if (totalTokens > 0) {
+            token.safeTransfer(vestingContract, totalTokens);
+            IVesting(vestingContract).registerAllocations(trimmedBeneficiaries, trimmedAmounts);
         }
-        token.safeTransfer(vestingContract, totalTokens);
-
-        IVesting(vestingContract).registerAllocations(beneficiaries, amounts);
 
         emit FinalizedToVesting(vestingContract, totalTokens);
 
@@ -314,21 +281,122 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
             presaleManager.finalizePresale(
                 auction,
                 vestingContract,
-                beneficiaries,
-                amounts,
+                trimmedBeneficiaries,
+                trimmedAmounts,
                 totalETH,
                 totalTokens
             );
         }
+
+        emit PoolFinalized(totalTokens, totalETH);
+    }
+
+    // ============ POST-SALE CLEANUP ============
+    function unwindAllLiquidity() external onlyOwner {
+        require(finalized, "not finalized");
+        require(poolInitialized, "pool not init");
+        require(block.timestamp > endTime, "auction active");
+
+        uint256 lpBalance = pool.balanceLP(address(this));
+        require(lpBalance > 0, "no lp tokens");
+
+        uint256 tokenBefore = token.balanceOf(address(this));
+        uint256 ethBefore = address(this).balance;
+
+        pool.removeLiquidity(lpBalance);
+
+        uint256 tokensRemoved = token.balanceOf(address(this)) - tokenBefore;
+        uint256 ethRemoved = address(this).balance - ethBefore;
+
+        emit FullUnwindExecuted(ethRemoved, tokensRemoved);
+    }
+
+    function unwindPartial(uint256 percentBP) external onlyOwner {
+        require(finalized, "not finalized");
+        require(poolInitialized, "pool not init");
+        require(block.timestamp > endTime, "auction active");
+        require(percentBP > 0 && percentBP <= BP_SCALE, "percent invalid");
+
+        uint256 lpBalance = pool.balanceLP(address(this));
+        require(lpBalance > 0, "no lp tokens");
+
+        uint256 lpToBurn = (lpBalance * percentBP) / BP_SCALE;
+        require(lpToBurn > 0, "nothing to unwind");
+
+        uint256 tokenBefore = token.balanceOf(address(this));
+        uint256 ethBefore = address(this).balance;
+
+        pool.removeLiquidity(lpToBurn);
+
+        uint256 tokensRemoved = token.balanceOf(address(this)) - tokenBefore;
+        uint256 ethRemoved = address(this).balance - ethBefore;
+
+        emit PartialUnwindExecuted(percentBP, ethRemoved, tokensRemoved);
+    }
+
+    function rebalanceTo5050() external payable onlyOwner {
+        require(finalized, "not finalized");
+        require(poolInitialized, "pool not init");
+        require(block.timestamp > endTime, "auction active");
+
+        uint256 reserveEth = pool.reserveETH();
+        uint256 reserveToken = pool.reserveToken();
+        require(reserveEth > 0 && reserveToken > 0, "empty pool");
+
+        (uint256 weightToken, uint256 weightEth) = pool.currentWeights();
+        require(weightToken > 0 && weightEth > 0, "weights zero");
+
+        uint256 pricePerToken = Math.mulDiv(reserveEth, weightToken, reserveToken);
+        pricePerToken = Math.mulDiv(pricePerToken, 1e18, weightEth);
+        require(pricePerToken > 0, "price zero");
+
+        uint256 tokenValue = Math.mulDiv(reserveToken, pricePerToken, 1e18);
+        uint256 ethValue = reserveEth;
+
+        if (tokenValue > ethValue) {
+            uint256 ethNeeded = tokenValue - ethValue;
+            require(ethNeeded > 0, "balanced");
+            require(msg.value >= ethNeeded, "insufficient eth");
+
+            pool.addLiquiditySingleETH{value: ethNeeded}();
+
+            if (msg.value > ethNeeded) {
+                (bool refundOk, ) = msg.sender.call{value: msg.value - ethNeeded}("");
+                require(refundOk, "refund failed");
+            }
+
+            emit PoolRebalancedTo5050(ethNeeded, 0);
+        } else if (ethValue > tokenValue) {
+            uint256 diff = ethValue - tokenValue;
+            uint256 tokensNeeded = Math.mulDiv(diff, 1e18, pricePerToken);
+            require(tokensNeeded > 0, "balanced");
+            require(msg.value == 0, "eth not needed");
+
+            uint256 currentBalance = token.balanceOf(address(this));
+            if (currentBalance < tokensNeeded) {
+                uint256 shortfall = tokensNeeded - currentBalance;
+                token.safeTransferFrom(msg.sender, address(this), shortfall);
+            }
+
+            token.safeApprove(address(pool), 0);
+            token.safeApprove(address(pool), tokensNeeded);
+            pool.addLiquiditySingleToken(tokensNeeded);
+            token.safeApprove(address(pool), 0);
+
+            emit PoolRebalancedTo5050(0, tokensNeeded);
+        } else {
+            revert("already balanced");
+        }
     }
 
     // ============ WITHDRAWALS / TREASURY ============
-    function withdrawETH(address payable to, uint256 amount) external onlyOwner {
-        require(to != address(0), "zero addr");
+    function withdrawETH(uint256 amount) external onlyOwner {
+        require(block.timestamp > endTime, "auction active");
+        require(treasury != address(0), "treasury zero");
         require(amount <= address(this).balance, "insufficient balance");
-        (bool ok,) = to.call{value: amount}("");
+        (bool ok,) = payable(treasury).call{value: amount}("");
         require(ok, "withdraw failed");
-        emit WithdrawnETH(to, amount);
+        emit WithdrawnETH(treasury, amount);
     }
 
     function setTreasury(address _treasury) external onlyOwner {
@@ -348,10 +416,6 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
     }
 
     // ============ GETTERS ============
-    function getCommit(address user, bytes32 commitHash) external view returns (Commit memory) {
-        return _commits[user][commitHash];
-    }
-
     function currentFeeBP() external view returns (uint256) {
         return _currentFeeBP();
     }

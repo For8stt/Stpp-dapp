@@ -40,15 +40,13 @@ describe("SecureLBP Pool Initialization", function () {
 
         const now = await time.latest();
         const start = now + 10;
-        const commitEnd = start + 60;
-        const revealEnd = commitEnd + 60;
+        const endTime = start + 120;
 
         const LBP = await ethers.getContractFactory("SecureLBP");
         lbp = (await LBP.deploy(
             await token.getAddress(),
             start,
-            commitEnd,
-            revealEnd,
+            endTime,
             treasury.address,
             POOL_START_WEIGHT,
             POOL_END_WEIGHT,

@@ -21,7 +21,6 @@ interface AuctionTestConfig {
     maxDecayMultiplier: bigint;
     minCommitDuration: bigint;
     vestingStart: bigint;
-    vestingCliff: bigint;
     vestingDuration: bigint;
     treasury: string;
     lbpTokenRecipient: string;
@@ -80,7 +79,6 @@ async function deployAuctionFixture(overrides: Partial<AuctionTestConfig> = {}) 
         maxDecayMultiplier: overrides.maxDecayMultiplier ?? ethers.parseEther("2"),
         minCommitDuration: overrides.minCommitDuration ?? 300n,
         vestingStart: overrides.vestingStart ?? defaultStart,
-        vestingCliff: overrides.vestingCliff ?? 0n,
         vestingDuration: overrides.vestingDuration ?? 0n,
         treasury: overrides.treasury ?? treasurySigner.address,
         lbpTokenRecipient: overrides.lbpTokenRecipient ?? bob.address,
@@ -105,7 +103,6 @@ async function deployAuctionFixture(overrides: Partial<AuctionTestConfig> = {}) 
         maxDecayMultiplier: finalConfig.maxDecayMultiplier,
         minCommitDuration: finalConfig.minCommitDuration,
         vestingStart: finalConfig.vestingStart,
-        vestingCliff: finalConfig.vestingCliff,
         vestingDuration: finalConfig.vestingDuration,
         treasury: finalConfig.treasury,
         lbpTokenRecipient: finalConfig.lbpTokenRecipient,
@@ -162,7 +159,6 @@ describe("DutchAuction-Behaviors extended behaviors", function () {
             maxDecayMultiplier: ethers.parseEther("1"),
             minCommitDuration: 100n,
             vestingStart: 0n,
-            vestingCliff: 0n,
             vestingDuration: 0n,
             treasury: treasury.address,
             lbpTokenRecipient: treasury.address,
@@ -274,7 +270,7 @@ describe("DutchAuction-Behaviors extended behaviors", function () {
         await expect(auction.updateDynamicReserve()).to.be.revertedWithCustomError(auction, "CommitPhaseComplete");
     });
 
-    it("handles vesting cliffs and gradual unlocks", async function () {
+    it("locks tokens until vesting duration completes", async function () {
         const latestBlock = await ethers.provider.getBlock("latest");
         const now = BigInt(latestBlock?.timestamp ?? 0);
 
@@ -282,7 +278,6 @@ describe("DutchAuction-Behaviors extended behaviors", function () {
             fixtureWithOverrides({
                 startTime: now + 120n,
                 vestingStart: now + 10_000n,
-                vestingCliff: 300n,
                 vestingDuration: 900n,
                 tokensForSale: 90n,
                 bonusReserve: 0n,
@@ -306,22 +301,12 @@ describe("DutchAuction-Behaviors extended behaviors", function () {
         await time.increaseTo(revealEndTime + 1n);
         await auction.finalize();
 
-        const beforeCliffTimestamp = BigInt((await ethers.provider.getBlock("latest"))!.timestamp);
-        expect(beforeCliffTimestamp).to.be.lt(ctx.config.vestingStart + ctx.config.vestingCliff);
+        const currentTs = BigInt((await ethers.provider.getBlock("latest"))!.timestamp);
+        expect(currentTs).to.be.lt(ctx.config.vestingStart + ctx.config.vestingDuration);
         await expect(auction.connect(alice).claim.staticCall()).to.be.revertedWithCustomError(auction, "NothingToClaim");
 
-        await time.increaseTo(ctx.config.vestingStart + ctx.config.vestingCliff - 1n);
+        await time.increaseTo(ctx.config.vestingStart + ctx.config.vestingDuration - 1n);
         await expect(auction.connect(alice).claim.staticCall()).to.be.revertedWithCustomError(auction, "NothingToClaim");
-
-        await time.increaseTo(ctx.config.vestingStart + ctx.config.vestingCliff + 1n);
-        await auction.connect(alice).claim();
-        const afterCliffBalance = await token.balanceOf(await alice.getAddress());
-        expect(afterCliffBalance).to.be.gt(0n);
-
-        await time.increaseTo(ctx.config.vestingStart + ctx.config.vestingDuration / 2n);
-        await auction.connect(alice).claim();
-        const midBalance = await token.balanceOf(await alice.getAddress());
-        expect(midBalance).to.be.gt(afterCliffBalance);
 
         await time.increaseTo(ctx.config.vestingStart + ctx.config.vestingDuration + 1n);
         await auction.connect(alice).claim();

@@ -39,15 +39,13 @@ describe("SecureLBP Deployment", function () {
 
         const now = await time.latest();
         const start = now + 10;
-        const commitEnd = start + 60;
-        const revealEnd = commitEnd + 60;
+        const end = start + 120;
 
         const LBP = await ethers.getContractFactory("SecureLBP");
         lbp = (await LBP.deploy(
             await token.getAddress(),
             start,
-            commitEnd,
-            revealEnd,
+            end,
             treasury.address,
             POOL_START_WEIGHT,
             POOL_END_WEIGHT,
@@ -65,15 +63,13 @@ describe("SecureLBP Deployment", function () {
         it("should deploy with valid params", async () => {
             const now = await time.latest();
             const start = now + 10;
-            const commitEnd = start + 60;
-            const revealEnd = commitEnd + 60;
+            const end = start + 120;
 
             const LBP = await ethers.getContractFactory("SecureLBP");
             const newLbp = (await LBP.deploy(
                 await token.getAddress(),
                 start,
-                commitEnd,
-                revealEnd,
+                end,
                 treasury.address,
                 POOL_START_WEIGHT,
                 POOL_END_WEIGHT,
@@ -85,8 +81,7 @@ describe("SecureLBP Deployment", function () {
 
             expect(await newLbp.token()).to.equal(await token.getAddress());
             expect(await newLbp.startTime()).to.equal(start);
-            expect(await newLbp.commitEnd()).to.equal(commitEnd);
-            expect(await newLbp.revealEnd()).to.equal(revealEnd);
+            expect(await newLbp.endTime()).to.equal(end);
             expect(await newLbp.treasury()).to.equal(treasury.address);
             expect(await newLbp.poolStartWeightToken()).to.equal(POOL_START_WEIGHT);
             expect(await newLbp.poolEndWeightToken()).to.equal(POOL_END_WEIGHT);
@@ -102,16 +97,14 @@ describe("SecureLBP Deployment", function () {
         it("should revert on zero token", async () => {
             const now = await time.latest();
             const start = now + 10;
-            const commitEnd = start + 60;
-            const revealEnd = commitEnd + 60;
+            const end = start + 120;
 
             const LBP = await ethers.getContractFactory("SecureLBP");
             await expect(
                 LBP.deploy(
                     ethers.ZeroAddress,
                     start,
-                    commitEnd,
-                    revealEnd,
+                    end,
                     treasury.address,
                     POOL_START_WEIGHT,
                     POOL_END_WEIGHT,
@@ -125,16 +118,14 @@ describe("SecureLBP Deployment", function () {
         it("should revert on invalid times", async () => {
             const now = await time.latest();
             const start = now + 10;
-            const commitEnd = start - 5;
-            const revealEnd = commitEnd + 60;
+            const end = start - 5;
 
             const LBP = await ethers.getContractFactory("SecureLBP");
             await expect(
                 LBP.deploy(
                     await token.getAddress(),
                     start,
-                    commitEnd,
-                    revealEnd,
+                    end,
                     treasury.address,
                     POOL_START_WEIGHT,
                     POOL_END_WEIGHT,
@@ -148,16 +139,14 @@ describe("SecureLBP Deployment", function () {
         it("should revert on zero treasury", async () => {
             const now = await time.latest();
             const start = now + 10;
-            const commitEnd = start + 60;
-            const revealEnd = commitEnd + 60;
+            const end = start + 120;
 
             const LBP = await ethers.getContractFactory("SecureLBP");
             await expect(
                 LBP.deploy(
                     await token.getAddress(),
                     start,
-                    commitEnd,
-                    revealEnd,
+                    end,
                     ethers.ZeroAddress,
                     POOL_START_WEIGHT,
                     POOL_END_WEIGHT,

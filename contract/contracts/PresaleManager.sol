@@ -7,10 +7,16 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./DutchAuction.sol";
 import "./SecureLBP.sol";
 import "./interfaces/IPresaleManager.sol";
+import "./TwoStageVesting.sol";
+
+interface IAutomationCompatible {
+    function checkUpkeep(bytes calldata checkData) external view returns (bool upkeepNeeded, bytes memory performData);
+    function performUpkeep(bytes calldata performData) external;
+}
 
 /// @title PresaleManager
 /// @notice Coordinates the full presale pipeline (Dutch auction → LBP → vesting).
-contract PresaleManager is Ownable, IPresaleManager {
+contract PresaleManager is Ownable, IPresaleManager, IAutomationCompatible {
     using SafeERC20 for IERC20;
 
     struct AuctionInput {
@@ -30,21 +36,57 @@ contract PresaleManager is Ownable, IPresaleManager {
         uint256 thresholdLow;
         uint256 maxDecayMultiplier;
         uint256 minCommitDuration;
+        uint256 demandCheckTime;
         uint256 vestingStart;
-        uint256 vestingCliff;
         uint256 vestingDuration;
         bytes32 merkleRoot;
         uint256[] priceTicks;
     }
 
+    /// @notice Allows the manager owner to top up the auction bonus reserve.
+    function auctionUpdateBonusReserve(address auctionAddress, uint256 additionalReserve) external onlyOwner {
+        AuctionRecord storage record = _records[auctionAddress];
+        require(isManagedAuction[auctionAddress], "unknown auction");
+
+        DutchAuction payableAuction = DutchAuction(payable(auctionAddress));
+        payableAuction.updateBonusReserve(additionalReserve);
+        record.bonusReserve += additionalReserve;
+    }
+
+    /// @notice Updates vesting schedule parameters on the Dutch auction.
+    function auctionUpdateVesting(
+        address auctionAddress,
+        uint256 newStart,
+        uint256 newDuration
+    ) external onlyOwner {
+        require(isManagedAuction[auctionAddress], "unknown auction");
+
+        DutchAuction(payable(auctionAddress)).updateVesting(newStart, newDuration);
+    }
+
+    /// @notice Withdraws auction proceeds to the configured treasury through the auction contract.
+    function auctionWithdrawTreasury(address payable auctionAddress, address payable recipient) external onlyOwner {
+        AuctionRecord storage record = _records[auctionAddress];
+        require(isManagedAuction[auctionAddress], "unknown auction");
+        require(recipient != address(0), "recipient zero");
+
+        DutchAuction payableAuction = DutchAuction(payable(auctionAddress));
+        payableAuction.withdrawTreasury(recipient);
+        record.totalRaised = payableAuction.totalRaised();
+    }
+
     struct LbpLaunchConfig {
         uint256 startTime;
-        uint256 commitEnd;
-        uint256 revealEnd;
+        uint256 endTime;
         uint256 poolStartWeightToken;
         uint256 poolEndWeightToken;
         uint256 poolSwapFee;
         address vesting;
+        bool deployVesting;
+        uint256 vestingStartTime;
+        uint256 vestingCliffDuration;
+        uint256 vestingFinalDuration;
+        uint256 vestingCliffPercentBP;
     }
 
     struct AuctionRecord {
@@ -63,8 +105,10 @@ contract PresaleManager is Ownable, IPresaleManager {
         uint256 unsoldTokens;
         uint256 lbpEthProvided;
         uint256 lbpTokensProvided;
-        uint256 ethDeliveredToVesting;
+        uint256 ethRaisedDuringLBP;
         uint256 tokensDeliveredToVesting;
+        uint256 demandCheckTime;
+        bool demandCheckTriggered;
     }
 
     address[] private _auctions;
@@ -94,12 +138,19 @@ contract PresaleManager is Ownable, IPresaleManager {
         uint256 tokenAmount
     );
     event AuctionProceedsWithdrawn(address indexed auction, address indexed recipient, uint256 amount);
+    event AuctionDemandCheckExecuted(address indexed auction);
+    event KeeperEnabledUpdated(bool enabled);
+
+    bool public keeperEnabled = true;
+    bool private keeperConfigFrozen;
+    uint256 private constant DEMAND_CHECK_GRACE = 30 minutes;
 
     /// @notice Deploys and configures a new Dutch auction under manager control.
     function createAuction(AuctionInput calldata params) external onlyOwner returns (address auctionAddress) {
         require(params.saleToken != address(0), "saleToken zero");
         require(params.treasury != address(0), "treasury zero");
         require(params.priceTicks.length > 0, "priceTicks empty");
+        keeperConfigFrozen = true;
 
         DutchAuction auction = new DutchAuction(IERC20(params.saleToken), address(this));
 
@@ -119,7 +170,6 @@ contract PresaleManager is Ownable, IPresaleManager {
             maxDecayMultiplier: params.maxDecayMultiplier,
             minCommitDuration: params.minCommitDuration,
             vestingStart: params.vestingStart,
-            vestingCliff: params.vestingCliff,
             vestingDuration: params.vestingDuration,
             treasury: params.treasury,
             lbpTokenRecipient: address(this),
@@ -140,6 +190,8 @@ contract PresaleManager is Ownable, IPresaleManager {
         record.treasury = params.treasury;
         record.tokensForSale = params.tokensForSale;
         record.bonusReserve = params.bonusReserve;
+        record.demandCheckTime = params.demandCheckTime;
+        record.demandCheckTriggered = false;
 
         emit AuctionCreated(auctionAddress, params.saleToken, params.tokensForSale);
     }
@@ -150,7 +202,7 @@ contract PresaleManager is Ownable, IPresaleManager {
         require(isManagedAuction[auctionAddress], "unknown auction");
         require(!record.finalized, "already finalized");
 
-        DutchAuction auction = DutchAuction(auctionAddress);
+        DutchAuction auction = DutchAuction(payable(auctionAddress));
         auction.finalize();
 
         bool success = auction.successful();
@@ -179,12 +231,11 @@ contract PresaleManager is Ownable, IPresaleManager {
         require(isManagedAuction[auctionAddress], "unknown auction");
         require(record.finalized, "auction not finalized");
         require(!record.lbpInitialized, "lbp already launched");
-        require(cfg.vesting != address(0), "vesting zero");
-        require(cfg.startTime < cfg.commitEnd && cfg.commitEnd < cfg.revealEnd, "invalid lbp times");
+        require(cfg.startTime < cfg.endTime, "invalid lbp times");
 
         uint256 tokenBalanceBefore = IERC20(record.saleToken).balanceOf(address(this));
         uint256 ethBalanceBefore = address(this).balance;
-        DutchAuction(auctionAddress).launchLbp();
+        DutchAuction(payable(auctionAddress)).launchLbp();
         uint256 tokensReceived = IERC20(record.saleToken).balanceOf(address(this)) - tokenBalanceBefore;
         uint256 ethReceived = address(this).balance - ethBalanceBefore;
         require(tokensReceived > 0, "no tokens received");
@@ -195,14 +246,35 @@ contract PresaleManager is Ownable, IPresaleManager {
         IERC20(record.saleToken).safeTransfer(deployedLbp, tokensReceived);
         SecureLBP(deployedLbp).initPoolFromAuction{value: ethReceived}(tokensReceived);
 
+        address vestingTarget = cfg.vesting;
+        if (cfg.deployVesting) {
+            require(vestingTarget == address(0), "vesting preset");
+            TwoStageVesting vestingInstance = new TwoStageVesting(
+                record.saleToken,
+                cfg.vestingStartTime,
+                cfg.vestingCliffDuration,
+                cfg.vestingFinalDuration,
+                cfg.vestingCliffPercentBP
+            );
+            vestingInstance.setRegistrar(deployedLbp);
+            vestingTarget = address(vestingInstance);
+        }
+
+        require(vestingTarget != address(0), "vesting zero");
+
+        // Attempt to wire registrar automatically for compatible vesting contracts.
+        if (!cfg.deployVesting) {
+            try TwoStageVesting(vestingTarget).setRegistrar(deployedLbp) {} catch {}
+        }
+
         record.lbp = deployedLbp;
-        record.vesting = cfg.vesting;
+        record.vesting = vestingTarget;
         record.lbpInitialized = true;
         record.lbpTokensProvided = tokensReceived;
         record.lbpEthProvided = ethReceived;
 
         lbpAddress = address(deployedLbp);
-        emit LBPInitialized(auctionAddress, lbpAddress, cfg.vesting, tokensReceived, ethReceived);
+        emit LBPInitialized(auctionAddress, lbpAddress, vestingTarget, tokensReceived, ethReceived);
     }
 
     /// @notice Finalizes the LBP phase and routes allocations to the configured vesting contract.
@@ -216,12 +288,84 @@ contract PresaleManager is Ownable, IPresaleManager {
         SecureLBP(record.lbp).finalizeToVesting(record.vesting, beneficiaries);
     }
 
+    /// @notice Burns all remaining LP tokens and returns ETH + tokens to SecureLBP.
+    function unwindLbpAll(address auctionAddress) external onlyOwner {
+        AuctionRecord storage record = _records[auctionAddress];
+        require(isManagedAuction[auctionAddress], "unknown auction");
+        require(record.lbpInitialized, "lbp not launched");
+
+        SecureLBP(record.lbp).unwindAllLiquidity();
+    }
+
+    /// @notice Burns a percentage of LBP liquidity in basis points.
+    function unwindLbpPartial(address auctionAddress, uint256 percentBP) external onlyOwner {
+        AuctionRecord storage record = _records[auctionAddress];
+        require(isManagedAuction[auctionAddress], "unknown auction");
+        require(record.lbpInitialized, "lbp not launched");
+
+        SecureLBP(record.lbp).unwindPartial(percentBP);
+    }
+
+    /// @notice Rebalances the remaining pool reserves to an approximate 50/50 value split.
+    function rebalanceLbp5050(address auctionAddress) external payable onlyOwner {
+        AuctionRecord storage record = _records[auctionAddress];
+        require(isManagedAuction[auctionAddress], "unknown auction");
+        require(record.lbpInitialized, "lbp not launched");
+
+        SecureLBP(record.lbp).rebalanceTo5050{value: msg.value}();
+    }
+
+    /// @notice Sweeps ETH from SecureLBP to the configured treasury post-sale.
+    function withdrawLbpEth(address auctionAddress, uint256 amount) external onlyOwner {
+        AuctionRecord storage record = _records[auctionAddress];
+        require(isManagedAuction[auctionAddress], "unknown auction");
+        require(record.lbpInitialized, "lbp not launched");
+
+        SecureLBP(record.lbp).withdrawETH(amount);
+    }
+
+    /// @notice Updates the oracle contract consumed by the LBP.
+    function setLbpOracle(address auctionAddress, address oracle) external onlyOwner {
+        AuctionRecord storage record = _records[auctionAddress];
+        require(isManagedAuction[auctionAddress], "unknown auction");
+        require(record.lbpInitialized, "lbp not launched");
+
+        SecureLBP(record.lbp).setOracle(oracle);
+    }
+
+    /// @notice Updates the treasury address used for ETH withdrawals.
+    function setLbpTreasury(address auctionAddress, address treasury_) external onlyOwner {
+        AuctionRecord storage record = _records[auctionAddress];
+        require(isManagedAuction[auctionAddress], "unknown auction");
+        require(record.lbpInitialized, "lbp not launched");
+
+        SecureLBP(record.lbp).setTreasury(treasury_);
+    }
+
+    /// @notice Adjusts the per-address contribution cap enforced by the LBP.
+    function setLbpMaxContribution(address auctionAddress, uint256 cap) external onlyOwner {
+        AuctionRecord storage record = _records[auctionAddress];
+        require(isManagedAuction[auctionAddress], "unknown auction");
+        require(record.lbpInitialized, "lbp not launched");
+
+        SecureLBP(record.lbp).setMaxContributionPerAddress(cap);
+    }
+
+    /// @notice Recovers non-sale tokens accidentally sent to the LBP.
+    function rescueLbpERC20(address auctionAddress, address erc20, address to, uint256 amount) external onlyOwner {
+        AuctionRecord storage record = _records[auctionAddress];
+        require(isManagedAuction[auctionAddress], "unknown auction");
+        require(record.lbpInitialized, "lbp not launched");
+
+        SecureLBP(record.lbp).rescueERC20(erc20, to, amount);
+    }
+
     /// @notice Withdraws remaining ETH proceeds from a managed auction to the desired recipient.
     function withdrawAuctionProceeds(address payable auctionAddress, address payable recipient) external onlyOwner {
         require(isManagedAuction[auctionAddress], "unknown auction");
         require(recipient != address(0), "recipient zero");
 
-        DutchAuction auction = DutchAuction(auctionAddress);
+        DutchAuction auction = DutchAuction(payable(auctionAddress));
         uint256 balanceBefore = auction.ethForTreasury();
         auction.withdrawTreasury(recipient);
         emit AuctionProceedsWithdrawn(auctionAddress, recipient, balanceBefore - auction.ethForTreasury());
@@ -259,10 +403,90 @@ contract PresaleManager is Ownable, IPresaleManager {
         }
 
         record.vestingFinalized = true;
-        record.ethDeliveredToVesting = ethAmount;
+        record.ethRaisedDuringLBP = ethAmount;
         record.tokensDeliveredToVesting = tokenAmount;
 
         emit LBPFinalized(auctionAddress, msg.sender, vestingContract, ethAmount, tokenAmount);
+    }
+
+    /// @notice Checks auction demand and triggers dynamic reserve adjustment if needed.
+    function checkAndAdjustAuction(address auctionAddress) external onlyOwner {
+        AuctionRecord storage record = _records[auctionAddress];
+        require(isManagedAuction[auctionAddress], "unknown auction");
+        require(!keeperEnabled, "keeper active");
+        require(record.demandCheckTime != 0, "demand time unset");
+        require(block.timestamp >= record.demandCheckTime, "too early");
+        require(block.timestamp <= record.demandCheckTime + DEMAND_CHECK_GRACE, "window elapsed");
+        _executeDemandCheck(auctionAddress, record, true);
+    }
+
+    /// @notice Enables or disables keeper-based demand checks.
+    function setKeeperEnabled(bool enabled) external onlyOwner {
+        require(!keeperConfigFrozen, "keepers frozen");
+        keeperEnabled = enabled;
+        emit KeeperEnabledUpdated(enabled);
+    }
+
+    /// @inheritdoc IAutomationCompatible
+    function checkUpkeep(bytes calldata /* checkData */)
+        external
+        view
+        override
+        returns (bool upkeepNeeded, bytes memory performData)
+    {
+        if (!keeperEnabled) {
+            return (false, bytes(""));
+        }
+
+        uint256 len = _auctions.length;
+        for (uint256 i = 0; i < len; ++i) {
+            address auctionAddress = _auctions[i];
+            AuctionRecord storage record = _records[auctionAddress];
+            DutchAuction auction = DutchAuction(payable(auctionAddress));
+            if (_shouldTriggerDemandCheck(auction, record)) {
+                return (true, abi.encode(auctionAddress));
+            }
+        }
+
+        return (false, bytes(""));
+    }
+
+    /// @inheritdoc IAutomationCompatible
+    function performUpkeep(bytes calldata performData) external override {
+        require(keeperEnabled, "keeper disabled");
+        address auctionAddress = abi.decode(performData, (address));
+        AuctionRecord storage record = _records[auctionAddress];
+        require(isManagedAuction[auctionAddress], "unknown auction");
+        _executeDemandCheck(auctionAddress, record, true);
+    }
+
+    function _executeDemandCheck(
+        address auctionAddress,
+        AuctionRecord storage record,
+        bool enforce
+    ) private {
+        DutchAuction auction = DutchAuction(payable(auctionAddress));
+        bool shouldTrigger = _shouldTriggerDemandCheck(auction, record);
+        if (enforce) {
+            require(shouldTrigger, "conditions not met");
+        }
+        if (!shouldTrigger) {
+            return;
+        }
+
+        auction.updateDynamicReserve();
+        record.demandCheckTriggered = true;
+        emit AuctionDemandCheckExecuted(auctionAddress);
+    }
+
+    function _shouldTriggerDemandCheck(DutchAuction auction, AuctionRecord storage record) private view returns (bool) {
+        if (record.demandCheckTriggered) return false;
+        if (record.demandCheckTime == 0 || block.timestamp < record.demandCheckTime) return false;
+        if (auction.finalized()) return false;
+        if (block.timestamp > auction.commitEndTime()) return false;
+        if (auction.dynamicAdjustmentCount() > 0) return false;
+        if (auction.totalDepositCommitted() >= auction.thresholdLow()) return false;
+        return true;
     }
 
     function _deploySecureLBP(
@@ -273,8 +497,7 @@ contract PresaleManager is Ownable, IPresaleManager {
         SecureLBP lbp = new SecureLBP(
             record.saleToken,
             cfg.startTime,
-            cfg.commitEnd,
-            cfg.revealEnd,
+            cfg.endTime,
             record.treasury,
             cfg.poolStartWeightToken,
             cfg.poolEndWeightToken,
