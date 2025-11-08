@@ -4,7 +4,9 @@ import {
     SecureLBP,
     TestToken,
     MockPresaleManager,
-    LBPWeightedAMM
+    LBPWeightedAMM,
+    LBPOracle,
+    MockPriceFeed
 } from "../../typechain-types";
 
 const POOL_START_WEIGHT = ethers.parseUnits("0.7", 18);
@@ -24,6 +26,8 @@ export interface LbpBaseContext {
     token: TestToken;
     lbp: SecureLBP;
     pool: LBPWeightedAMM;
+    oracle: LBPOracle;
+    priceFeed: MockPriceFeed;
     startTime: bigint;
     endTime: bigint;
 }
@@ -64,6 +68,16 @@ export async function deployLbpWithPoolFixture(): Promise<LbpBaseContext> {
 
     const pool = (await ethers.getContractAt("LBPWeightedAMM", await lbp.pool())) as LBPWeightedAMM;
 
+    const Feed = await ethers.getContractFactory("MockPriceFeed");
+    const priceFeed = (await Feed.deploy(ethers.parseUnits("2000", 8))) as MockPriceFeed;
+    await priceFeed.waitForDeployment();
+
+    const Oracle = await ethers.getContractFactory("LBPOracle");
+    const oracle = (await Oracle.deploy(await priceFeed.getAddress())) as LBPOracle;
+    await oracle.waitForDeployment();
+
+    await lbp.connect(owner).setOracle(await oracle.getAddress());
+
     return {
         owner,
         user1,
@@ -74,6 +88,8 @@ export async function deployLbpWithPoolFixture(): Promise<LbpBaseContext> {
         token,
         lbp,
         pool,
+        oracle,
+        priceFeed,
         startTime,
         endTime
     };
@@ -131,6 +147,16 @@ export async function deployLbpWithoutPoolFixture(): Promise<Omit<LbpBaseContext
     )) as SecureLBP;
     await lbp.waitForDeployment();
 
+    const Feed = await ethers.getContractFactory("MockPriceFeed");
+    const priceFeed = (await Feed.deploy(ethers.parseUnits("2000", 8))) as MockPriceFeed;
+    await priceFeed.waitForDeployment();
+
+    const Oracle = await ethers.getContractFactory("LBPOracle");
+    const oracle = (await Oracle.deploy(await priceFeed.getAddress())) as LBPOracle;
+    await oracle.waitForDeployment();
+
+    await lbp.connect(owner).setOracle(await oracle.getAddress());
+
     return {
         owner,
         user1,
@@ -140,6 +166,8 @@ export async function deployLbpWithoutPoolFixture(): Promise<Omit<LbpBaseContext
         presaleManager,
         token,
         lbp,
+        oracle,
+        priceFeed,
         startTime,
         endTime
     };

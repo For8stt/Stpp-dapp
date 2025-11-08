@@ -6,7 +6,7 @@ pragma solidity ^0.8.20;
 
 Policy: real-time bidding LBP with adaptive fees, oracle-driven pauses,
 per-address caps, pull-based claims, SafeERC20 events, chunked finalize.
-Intended for integration in STTP pipeline (DutchAuction-Behaviors -> LBP).
+Intended for integration in STPP pipeline (DutchAuction -> LBP).
 
 Supports dynamic pool init from auction proceeds: initPoolFromAuction(eth, tokens)
 deploys/adds to LBPWeightedAMM.
@@ -30,7 +30,7 @@ interface ILBPOracle {
     function viewAdaptiveFee() external view returns (uint256);
 }
 
-// Interface for PresaleManager callback (moved from here to avoid duplicate; import from DutchAuction-Behaviors if needed)
+// Interface for PresaleManager callback (moved from here to avoid duplicate; import from DutchAuction if needed)
 import "./interfaces/IPresaleManager.sol";
 
 contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
@@ -92,6 +92,7 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
     event FullUnwindExecuted(uint256 ethRemoved, uint256 tokensRemoved);
     event PartialUnwindExecuted(uint256 percentBP, uint256 ethRemoved, uint256 tokensRemoved);
     event PoolRebalancedTo5050(uint256 ethAdded, uint256 tokensAdded);
+    event TokensWithdrawn(address to, uint256 amount);
 
     // ============ CONSTRUCTOR ============
     constructor(
@@ -375,7 +376,9 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
     }
 
     // ============ WITHDRAWALS / TREASURY ============
+    /// @notice Owner option #3: pull pure ETH proceeds once trading + vesting allocations are sealed.
     function withdrawETH(uint256 amount) external onlyOwner {
+        require(finalized, "LBP not finalized");
         require(block.timestamp > endTime, "auction active");
         require(treasury != address(0), "treasury zero");
         require(amount <= address(this).balance, "insufficient balance");
@@ -384,7 +387,30 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
         emit WithdrawnETH(treasury, amount);
     }
 
+    /// @notice Owner option #1/#2 helper: withdraw all unsold tokens that currently sit on SecureLBP.
+    function withdrawAllTokens() external onlyOwner {
+        uint256 balance = token.balanceOf(address(this));
+        require(balance > 0, "no tokens");
+        _withdrawTokens(balance);
+    }
+
+    /// @notice Owner option #2 helper: withdraw a specific token amount (post-unwind remainders).
+    function withdrawTokens(uint256 amount) external onlyOwner {
+        require(amount > 0, "amount zero");
+        _withdrawTokens(amount);
+    }
+
+    function _withdrawTokens(uint256 amount) internal {
+        require(finalized, "LBP not finalized");
+        require(treasury != address(0), "treasury zero");
+        uint256 balance = token.balanceOf(address(this));
+        require(amount <= balance, "insufficient tokens");
+        token.safeTransfer(treasury, amount);
+        emit TokensWithdrawn(treasury, amount);
+    }
+
     function setTreasury(address _treasury) external onlyOwner {
+        require(block.timestamp < startTime, "cannot change treasury after start");
         require(_treasury != address(0), "zero");
         treasury = _treasury;
         emit TreasurySet(_treasury);

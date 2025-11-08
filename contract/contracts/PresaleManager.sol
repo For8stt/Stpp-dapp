@@ -306,6 +306,24 @@ contract PresaleManager is Ownable, IPresaleManager, IAutomationCompatible {
         SecureLBP(record.lbp).withdrawETH(amount);
     }
 
+    /// @notice Withdraws a specific amount of unsold tokens from SecureLBP to the treasury.
+    function withdrawLbpTokens(address auctionAddress, uint256 amount) external onlyOwner {
+        AuctionRecord storage record = _records[auctionAddress];
+        require(isManagedAuction[auctionAddress], "unknown auction");
+        require(record.lbpInitialized, "lbp not launched");
+
+        SecureLBP(record.lbp).withdrawTokens(amount);
+    }
+
+    /// @notice Withdraws the entire unsold token balance held by SecureLBP to the treasury.
+    function withdrawLbpAllTokens(address auctionAddress) external onlyOwner {
+        AuctionRecord storage record = _records[auctionAddress];
+        require(isManagedAuction[auctionAddress], "unknown auction");
+        require(record.lbpInitialized, "lbp not launched");
+
+        SecureLBP(record.lbp).withdrawAllTokens();
+    }
+
     /// @notice Updates the oracle contract consumed by the LBP.
     function setLbpOracle(address auctionAddress, address oracle) external onlyOwner {
         AuctionRecord storage record = _records[auctionAddress];

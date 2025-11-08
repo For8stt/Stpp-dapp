@@ -26,7 +26,7 @@ async function main() {
     await token.mint(deployer.address, TOTAL_SUPPLY);
     console.log("✅ Minted", TOTAL_SUPPLY.toString(), "tokens to deployer");
 
-    // --- 2. Deploy DutchAuction-Behaviors ---
+    // --- 2. Deploy DutchAuction ---
     const Auction = await ethers.getContractFactory("DutchAuction");
     const auction = await Auction.deploy(token.address, deployer.address);
     await auction.deployed();

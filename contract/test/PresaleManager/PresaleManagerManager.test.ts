@@ -64,6 +64,63 @@ async function deployFixture() {
     };
 }
 
+async function fullPipelineFixture() {
+    const base = await deployFixture();
+    const { manager, auction, token, treasury, alice, config } = base;
+
+    const commitQty = ethers.parseUnits("10", 18);
+    const priceTicks = await Promise.all([auction.priceTicks(0), auction.priceTicks(1)]);
+    const deposit = commitQty * priceTicks[0];
+    const nonce = ethers.hexlify(ethers.randomBytes(32));
+    const commitHash = ethers.keccak256(
+        ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256", "bytes32"], [0, commitQty, nonce])
+    );
+
+    await time.increaseTo(config.startTime + 1n);
+    await auction.connect(alice).commit(commitHash, [], { value: deposit });
+
+    await time.increaseTo(config.startTime + config.commitDuration + 1n);
+    await auction.connect(alice).reveal(0, commitQty, nonce, 0);
+
+    await time.increaseTo(config.startTime + config.commitDuration + config.revealDuration + 1n);
+    await manager.finalizeAuction(await auction.getAddress());
+
+    const stableShare = (commitQty * priceTicks[1] * config.lbpStableShareBps) / BPS_DENOMINATOR;
+    const lbpStart = config.startTime + config.commitDuration + config.revealDuration + 600n;
+    const launchConfig = {
+        startTime: lbpStart,
+        endTime: config.startTime + config.commitDuration + config.revealDuration + 1_200n,
+        poolStartWeightToken: 70n * 10n ** 16n,
+        poolEndWeightToken: 30n * 10n ** 16n,
+        poolSwapFee: 3n * 10n ** 15n,
+        vestingStartTime: lbpStart,
+        vestingCliffDuration: 0n,
+        vestingFinalDuration: 0n,
+        vestingCliffPercentBP: 0n
+    };
+
+    await manager.launchLBP(await auction.getAddress(), launchConfig);
+
+    const recordAfterLaunch = await manager.getAuctionRecord(await auction.getAddress());
+    const lbp = await ethers.getContractAt("SecureLBP", recordAfterLaunch.lbp);
+
+    const escrowFactory = await ethers.getContractFactory("TokenVestingEscrow");
+    const escrow = await escrowFactory.deploy(await token.getAddress(), await lbp.getAddress());
+    await escrow.waitForDeployment();
+
+    await time.increaseTo(launchConfig.endTime + 1n);
+    await manager.finalizeLbp(await auction.getAddress(), await escrow.getAddress());
+
+    return {
+        ...base,
+        lbp,
+        launchConfig,
+        commitQty,
+        priceTicks,
+        stableShare
+    };
+}
+
 // npx hardhat test test/PresaleManager/PresaleManagerManager.test.ts
 describe("PresaleManager", function () {
     it("tracks created auctions and exposes them via getAllAuctions", async function () {
@@ -203,5 +260,44 @@ describe("PresaleManager", function () {
         await expect(
             manager.finalizeLbp(await auction.getAddress(), await fakeEscrow.getAddress())
         ).to.be.revertedWith("escrow token mismatch");
+    });
+
+    describe("LBP withdrawals via manager", function () {
+        it("withdrawLbpTokens forwards partial token withdrawals to SecureLBP", async function () {
+            const { manager, auction, lbp, token, treasury } = await loadFixture(fullPipelineFixture);
+
+            await manager.unwindLbpAll(await auction.getAddress());
+
+            const lbpAddress = await lbp.getAddress();
+            const treasuryBefore = await token.balanceOf(treasury.address);
+            const contractBalance = await token.balanceOf(lbpAddress);
+            expect(contractBalance).to.be.gt(0n);
+            const partial = contractBalance / 2n;
+
+            await expect(manager.withdrawLbpTokens(await auction.getAddress(), partial))
+                .to.emit(lbp, "TokensWithdrawn")
+                .withArgs(treasury.address, partial);
+
+            expect(await token.balanceOf(treasury.address)).to.equal(treasuryBefore + partial);
+            expect(await token.balanceOf(lbpAddress)).to.equal(contractBalance - partial);
+        });
+
+        it("withdrawLbpAllTokens drains all remaining tokens", async function () {
+            const { manager, auction, lbp, token, treasury } = await loadFixture(fullPipelineFixture);
+
+            await manager.unwindLbpAll(await auction.getAddress());
+
+            const lbpAddress = await lbp.getAddress();
+            const contractBalance = await token.balanceOf(lbpAddress);
+            expect(contractBalance).to.be.gt(0n);
+            const treasuryBefore = await token.balanceOf(treasury.address);
+
+            await expect(manager.withdrawLbpAllTokens(await auction.getAddress()))
+                .to.emit(lbp, "TokensWithdrawn")
+                .withArgs(treasury.address, contractBalance);
+
+            expect(await token.balanceOf(lbpAddress)).to.equal(0n);
+            expect(await token.balanceOf(treasury.address)).to.equal(treasuryBefore + contractBalance);
+        });
     });
 });
