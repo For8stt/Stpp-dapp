@@ -1,7 +1,7 @@
 /**
  * Economic Simulations Test Suite for LBP Weighted AMM
  *
- * This test file models economic scenarios for the Liquidity Bootstrap Pool (LBP) Weighted Automated Market Maker (AMM).
+ * This test file models economic Scenarios for the Liquidity Bootstrap Pool (LBP) Weighted Automated Market Maker (AMM).
  * It uses agent-based modeling with bots as agents performing random swaps, arbitrage, and large transactions to measure
  * key metrics: slippage, price impact, arbitrage profit, and pool drain risk.
  *

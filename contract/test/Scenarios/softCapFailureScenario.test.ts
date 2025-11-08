@@ -1,0 +1,70 @@
+import { expect } from "chai";
+import { ethers } from "hardhat";
+import { loadFixture, time } from "@nomicfoundation/hardhat-network-helpers";
+import {
+    buildCommitHash,
+    fixtureWithOverrides,
+    randomNonce
+} from "../DutchAuction/utils/dutchAuctionFixtures";
+
+describe("Scenario – soft cap failure and refunds", function () {
+    async function failingAuctionFixture() {
+        const overrides = {
+            softCap: ethers.parseEther("50"),
+            tokensForSale: 150n,
+            perAddressCap: 150n,
+            bonusReserve: 0n
+        };
+        return fixtureWithOverrides(overrides)();
+    }
+
+    it("handles refunds for revealed, unrevealed, and reverting recipients", async function () {
+        const ctx = await loadFixture(failingAuctionFixture);
+        const { auction, alice, bob, deployer, priceTicks, startTime, commitEndTime, revealEndTime } = ctx;
+
+        await time.increaseTo(startTime + 1n);
+
+        const qtyAlice = 60n;
+        const qtyBob = 40n;
+        const qtyRejector = 20n;
+        const nonceAlice = randomNonce();
+        const nonceBob = randomNonce();
+        const nonceRejector = randomNonce();
+
+        const depositAlice = qtyAlice * priceTicks[0];
+        const depositBob = qtyBob * priceTicks[0];
+        const depositRejector = qtyRejector * priceTicks[0];
+
+        await auction.connect(alice).commit(buildCommitHash(0n, qtyAlice, nonceAlice), [], { value: depositAlice });
+        await auction.connect(bob).commit(buildCommitHash(0n, qtyBob, nonceBob), [], { value: depositBob });
+
+        const rejectorFactory = await ethers.getContractFactory("RefundRejector");
+        const rejector = await rejectorFactory.deploy(await auction.getAddress());
+        await rejector.waitForDeployment();
+        await rejector.commitBid(buildCommitHash(0n, qtyRejector, nonceRejector), { value: depositRejector });
+
+        await time.increaseTo(commitEndTime + 1n);
+        await auction.connect(alice).reveal(0, qtyAlice, nonceAlice, 0);
+        // Bob and refund rejector intentionally leave commits unrevealed.
+
+        await time.increaseTo(revealEndTime + 1n);
+        await auction.connect(deployer).finalize();
+        expect(await auction.successful()).to.equal(false);
+
+        await expect(auction.connect(alice).refundUnsuccessful())
+            .to.emit(auction, "RefundIssued")
+            .withArgs(await alice.getAddress(), depositAlice);
+        expect(await auction.revealedDeposit(await alice.getAddress())).to.equal(0n);
+
+        await expect(auction.connect(bob).refundUnsuccessful())
+            .to.emit(auction, "RefundIssued")
+            .withArgs(await bob.getAddress(), depositBob);
+        const bobCommit = await auction.commits(await bob.getAddress(), 0);
+        expect(bobCommit.withdrawn).to.equal(true);
+        expect(bobCommit.revealed).to.equal(false);
+
+        await expect(rejector.triggerRefund()).to.be.revertedWith("refund failed");
+        const rejectorCommit = await auction.commits(await rejector.getAddress(), 0);
+        expect(rejectorCommit.withdrawn).to.equal(false);
+    });
+});

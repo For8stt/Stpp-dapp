@@ -10,7 +10,7 @@
  * - "should handle LP proportions correctly with multiple users": Tests proportional LP for alice/bob, half removal.
  * - "should update weights dynamically over time": Tests initial/halfway/end weights with evm_increaseTime, sum=SCALE.
  *
- * Uses signers (owner, alice, bob) for multi-user scenarios, closeTo for weight rounding.
+ * Uses signers (owner, alice, bob) for multi-user Scenarios, closeTo for weight rounding.
  *
  * Run: npx hardhat test test/test-WeightedAMM/WeightedAMM.test.ts
  */
