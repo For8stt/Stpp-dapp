@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "../LBPOracle.sol";
+import "../oracle/LBPOracle.sol";
 
 contract MockPriceFeed is IChainlinkPriceFeed {
     int256 private price;

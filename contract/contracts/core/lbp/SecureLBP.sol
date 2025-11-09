@@ -24,6 +24,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
 
 import "./WeightedAMM.sol"; // Import for dynamic deployment
+import "../../libraries/VestingMath.sol";
 
 interface ILBPOracle {
     function isPaused() external view returns (bool);
@@ -31,7 +32,7 @@ interface ILBPOracle {
 }
 
 // Interface for PresaleManager callback (moved from here to avoid duplicate; import from DutchAuction if needed)
-import "./interfaces/IPresaleManager.sol";
+import "../../interfaces/IPresaleManager.sol";
 
 contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
     using SafeERC20 for IERC20;
@@ -440,23 +441,17 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
 
     // ============ VESTING CLAIMS ============
     function vestedAmount(address user) public view returns (uint256) {
-        if (!finalized) return 0;
         uint256 allocation = allocations[user];
-        if (allocation == 0) return 0;
-        if (!vestingConfigured) {
-            return allocation;
-        }
-        uint256 cliffTime = vestingStart + vestingCliffDuration;
-        uint256 finalTime = vestingStart + vestingFinalDuration;
-
-        if (block.timestamp < cliffTime) {
-            return 0;
-        }
-
-        if (vestingFinalDuration == 0 || block.timestamp >= finalTime) {
-            return allocation;
-        }
-
-        return (allocation * vestingCliffPercentBP) / BP_SCALE;
+        return
+            VestingMath.lbpVestedAmount(
+                finalized,
+                allocation,
+                vestingConfigured,
+                vestingStart,
+                vestingCliffDuration,
+                vestingFinalDuration,
+                vestingCliffPercentBP,
+                BP_SCALE
+            );
     }
 }

@@ -159,6 +159,17 @@ function buildMerkleWhitelist(addresses: string[]) {
     };
 }
 
+function recordPrice(series: number[], candidate: number) {
+    if (candidate <= 0 || Number.isNaN(candidate)) return;
+    if (series.length === 0) {
+        series.push(candidate);
+        return;
+    }
+    const last = series[series.length - 1];
+    const blended = last * 0.7 + candidate * 0.3;
+    series.push(blended);
+}
+
 function computeVRI(prices: number[]): number {
     if (prices.length <= 1) return 0;
     const logReturns: number[] = [];
@@ -355,7 +366,7 @@ async function simulateDutchAuction(
             .connect(signer)
             .commit(commitHash, ctx.whitelistProofs[signer.address.toLowerCase()], { value: deposit });
 
-        priceSeries.push(Number(priceTick) || 1);
+        recordPrice(priceSeries, Number(priceTick) || 1);
         bidRecords.push({
             signer,
             qty,
@@ -445,7 +456,7 @@ async function simulateLbpFlow(
         if (tokenOut > 0n) {
             const price = Number(ethers.formatEther(netEth > 0n ? netEth : contribution)) /
                 Number(ethers.formatEther(tokenOut));
-            if (price > 0) existingPriceSeries.push(price);
+            recordPrice(existingPriceSeries, price);
         }
     }
 
@@ -494,23 +505,23 @@ function applySaleToPool(pool: VirtualPool, saleAmount: bigint, priceSeries: num
     pool.token += saleAmount;
     pool.eth = k / pool.token;
     const price = Number(ethers.formatEther(pool.eth)) / Number(ethers.formatEther(pool.token));
-    if (price > 0) priceSeries.push(price);
+    recordPrice(priceSeries, price);
 
     const shocks = config.priceShocks ?? { pumpChance: 0, crashChance: 0, shockMagnitude: 0 };
     const magnitude = shocks.shockMagnitude ?? 0;
-    if (magnitude <= 0) return;
+        if (magnitude <= 0) return;
 
     if (randomFraction(baseSeed, `${label}-pump`) < (shocks.pumpChance ?? 0)) {
         const scale = BigInt(Math.floor(magnitude * Number(PRICE_PRECISION)));
         pool.eth += (pool.eth * scale) / PRICE_PRECISION;
         const pumpedPrice = Number(ethers.formatEther(pool.eth)) / Number(ethers.formatEther(pool.token));
-        if (pumpedPrice > 0) priceSeries.push(pumpedPrice);
+        recordPrice(priceSeries, pumpedPrice);
     } else if (randomFraction(baseSeed, `${label}-crash`) < (shocks.crashChance ?? 0)) {
         const scale = BigInt(Math.floor(magnitude * Number(PRICE_PRECISION)));
         pool.eth = pool.eth - (pool.eth * scale) / PRICE_PRECISION;
         if (pool.eth < 1n) pool.eth = 1n;
         const crashedPrice = Number(ethers.formatEther(pool.eth)) / Number(ethers.formatEther(pool.token));
-        if (crashedPrice > 0) priceSeries.push(crashedPrice);
+        recordPrice(priceSeries, crashedPrice);
     }
 }
 

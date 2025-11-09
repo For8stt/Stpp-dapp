@@ -5,7 +5,12 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
+
+import "../../interfaces/IAuction.sol";
+import "../../libraries/CommitLib.sol";
+import "../../libraries/PriceTickLib.sol";
+import "../../libraries/ReserveDecayLib.sol";
+import "../../libraries/VestingMath.sol";
 
 /// @title Commit–Reveal Dutch auction with dynamic reserve management and LBP transition
 /// @notice Implements a production oriented Dutch auction with commit / reveal flow, per
@@ -15,7 +20,7 @@ import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 /// reveal to populate price buckets → optional dynamic reserve adjustment → finalize to determine
 /// clearing price → manager optionally calls `launchLbp` for residual inventory → participants claim
 /// vested tokens / refunds → losers and unrevealed deposits withdraw → manager withdraws proceeds.
-contract DutchAuction is Ownable, ReentrancyGuard {
+contract DutchAuction is IAuction, Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     uint256 private constant BPS_DENOMINATOR = 10_000;
@@ -35,30 +40,6 @@ contract DutchAuction is Ownable, ReentrancyGuard {
         uint32 bonusPct;
         bool allocationComputed;
         uint224 allocatedQty;
-    }
-
-    struct AuctionConfig {
-        uint256 startTime;
-        uint256 commitDuration;
-        uint256 revealDuration;
-        uint256 perAddressCap;
-        uint256 softCap;
-        uint256 tokensForSale;
-        uint256 bonusReserve;
-        uint256 earlyBonusWindow;
-        uint256 earlyBonusPct;
-        uint256 nonRevealPenaltyBps;
-        uint256 lbpStableShareBps;
-        uint256 thresholdLow;
-        uint256 maxDecayMultiplier;
-        uint256 minCommitDuration;
-        uint256 vestingStart;
-        uint256 vestingDuration;
-        address treasury;
-        address lbpTokenRecipient;
-        address payable lbpStableRecipient;
-        bytes32 merkleRoot;
-        uint256[] priceTicks;
     }
 
     struct AllocationData {
@@ -154,8 +135,8 @@ contract DutchAuction is Ownable, ReentrancyGuard {
     error AuctionNotActive();
     error CommitPhaseComplete();
     error RevealPhaseClosed();
-    error InvalidProof();
     error CapExceeded();
+    error InvalidProof();
     error AlreadyRevealed();
     error InvalidCommit();
     error AuctionNotFinalized();
@@ -197,7 +178,7 @@ contract DutchAuction is Ownable, ReentrancyGuard {
 
     /// @notice One-time setup for the auction windows, caps, pricing ticks, and vesting details.
     /// @dev Validates timing bounds and descending price ticks before storing configuration.
-    function initializeAuction(AuctionConfig calldata config) external onlyManager {
+    function initializeAuction(IAuction.AuctionConfig calldata config) external override onlyManager {
         if (initialized) revert AuctionFinalizedAlready();
         require(config.treasury != address(0), "treasury zero");
         require(config.tokensForSale > 0, "tokensForSale zero");
@@ -259,10 +240,7 @@ contract DutchAuction is Ownable, ReentrancyGuard {
         if (block.timestamp < startTime || block.timestamp > commitEndTime) revert AuctionNotActive();
         if (msg.value == 0) revert InvalidCommit();
 
-        if (merkleRoot != bytes32(0)) {
-            bool verified = MerkleProof.verify(merkleProof, merkleRoot, keccak256(abi.encodePacked(msg.sender)));
-            if (!verified) revert InvalidProof();
-        }
+        if (!CommitLib.verifyWhitelist(merkleRoot, merkleProof, msg.sender)) revert InvalidProof();
 
         uint256 impliedQty = msg.value / priceTicks[0];
         require(impliedQty > 0, "deposit too small");
@@ -298,11 +276,11 @@ contract DutchAuction is Ownable, ReentrancyGuard {
         Commit storage userCommit = commits[msg.sender][commitIndex];
         if (userCommit.revealed) revert AlreadyRevealed();
 
-        bytes32 expectedHash = keccak256(abi.encode(priceTickIndex, qty, nonce));
+        bytes32 expectedHash = CommitLib.bidHash(priceTickIndex, qty, nonce);
         if (expectedHash != userCommit.commitHash) revert InvalidCommit();
 
         uint256 deposit = uint256(userCommit.deposit);
-        require(deposit == qty * priceTicks[0], "deposit/qty mismatch");
+        require(CommitLib.depositMatches(deposit, qty, priceTicks[0]), "deposit/qty mismatch");
 
         if (revealedQty[msg.sender] + qty > perAddressCap) revert CapExceeded();
 
@@ -319,8 +297,7 @@ contract DutchAuction is Ownable, ReentrancyGuard {
             }
         }
 
-
-    userCommit.revealed = true;
+        userCommit.revealed = true;
 
         revealedBids[msg.sender].push(
             RevealedBid({
@@ -344,25 +321,23 @@ contract DutchAuction is Ownable, ReentrancyGuard {
 
     /// @notice Adjusts decay multiplier and commit end time if deposits lag behind expectations.
     /// @dev Callable once; shortens commit phase while respecting minimum duration.
-    function updateDynamicReserve() external onlyManager {
+    function updateDynamicReserve() external override onlyManager {
         if (!initialized) revert AuctionNotInitialized();
         if (block.timestamp > commitEndTime) revert CommitPhaseComplete();
         if (dynamicAdjustmentCount > 0) revert CommitPhaseComplete();
 
         if (totalDepositCommitted < thresholdLow) {
-            if (decayMultiplier < maxDecayMultiplier) {
-                decayMultiplier = maxDecayMultiplier;
-            }
-
-            uint256 reduction = ((initialCommitEndTime - startTime) * 25) / 100;
-            uint256 targetEnd = commitEndTime > reduction ? commitEndTime - reduction : startTime + minCommitDuration;
-            uint256 minEndTime = startTime + minCommitDuration;
-            if (targetEnd < minEndTime) {
-                targetEnd = minEndTime;
-            }
-            if (targetEnd < commitEndTime) {
-                commitEndTime = targetEnd;
-                revealEndTime = commitEndTime + (revealEndTime - initialCommitEndTime);
+            decayMultiplier = ReserveDecayLib.applyDecayMultiplier(decayMultiplier, maxDecayMultiplier);
+            (bool updated, uint256 newCommitEnd) = ReserveDecayLib.adjustedCommitEnd(
+                startTime,
+                commitEndTime,
+                initialCommitEndTime,
+                minCommitDuration
+            );
+            if (updated) {
+                uint256 revealDuration = revealEndTime - initialCommitEndTime;
+                commitEndTime = newCommitEnd;
+                revealEndTime = commitEndTime + revealDuration;
             }
 
             dynamicAdjustmentCount += 1;
@@ -372,7 +347,7 @@ contract DutchAuction is Ownable, ReentrancyGuard {
 
     /// @notice Concludes the auction, calculating clearing price, settlements, and LBP flow.
     /// @dev Reverts until reveal window closes; marks success or failure based on soft cap.
-    function finalize() external onlyManager nonReentrant {
+    function finalize() external override onlyManager nonReentrant {
         if (!initialized) revert AuctionNotInitialized();
         if (finalized) revert AuctionFinalizedAlready();
         if (block.timestamp <= revealEndTime) revert RevealPhaseClosed();
@@ -398,7 +373,7 @@ contract DutchAuction is Ownable, ReentrancyGuard {
 
     /// @notice Transfers unsold tokens and optional ETH share to the configured LBP recipients.
     /// @dev Callable once after a successful finalize; deducts ETH share from treasury balance.
-    function launchLbp() external onlyManager nonReentrant {
+    function launchLbp() external override onlyManager nonReentrant {
         if (!finalized || !successful) revert AuctionNotFinalized();
         if (lbpLaunched) revert LBPAlreadyLaunched();
 
@@ -426,40 +401,17 @@ contract DutchAuction is Ownable, ReentrancyGuard {
 
     /// @dev Walks price buckets top-down to establish clearing tick and pro-rata parameters.
     function _determineClearingPrice() internal {
-        uint256 cumulative;
-        uint256 clearingIdx = type(uint256).max;
-        uint256 ticksLength = priceTicks.length;
+        PriceTickLib.ClearingData memory data =
+            PriceTickLib.determineClearing(priceBucketTotals, priceTicks, tokensForSale);
 
-        for (uint256 i = 0; i < ticksLength; i++) {
-            cumulative += priceBucketTotals[i];
-            if (cumulative >= tokensForSale && clearingIdx == type(uint256).max) {
-                clearingIdx = i;
-                filledAboveClearing = cumulative - priceBucketTotals[i];
-                totalAtClearingTick = priceBucketTotals[i];
-            }
-        }
-
-        if (clearingIdx == type(uint256).max) {
-            tokensSold = cumulative;
-            if (ticksLength == 0) {
-                clearingTickIndex = 0;
-                clearingPrice = 0;
-            } else {
-                clearingTickIndex = ticksLength - 1;
-                clearingPrice = priceTicks[ticksLength - 1];
-            }
-            totalRaised = tokensSold * clearingPrice;
-            proRataNumerator = 0;
-            proRataDenominator = 0;
-        } else {
-            clearingTickIndex = clearingIdx;
-            clearingPrice = priceTicks[clearingIdx];
-            tokensSold = tokensForSale;
-            uint256 remaining = tokensForSale - filledAboveClearing;
-            proRataNumerator = remaining;
-            proRataDenominator = totalAtClearingTick;
-            totalRaised = tokensSold * clearingPrice;
-        }
+        clearingTickIndex = data.clearingTickIndex;
+        clearingPrice = data.clearingPrice;
+        tokensSold = data.tokensSold;
+        totalRaised = data.totalRaised;
+        filledAboveClearing = data.filledAboveClearing;
+        totalAtClearingTick = data.totalAtClearingTick;
+        proRataNumerator = data.proRataNumerator;
+        proRataDenominator = data.proRataDenominator;
     }
 
     /// @notice Claims vested tokens and outstanding refunds for a winning participant.
@@ -473,7 +425,7 @@ contract DutchAuction is Ownable, ReentrancyGuard {
         }
         AllocationData storage allocation = accountAllocations[msg.sender];
 
-        uint256 unlocked = _vestedFraction();
+        uint256 unlocked = VestingMath.cliffOnlyFraction(vestingStart, vestingDuration);
         uint256 totalTokensDue = allocation.totalQty + allocation.bonusQty;
         uint256 vestedTokens = (totalTokensDue * unlocked) / BPS_DENOMINATOR;
 
@@ -628,7 +580,7 @@ contract DutchAuction is Ownable, ReentrancyGuard {
 
     /// @notice Transfers accumulated ETH proceeds to the treasury once the auction succeeds.
     /// @dev Zeroes the tracked amount before sending to guard against reentrancy.
-    function withdrawTreasury(address payable recipient) external onlyOwner {
+    function withdrawTreasury(address payable recipient) external override onlyOwner {
         if (!finalized || !successful) revert AuctionNotFinalized();
         if (recipient == address(0)) revert InvalidCommit();
 
@@ -640,26 +592,15 @@ contract DutchAuction is Ownable, ReentrancyGuard {
         }
     }
 
-    /// @dev Computes vesting progress as basis points relative to start, cliff, and duration.
-    function _vestedFraction() internal view returns (uint256) {
-        if (vestingDuration == 0) {
-            return BPS_DENOMINATOR;
-        }
-        if (block.timestamp >= vestingStart + vestingDuration) {
-            return BPS_DENOMINATOR;
-        }
-        return 0;
-    }
-
     /// @notice Adds more tokens to the bonus reserve used for early participation rewards.
-    function updateBonusReserve(uint256 additionalReserve) external onlyOwner {
+    function updateBonusReserve(uint256 additionalReserve) external override onlyOwner {
         require(additionalReserve > 0, "invalid reserve");
         bonusReserve += additionalReserve;
         bonusReserveRemaining += additionalReserve;
     }
 
     /// @notice Updates vesting configuration that gates token unlocks during claims.
-    function updateVesting(uint256 newStart, uint256 newDuration) external onlyOwner {
+    function updateVesting(uint256 newStart, uint256 newDuration) external override onlyOwner {
         vestingStart = newStart;
         vestingDuration = newDuration;
         emit VestingUpdated(newStart, newDuration);
