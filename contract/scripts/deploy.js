@@ -5,11 +5,8 @@ const path = require("path");
 async function main() {
     const Lock = await hre.ethers.getContractFactory("Lock");
 
-    // +1 година від поточного часу
-    const unlockTime = Math.floor(Date.now() / 1000) + 3600;
-
-    // деплой контракту
-    const lock = await Lock.deploy(unlockTime, { value: hre.ethers.parseEther("1") });
+    // деплой контракту без додаткових параметрів
+    const lock = await Lock.deploy({ value: hre.ethers.parseEther("0") });
 
     // очікування деплою
     await lock.waitForDeployment();
@@ -19,7 +16,7 @@ async function main() {
     // витягуємо ABI
     const contractArtifact = path.join(
         __dirname,
-        "../artifacts/contracts/Lock.sol/Lock.json"
+        "../artifacts/contracts/unnecessary/Lock.sol/Lock.json"
     );
     const artifact = JSON.parse(fs.readFileSync(contractArtifact, "utf8"));
 

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { depositFund, withdrawFund } from "../utils/contractServices";
+import { depositFund, withdrawFund } from "../utils/lockServices";
 import { toast } from "react-toastify";
 
 function ContractActions({ refreshBalances }) {

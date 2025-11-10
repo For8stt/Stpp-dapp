@@ -44,4 +44,17 @@ npx hardhat compile
 
 npx hardhat run scripts/deploy.js --network localhost
 
+
+
+step by sep how to start aplication 
+
+npx hardhat compile
+npx hardhat node
+
+npx hardhat run scripts/deploy.js --network localhost
+
+npm start
+
+
+
 ```
