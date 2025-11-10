@@ -13,7 +13,7 @@ describe("TokenVestingEscrow edge cases", function () {
 
         await token.transfer(await escrow.getAddress(), allocation);
 
-        await expect(escrow.connect(user).claim()).to.be.revertedWith("nothing claimable");
+        await expect(escrow.connect(user).claim()).to.be.revertedWithCustomError(escrow, "NothingClaimable");
     });
 
     it("claimable returns zero after full claim", async function () {
@@ -27,7 +27,7 @@ describe("TokenVestingEscrow edge cases", function () {
         await escrow.connect(user).claim();
 
         expect(await escrow.claimable(user.address)).to.equal(0n);
-        await expect(escrow.connect(user).claim()).to.be.revertedWith("nothing claimable");
+        await expect(escrow.connect(user).claim()).to.be.revertedWithCustomError(escrow, "NothingClaimable");
     });
 
     it("guards against reentrancy attacks", async function () {

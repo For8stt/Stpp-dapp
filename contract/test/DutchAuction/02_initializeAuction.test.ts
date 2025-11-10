@@ -126,21 +126,21 @@ describe("DutchAuction – 02_initializeAuction", function () {
         const { auction, manager, baseConfig } = await loadFixture(deployBaseFixture);
         await expect(
             auction.connect(manager).initializeAuction({ ...baseConfig, treasury: ethers.ZeroAddress })
-        ).to.be.revertedWith("treasury zero");
+        ).to.be.revertedWithCustomError(auction, "TreasuryZero");
     });
 
     it("should revert if tokensForSale is zero", async function () {
         const { auction, manager, baseConfig } = await loadFixture(deployBaseFixture);
         await expect(
             auction.connect(manager).initializeAuction({ ...baseConfig, tokensForSale: 0n })
-        ).to.be.revertedWith("tokensForSale zero");
+        ).to.be.revertedWithCustomError(auction, "TokensForSaleZero");
     });
 
     it("should revert if revealDuration is zero", async function () {
         const { auction, manager, baseConfig } = await loadFixture(deployBaseFixture);
         await expect(
             auction.connect(manager).initializeAuction({ ...baseConfig, revealDuration: 0n })
-        ).to.be.revertedWith("reveal duration");
+        ).to.be.revertedWithCustomError(auction, "RevealDurationZero");
     });
 
     it("should revert if commitDuration is shorter than minCommitDuration", async function () {
@@ -150,14 +150,14 @@ describe("DutchAuction – 02_initializeAuction", function () {
                 ...baseConfig,
                 commitDuration: baseConfig.minCommitDuration - 1n
             })
-        ).to.be.revertedWith("commit duration");
+        ).to.be.revertedWithCustomError(auction, "CommitDurationTooShort");
     });
 
     it("should revert if priceTicks array is empty", async function () {
         const { auction, manager, baseConfig } = await loadFixture(deployBaseFixture);
         await expect(
             auction.connect(manager).initializeAuction({ ...baseConfig, priceTicks: [] })
-        ).to.be.revertedWith("ticks empty");
+        ).to.be.revertedWithCustomError(auction, "PriceTicksEmpty");
     });
 
     it("should revert if priceTicks are not strictly descending", async function () {
@@ -172,20 +172,20 @@ describe("DutchAuction – 02_initializeAuction", function () {
         const { auction, manager, baseConfig } = await loadFixture(deployBaseFixture);
         await expect(
             auction.connect(manager).initializeAuction({ ...baseConfig, nonRevealPenaltyBps: 10_001n })
-        ).to.be.revertedWith("penalty bps");
+        ).to.be.revertedWithCustomError(auction, "PenaltyTooHigh");
     });
 
     it("should revert if earlyBonusPct exceeds 10000", async function () {
         const { auction, manager, baseConfig } = await loadFixture(deployBaseFixture);
         await expect(
             auction.connect(manager).initializeAuction({ ...baseConfig, earlyBonusPct: 10_001n })
-        ).to.be.revertedWith("bonus pct");
+        ).to.be.revertedWithCustomError(auction, "BonusTooHigh");
     });
 
     it("should revert if lbpStableShareBps exceeds 10000", async function () {
         const { auction, manager, baseConfig } = await loadFixture(deployBaseFixture);
         await expect(
             auction.connect(manager).initializeAuction({ ...baseConfig, lbpStableShareBps: 10_001n })
-        ).to.be.revertedWith("lbp share");
+        ).to.be.revertedWithCustomError(auction, "LbpShareTooHigh");
     });
 });

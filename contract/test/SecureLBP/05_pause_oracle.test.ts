@@ -17,7 +17,7 @@ describe("SecureLBP – 05_pause_oracle", function () {
     it("should only allow oracle contract to call oraclePause()", async function () {
         const { lbp, owner, oracle } = await loadFixture(deployLbpWithPoolFixture);
 
-        await expect(lbp.connect(owner).oraclePause()).to.be.revertedWith("not oracle");
+        await expect(lbp.connect(owner).oraclePause()).to.be.revertedWithCustomError(lbp, "NotOracle");
 
         const oracleAddr = await oracle.getAddress();
         const oracleSigner = await impersonate(oracleAddr);
@@ -49,7 +49,7 @@ describe("SecureLBP – 05_pause_oracle", function () {
 
         await lbp.connect(owner).setOracle(ethers.ZeroAddress);
 
-        await expect(lbp.connect(owner).oraclePause()).to.be.revertedWith("oracle not set");
+        await expect(lbp.connect(owner).oraclePause()).to.be.revertedWithCustomError(lbp, "OracleNotSet");
     });
 
     it("should only allow oracle to call oracleUnpause()", async function () {
@@ -62,7 +62,7 @@ describe("SecureLBP – 05_pause_oracle", function () {
 
         await lbp.connect(oracleSigner).oraclePause();
 
-        await expect(lbp.connect(owner).oracleUnpause()).to.be.revertedWith("not oracle");
+        await expect(lbp.connect(owner).oracleUnpause()).to.be.revertedWithCustomError(lbp, "NotOracle");
 
         await lbp.connect(oracleSigner).oracleUnpause();
 

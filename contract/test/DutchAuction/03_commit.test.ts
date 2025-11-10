@@ -120,7 +120,10 @@ describe("DutchAuction – 03_commit", function () {
         const qty = 1n;
         const deposit = priceTicks[0] + 1n;
         const hash = buildCommitHash(0n, qty, randomNonce());
-        await expect(auction.connect(alice).commit(hash, [], { value: deposit })).to.be.revertedWith("deposit mismatch");
+        await expect(auction.connect(alice).commit(hash, [], { value: deposit })).to.be.revertedWithCustomError(
+            auction,
+            "DepositMismatch"
+        );
     });
 
     it("should revert if implied quantity is zero", async function () {
@@ -129,8 +132,9 @@ describe("DutchAuction – 03_commit", function () {
 
         const deposit = priceTicks[0] - 1n;
         const hash = buildCommitHash(0n, 1n, randomNonce());
-        await expect(auction.connect(alice).commit(hash, [], { value: deposit })).to.be.revertedWith(
-            "deposit too small"
+        await expect(auction.connect(alice).commit(hash, [], { value: deposit })).to.be.revertedWithCustomError(
+            auction,
+            "DepositTooSmall"
         );
     });
 

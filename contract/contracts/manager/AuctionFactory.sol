@@ -6,21 +6,22 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import "../core/auction/DutchAuction.sol";
 import "../interfaces/IAuctionFactory.sol";
+import "./errors/AuctionFactoryErrors.sol";
 
 /**
  * @title AuctionFactory
  * @notice Responsible solely for deploying new Dutch auction instances.
  */
-contract AuctionFactory is Ownable, IAuctionFactory {
+contract AuctionFactory is Ownable, IAuctionFactory, AuctionFactoryErrors {
     constructor(address owner_) {
-        require(owner_ != address(0), "owner zero");
+        if (owner_ == address(0)) revert OwnerZero();
         _transferOwnership(owner_);
     }
 
     /// @inheritdoc IAuctionFactory
     function deployAuction(address saleToken, address manager) external override onlyOwner returns (address) {
-        require(saleToken != address(0), "saleToken zero");
-        require(manager != address(0), "manager zero");
+        if (saleToken == address(0)) revert SaleTokenZero();
+        if (manager == address(0)) revert ManagerZero();
 
         DutchAuction auction = new DutchAuction(IERC20(saleToken), manager);
         auction.transferOwnership(manager);

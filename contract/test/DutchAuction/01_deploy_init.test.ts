@@ -45,7 +45,10 @@ describe("DutchAuction – 01_deploy_init", function () {
     it("should revert if saleToken == address(0)", async function () {
         const [, manager] = await ethers.getSigners();
         const auctionFactory = await ethers.getContractFactory("DutchAuction");
-        await expect(auctionFactory.deploy(ethers.ZeroAddress, manager.address)).to.be.revertedWith("saleToken zero");
+        await expect(auctionFactory.deploy(ethers.ZeroAddress, manager.address)).to.be.revertedWithCustomError(
+            auctionFactory,
+            "SaleTokenZero"
+        );
     });
 
     it("should revert if presaleManager == address(0)", async function () {
@@ -54,6 +57,9 @@ describe("DutchAuction – 01_deploy_init", function () {
         await token.waitForDeployment();
 
         const auctionFactory = await ethers.getContractFactory("DutchAuction");
-        await expect(auctionFactory.deploy(await token.getAddress(), ethers.ZeroAddress)).to.be.revertedWith("manager zero");
+        await expect(auctionFactory.deploy(await token.getAddress(), ethers.ZeroAddress)).to.be.revertedWithCustomError(
+            auctionFactory,
+            "ManagerZero"
+        );
     });
 });

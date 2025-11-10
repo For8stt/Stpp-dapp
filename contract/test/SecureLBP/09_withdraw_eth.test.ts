@@ -69,10 +69,10 @@ describe("SecureLBP – 09_withdraw_eth", function () {
     it("reverts before finalization", async function () {
         const { lbp, owner, endTime } = await loadFixture(deployLbpWithPoolFixture);
 
-        await expect(lbp.connect(owner).withdrawETH(1)).to.be.revertedWith("LBP not finalized");
+        await expect(lbp.connect(owner).withdrawETH(1)).to.be.revertedWithCustomError(lbp, "NotFinalized");
 
         await time.increaseTo(endTime + 1n);
-        await expect(lbp.connect(owner).withdrawETH(1)).to.be.revertedWith("LBP not finalized");
+        await expect(lbp.connect(owner).withdrawETH(1)).to.be.revertedWithCustomError(lbp, "NotFinalized");
     });
 
     it("transfers accumulated fees to treasury after finalize", async function () {
@@ -108,7 +108,10 @@ describe("SecureLBP – 09_withdraw_eth", function () {
 
         await ethers.provider.send("hardhat_setStorageAt", [lbpAddress, slot, ethers.toBeHex(0, 32)]);
 
-        await expect(lbp.connect(owner).withdrawETH(ethers.parseEther("0.1"))).to.be.revertedWith("treasury zero");
+        await expect(lbp.connect(owner).withdrawETH(ethers.parseEther("0.1"))).to.be.revertedWithCustomError(
+            lbp,
+            "TreasuryZero"
+        );
     });
 
     it("reverts when amount exceeds contract balance", async function () {
@@ -120,7 +123,10 @@ describe("SecureLBP – 09_withdraw_eth", function () {
         await finalizeLbp(lbp, owner, token);
 
         const balance = await ethers.provider.getBalance(await lbp.getAddress());
-        await expect(lbp.connect(owner).withdrawETH(balance + 1n)).to.be.revertedWith("insufficient balance");
+        await expect(lbp.connect(owner).withdrawETH(balance + 1n)).to.be.revertedWithCustomError(
+            lbp,
+            "InsufficientBalance"
+        );
     });
 
     it("prevents non-owners from withdrawing", async function () {
@@ -165,7 +171,7 @@ describe("SecureLBP – 09_withdraw_eth", function () {
 
         await expect(
             lbp.connect(owner).rescueERC20(await token.getAddress(), owner.address, 1n)
-        ).to.be.revertedWith("cannot rescue sale token");
+        ).to.be.revertedWithCustomError(lbp, "RescueSaleToken");
     });
 
     it("reverts when withdrawing tokens before finalization", async function () {
@@ -174,8 +180,8 @@ describe("SecureLBP – 09_withdraw_eth", function () {
         await token.mint(owner.address, extra);
         await token.connect(owner).transfer(await lbp.getAddress(), extra);
 
-        await expect(lbp.connect(owner).withdrawTokens(extra)).to.be.revertedWith("LBP not finalized");
-        await expect(lbp.connect(owner).withdrawAllTokens()).to.be.revertedWith("LBP not finalized");
+        await expect(lbp.connect(owner).withdrawTokens(extra)).to.be.revertedWithCustomError(lbp, "NotFinalized");
+        await expect(lbp.connect(owner).withdrawAllTokens()).to.be.revertedWithCustomError(lbp, "NotFinalized");
     });
 
     it("withdrawTokens sends requested amount to treasury after unwind", async function () {
@@ -212,14 +218,17 @@ describe("SecureLBP – 09_withdraw_eth", function () {
 
     it("withdrawTokens reverts on zero amount", async function () {
         const { lbp, owner } = await loadFixture(deployFinalizedAndUnwoundFixture);
-        await expect(lbp.connect(owner).withdrawTokens(0)).to.be.revertedWith("amount zero");
+        await expect(lbp.connect(owner).withdrawTokens(0)).to.be.revertedWithCustomError(lbp, "AmountZero");
     });
 
     it("withdrawTokens reverts when amount exceeds balance", async function () {
         const { lbp, owner, token } = await loadFixture(deployFinalizedAndUnwoundFixture);
         const lbpAddress = await lbp.getAddress();
         const balance = await token.balanceOf(lbpAddress);
-        await expect(lbp.connect(owner).withdrawTokens(balance + 1n)).to.be.revertedWith("insufficient tokens");
+        await expect(lbp.connect(owner).withdrawTokens(balance + 1n)).to.be.revertedWithCustomError(
+            lbp,
+            "InsufficientTokens"
+        );
     });
 
     it("withdrawTokens reverts when treasury is zero", async function () {
@@ -229,6 +238,6 @@ describe("SecureLBP – 09_withdraw_eth", function () {
         await ethers.provider.send("hardhat_setStorageAt", [lbpAddress, slot, ethers.toBeHex(0, 32)]);
 
         const balance = await token.balanceOf(lbpAddress);
-        await expect(lbp.connect(owner).withdrawTokens(balance)).to.be.revertedWith("treasury zero");
+        await expect(lbp.connect(owner).withdrawTokens(balance)).to.be.revertedWithCustomError(lbp, "TreasuryZero");
     });
 });

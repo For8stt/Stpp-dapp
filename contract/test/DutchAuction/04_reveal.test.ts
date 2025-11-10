@@ -254,7 +254,10 @@ describe("DutchAuction – 04_reveal", function () {
 
         await time.increaseTo(commitEndTime + 1n);
 
-        await expect(auction.connect(alice).reveal(0, qty, bid.nonce, 0)).to.be.revertedWith("deposit/qty mismatch");
+        await expect(auction.connect(alice).reveal(0, qty, bid.nonce, 0)).to.be.revertedWithCustomError(
+            auction,
+            "DepositMismatch"
+        );
     });
 
     it("should grant full early bonus when reserve sufficient", async function () {

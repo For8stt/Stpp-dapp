@@ -259,7 +259,7 @@ describe("PresaleManager", function () {
 
         await expect(
             manager.finalizeLbp(await auction.getAddress(), await fakeEscrow.getAddress())
-        ).to.be.revertedWith("escrow token mismatch");
+        ).to.be.revertedWithCustomError(manager, "EscrowTokenMismatch");
     });
 
     describe("LBP withdrawals via manager", function () {

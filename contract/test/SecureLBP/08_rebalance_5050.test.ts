@@ -171,7 +171,7 @@ describe("SecureLBP – 08_rebalance_5050", function () {
     describe("Reverts", function () {
         it("should revert if called before finalize", async function () {
             const { lbp, owner } = await loadFixture(deployLbpWithPoolFixture);
-            await expect(lbp.connect(owner).rebalanceTo5050()).to.be.revertedWith("not finalized");
+            await expect(lbp.connect(owner).rebalanceTo5050()).to.be.revertedWithCustomError(lbp, "NotFinalized");
         });
 
         it("should revert if reserves are zero", async function () {
@@ -184,7 +184,7 @@ describe("SecureLBP – 08_rebalance_5050", function () {
             expect(reserves).to.equal(0n);
             expect(await token.balanceOf(lbpAddress)).to.be.gt(0n);
 
-            await expect(lbp.connect(owner).rebalanceTo5050()).to.be.revertedWith("empty pool");
+            await expect(lbp.connect(owner).rebalanceTo5050()).to.be.revertedWithCustomError(lbp, "EmptyPool");
         });
 
         it("should revert if already balanced", async function () {
@@ -210,7 +210,7 @@ describe("SecureLBP – 08_rebalance_5050", function () {
                     : finalValues.tokenValue - finalValues.ethValue;
             expect(diff).to.be.lte(1_000_000_000_000_000n);
 
-            await expect(lbp.connect(owner).rebalanceTo5050()).to.be.revertedWith("already balanced");
+            await expect(lbp.connect(owner).rebalanceTo5050()).to.be.revertedWithCustomError(lbp, "Balanced");
         });
 
         it("should revert if not enough ETH supplied to rebalance", async function () {
@@ -221,7 +221,7 @@ describe("SecureLBP – 08_rebalance_5050", function () {
 
             await expect(
                 lbp.connect(owner).rebalanceTo5050({ value: ethNeeded - 1n })
-            ).to.be.revertedWith("insufficient eth");
+            ).to.be.revertedWithCustomError(lbp, "InsufficientEth");
         });
 
         it("should revert if not enough tokens supplied to rebalance", async function () {

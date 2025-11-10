@@ -8,13 +8,14 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 
 import "../lbp/SecureLBP.sol";
 import "./events/TokenVestingEscrowEvents.sol";
+import "./errors/TokenVestingEscrowErrors.sol";
 
 /**
  * @title TokenVestingEscrow
  * @notice Holds purchased tokens from SecureLBP finalization and lets users pull vested amounts.
  *         The vesting schedule and per-user allocations are sourced from the SecureLBP contract.
  */
-contract TokenVestingEscrow is ReentrancyGuard, Ownable, TokenVestingEscrowEvents {
+contract TokenVestingEscrow is ReentrancyGuard, Ownable, TokenVestingEscrowEvents, TokenVestingEscrowErrors {
     using SafeERC20 for IERC20;
 
     IERC20 public immutable token;
@@ -23,11 +24,11 @@ contract TokenVestingEscrow is ReentrancyGuard, Ownable, TokenVestingEscrowEvent
     mapping(address => uint256) public claimed;
 
     constructor(address token_, address payable secureLBP_) {
-        require(token_ != address(0), "token zero");
-        require(secureLBP_ != address(0), "lbp zero");
+        if (token_ == address(0)) revert TokenZero();
+        if (secureLBP_ == address(0)) revert LbpZero();
 
         SecureLBP lbp = SecureLBP(secureLBP_);
-        require(address(lbp.token()) == token_, "token mismatch");
+        if (address(lbp.token()) != token_) revert TokenMismatch();
 
         token = IERC20(token_);
         secureLBP = lbp;
@@ -41,7 +42,7 @@ contract TokenVestingEscrow is ReentrancyGuard, Ownable, TokenVestingEscrowEvent
 
     /// @notice Claim vested tokens on behalf of a user. Tokens are transferred to the user.
     function claimFor(address user) external nonReentrant {
-        require(user != address(0), "user zero");
+        if (user == address(0)) revert UserZero();
         _claim(user);
     }
 
@@ -62,14 +63,14 @@ contract TokenVestingEscrow is ReentrancyGuard, Ownable, TokenVestingEscrowEvent
 
     /// @notice Rescue non-sale tokens accidentally sent to the escrow.
     function rescueERC20(address erc20, address to, uint256 amount) external onlyOwner {
-        require(to != address(0), "to zero");
-        require(erc20 != address(token), "cannot rescue token");
+        if (to == address(0)) revert ToZero();
+        if (erc20 == address(token)) revert RescueSaleToken();
         SafeERC20.safeTransfer(IERC20(erc20), to, amount);
     }
 
     function _claim(address user) internal {
         uint256 amount = claimable(user);
-        require(amount > 0, "nothing claimable");
+        if (amount == 0) revert NothingClaimable();
 
         claimed[user] += amount;
         token.safeTransfer(user, amount);

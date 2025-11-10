@@ -131,8 +131,8 @@ contract DutchAuction is IAuction, Ownable, ReentrancyGuard, DutchAuctionEvents,
 
     /// @notice Sets the ERC20 token being auctioned, presale manager, and initializes decay multiplier baseline.
     constructor(IERC20 saleToken_, address presaleManager_) {
-        require(address(saleToken_) != address(0), "saleToken zero");
-        require(presaleManager_ != address(0), "manager zero");
+        if (address(saleToken_) == address(0)) revert SaleTokenZero();
+        if (presaleManager_ == address(0)) revert ManagerZero();
         saleToken = saleToken_;
         presaleManager = presaleManager_;
         decayMultiplier = 1e18;
@@ -157,15 +157,15 @@ contract DutchAuction is IAuction, Ownable, ReentrancyGuard, DutchAuctionEvents,
     /// @dev Validates timing bounds and descending price ticks before storing configuration.
     function initializeAuction(IAuction.AuctionConfig calldata config) external override onlyManager {
         if (initialized) revert AuctionFinalizedAlready();
-        require(config.treasury != address(0), "treasury zero");
-        require(config.tokensForSale > 0, "tokensForSale zero");
-        require(config.commitDuration >= config.minCommitDuration, "commit duration");
-        require(config.revealDuration > 0, "reveal duration");
-        require(config.priceTicks.length > 0, "ticks empty");
-        require(config.nonRevealPenaltyBps <= BPS_DENOMINATOR, "penalty bps");
-        require(config.earlyBonusPct <= BPS_DENOMINATOR, "bonus pct");
-        require(config.lbpStableShareBps <= BPS_DENOMINATOR, "lbp share");
-        require(config.maxDecayMultiplier >= 1e18, "decay range");
+        if (config.treasury == address(0)) revert TreasuryZero();
+        if (config.tokensForSale == 0) revert TokensForSaleZero();
+        if (config.commitDuration < config.minCommitDuration) revert CommitDurationTooShort();
+        if (config.revealDuration == 0) revert RevealDurationZero();
+        if (config.priceTicks.length == 0) revert PriceTicksEmpty();
+        if (config.nonRevealPenaltyBps > BPS_DENOMINATOR) revert PenaltyTooHigh();
+        if (config.earlyBonusPct > BPS_DENOMINATOR) revert BonusTooHigh();
+        if (config.lbpStableShareBps > BPS_DENOMINATOR) revert LbpShareTooHigh();
+        if (config.maxDecayMultiplier < 1e18) revert MaxDecayTooLow();
 
         for (uint256 i = 1; i < config.priceTicks.length; i++) {
             if (config.priceTicks[i - 1] <= config.priceTicks[i]) revert InvalidPriceTicks();
@@ -220,8 +220,8 @@ contract DutchAuction is IAuction, Ownable, ReentrancyGuard, DutchAuctionEvents,
         if (!CommitLib.verifyWhitelist(merkleRoot, merkleProof, msg.sender)) revert InvalidProof();
 
         uint256 impliedQty = msg.value / priceTicks[0];
-        require(impliedQty > 0, "deposit too small");
-        require(impliedQty * priceTicks[0] == msg.value, "deposit mismatch");
+        if (impliedQty == 0) revert DepositTooSmall();
+        if (impliedQty * priceTicks[0] != msg.value) revert DepositMismatch();
 
         if (committedQty[msg.sender] + impliedQty > perAddressCap) revert CapExceeded();
 
@@ -257,7 +257,7 @@ contract DutchAuction is IAuction, Ownable, ReentrancyGuard, DutchAuctionEvents,
         if (expectedHash != userCommit.commitHash) revert InvalidCommit();
 
         uint256 deposit = uint256(userCommit.deposit);
-        require(CommitLib.depositMatches(deposit, qty, priceTicks[0]), "deposit/qty mismatch");
+        if (!CommitLib.depositMatches(deposit, qty, priceTicks[0])) revert DepositMismatch();
 
         if (revealedQty[msg.sender] + qty > perAddressCap) revert CapExceeded();
 
@@ -361,15 +361,15 @@ contract DutchAuction is IAuction, Ownable, ReentrancyGuard, DutchAuctionEvents,
             stableForLBP = ethForTreasury;
         }
 
-        require(lbpTokenRecipient != address(0), "lbp token recipient zero");
+        if (lbpTokenRecipient == address(0)) revert LbpTokenRecipientZero();
 
         saleToken.safeTransfer(lbpTokenRecipient, unsoldTokens);
 
         if (stableForLBP > 0) {
-            require(lbpStableRecipient != address(0), "lbp stable recipient zero");
+            if (lbpStableRecipient == address(0)) revert LbpStableRecipientZero();
             ethForTreasury -= stableForLBP;
             (bool sent, ) = lbpStableRecipient.call{value: stableForLBP}("");
-            require(sent, "lbp stable transfer failed");
+            if (!sent) revert TransferFailed();
         }
 
         lbpLaunched = true;
@@ -427,7 +427,7 @@ contract DutchAuction is IAuction, Ownable, ReentrancyGuard, DutchAuctionEvents,
             uint256 refundValue = refundDue - alreadyRefunded;
             refundedAmount[msg.sender] = refundDue;
             (bool sent, ) = payable(msg.sender).call{value: refundValue}("");
-            require(sent, "refund failed");
+            if (!sent) revert TransferFailed();
             emit RefundIssued(msg.sender, refundValue);
         }
 
@@ -523,7 +523,7 @@ contract DutchAuction is IAuction, Ownable, ReentrancyGuard, DutchAuctionEvents,
         revealedDeposit[msg.sender] = 0;
 
         (bool sent, ) = payable(msg.sender).call{value: totalRefund}("");
-        require(sent, "refund failed");
+        if (!sent) revert TransferFailed();
         emit RefundIssued(msg.sender, totalRefund);
     }
 
@@ -550,7 +550,7 @@ contract DutchAuction is IAuction, Ownable, ReentrancyGuard, DutchAuctionEvents,
         uint256 refundAmount = deposit - penalty;
         if (refundAmount > 0) {
             (bool sent, ) = payable(msg.sender).call{value: refundAmount}("");
-            require(sent, "refund failed");
+            if (!sent) revert TransferFailed();
             emit RefundIssued(msg.sender, refundAmount);
         }
     }
@@ -565,13 +565,13 @@ contract DutchAuction is IAuction, Ownable, ReentrancyGuard, DutchAuctionEvents,
         ethForTreasury = 0;
         if (amount > 0) {
             (bool sent, ) = recipient.call{value: amount}("");
-            require(sent, "treasury transfer failed");
+            if (!sent) revert TransferFailed();
         }
     }
 
     /// @notice Adds more tokens to the bonus reserve used for early participation rewards.
     function updateBonusReserve(uint256 additionalReserve) external override onlyOwner {
-        require(additionalReserve > 0, "invalid reserve");
+        if (additionalReserve == 0) revert InvalidReserveIncrease();
         bonusReserve += additionalReserve;
         bonusReserveRemaining += additionalReserve;
     }

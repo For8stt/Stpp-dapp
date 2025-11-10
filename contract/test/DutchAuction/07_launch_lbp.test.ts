@@ -259,7 +259,10 @@ describe("DutchAuction – 07_launch_lbp", function () {
 
         it("should revert if lbpTokenRecipient is zero address", async function () {
             const ctx = await loadFixture(zeroTokenRecipientFixture);
-            await expect(ctx.auction.connect(ctx.deployer).launchLbp()).to.be.revertedWith("lbp token recipient zero");
+            await expect(ctx.auction.connect(ctx.deployer).launchLbp()).to.be.revertedWithCustomError(
+                ctx.auction,
+                "LbpTokenRecipientZero"
+            );
         });
 
         it("should revert if lbpStableRecipient is zero when ETH needs to be sent", async function () {
@@ -288,7 +291,10 @@ describe("DutchAuction – 07_launch_lbp", function () {
             await time.increaseTo(revealEndTime + 1n);
             await auction.connect(ctx.deployer).finalize();
 
-            await expect(auction.connect(ctx.deployer).launchLbp()).to.be.revertedWith("lbp stable recipient zero");
+            await expect(auction.connect(ctx.deployer).launchLbp()).to.be.revertedWithCustomError(
+                auction,
+                "LbpStableRecipientZero"
+            );
         });
 
         it("should revert if stable portion cannot be funded from treasury balance", async function () {
@@ -297,7 +303,7 @@ describe("DutchAuction – 07_launch_lbp", function () {
             const auctionAddress = await auction.getAddress();
 
             await ethers.provider.send("hardhat_setBalance", [auctionAddress, "0x0"]);
-            await expect(auction.connect(deployer).launchLbp()).to.be.revertedWith("lbp stable transfer failed");
+            await expect(auction.connect(deployer).launchLbp()).to.be.revertedWithCustomError(auction, "TransferFailed");
         });
     });
 });

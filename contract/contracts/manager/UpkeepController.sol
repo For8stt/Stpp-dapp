@@ -8,12 +8,19 @@ import "../interfaces/IAutomationCompatible.sol";
 import "../interfaces/IPresaleManager.sol";
 import "../interfaces/IUpkeepController.sol";
 import "./events/UpkeepControllerEvents.sol";
+import "./errors/UpkeepControllerErrors.sol";
 
 /**
  * @title UpkeepController
  * @notice Handles Chainlink keeper automation for auction demand checks.
  */
-contract UpkeepController is Ownable, IAutomationCompatible, IUpkeepController, UpkeepControllerEvents {
+contract UpkeepController is
+    Ownable,
+    IAutomationCompatible,
+    IUpkeepController,
+    UpkeepControllerEvents,
+    UpkeepControllerErrors
+{
     uint256 private constant DEMAND_CHECK_GRACE = 30 minutes;
 
     struct DemandConfig {
@@ -31,15 +38,15 @@ contract UpkeepController is Ownable, IAutomationCompatible, IUpkeepController, 
     mapping(address => bool) public isRegistered;
 
     constructor(address manager_) {
-        require(manager_ != address(0), "manager zero");
+        if (manager_ == address(0)) revert ManagerZero();
         manager = IPresaleManager(manager_);
         _transferOwnership(manager_);
     }
 
     /// @inheritdoc IUpkeepController
     function registerAuction(address auction, uint256 demandCheckTime) external override onlyOwner {
-        require(auction != address(0), "auction zero");
-        require(!isRegistered[auction], "already registered");
+        if (auction == address(0)) revert AuctionZero();
+        if (isRegistered[auction]) revert AuctionAlreadyRegistered();
 
         isRegistered[auction] = true;
         demandConfigs[auction] = DemandConfig({checkTime: demandCheckTime, triggered: false});
@@ -51,20 +58,20 @@ contract UpkeepController is Ownable, IAutomationCompatible, IUpkeepController, 
 
     /// @inheritdoc IUpkeepController
     function updateDemandCheckTime(address auction, uint256 newTime) external override onlyOwner {
-        require(isRegistered[auction], "unknown auction");
+        if (!isRegistered[auction]) revert UnknownAuction();
         demandConfigs[auction].checkTime = newTime;
     }
 
     /// @inheritdoc IUpkeepController
     function setKeeperEnabled(bool enabled) external override onlyOwner {
-        require(!keeperConfigFrozen, "keepers frozen");
+        if (keeperConfigFrozen) revert KeeperConfigFrozen();
         keeperEnabled = enabled;
         emit KeeperEnabledUpdated(enabled);
     }
 
     /// @inheritdoc IUpkeepController
     function executeDemandCheck(address auction) public override onlyOwner {
-        require(isRegistered[auction], "unknown auction");
+        if (!isRegistered[auction]) revert UnknownAuction();
         _executeDemandCheck(auction, true);
     }
 
@@ -97,15 +104,15 @@ contract UpkeepController is Ownable, IAutomationCompatible, IUpkeepController, 
 
     /// @inheritdoc IAutomationCompatible
     function performUpkeep(bytes calldata performData) external override {
-        require(keeperEnabled, "keeper disabled");
+        if (!keeperEnabled) revert KeeperDisabled();
         address auctionAddr = abi.decode(performData, (address));
-        require(isRegistered[auctionAddr], "unknown auction");
+        if (!isRegistered[auctionAddr]) revert UnknownAuction();
         _executeDemandCheck(auctionAddr, true);
     }
 
     function _executeDemandCheck(address auctionAddr, bool enforce) private {
         if (enforce) {
-            require(_shouldTriggerDemandCheck(auctionAddr), "conditions not met");
+            if (!_shouldTriggerDemandCheck(auctionAddr)) revert ConditionsNotMet();
         } else if (!_shouldTriggerDemandCheck(auctionAddr)) {
             return;
         }

@@ -20,7 +20,7 @@ describe("DutchAuction – 12_update_config", function () {
         const ctx = await loadFixture(deployAuctionFixture);
         const { auction } = ctx;
 
-        await expect(auction.updateBonusReserve(0)).to.be.revertedWith("invalid reserve");
+        await expect(auction.updateBonusReserve(0)).to.be.revertedWithCustomError(auction, "InvalidReserveIncrease");
     });
 
     it("should allow owner to updateVesting and emit VestingUpdated", async function () {

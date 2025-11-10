@@ -89,11 +89,11 @@ describe("SecureLBP – 02_initPool", function () {
 
         await expect(
             lbp.connect(owner).initPoolFromAuction(0, { value: INITIAL_POOL_ETH })
-        ).to.be.revertedWith("zero amounts");
+        ).to.be.revertedWithCustomError(lbp, "ZeroAmounts");
 
         await expect(
             lbp.connect(owner).initPoolFromAuction(INITIAL_POOL_TOKENS, { value: 0 })
-        ).to.be.revertedWith("zero amounts");
+        ).to.be.revertedWithCustomError(lbp, "ZeroAmounts");
     });
 
     it("should revert if function is called twice", async function () {
@@ -101,7 +101,7 @@ describe("SecureLBP – 02_initPool", function () {
 
         await expect(
             lbp.connect(owner).initPoolFromAuction(INITIAL_POOL_TOKENS, { value: INITIAL_POOL_ETH })
-        ).to.be.revertedWith("pool already init");
+        ).to.be.revertedWithCustomError(lbp, "PoolAlreadyInitialized");
     });
 
     it("should revert if called by non-owner", async function () {

@@ -16,7 +16,7 @@ describe("TokenVestingEscrow claim flow", function () {
         expect(allocationUser1).to.be.gt(0n);
         expect(allocationUser2).to.be.gt(0n);
 
-        await expect(escrow.connect(user1).claim()).to.be.revertedWith("nothing claimable");
+        await expect(escrow.connect(user1).claim()).to.be.revertedWithCustomError(escrow, "NothingClaimable");
 
         await lbp.connect(owner).finalizeToVesting(await escrow.getAddress());
 
