@@ -16,10 +16,11 @@ import "../interfaces/IVestingEscrow.sol";
 
 import "./AuctionFactory.sol";
 import "./UpkeepController.sol";
+import "./events/PresaleManagerEvents.sol";
 
 /// @title PresaleManager
 /// @notice High-level orchestrator for Dutch auction → LBP → vesting pipeline.
-contract PresaleManager is Ownable, IPresaleManager, IAutomationCompatible {
+contract PresaleManager is Ownable, IPresaleManager, IAutomationCompatible, PresaleManagerEvents {
     using SafeERC20 for IERC20;
 
     struct AuctionInput {
@@ -86,31 +87,6 @@ contract PresaleManager is Ownable, IPresaleManager, IAutomationCompatible {
     mapping(address => bool) public isManagedAuction;
     mapping(address => AuctionRecord) private _records;
 
-    event AuctionCreated(address indexed auction, address indexed saleToken, uint256 tokensForSale);
-    event AuctionFinalized(
-        address indexed auction,
-        bool successful,
-        uint256 clearingPrice,
-        uint256 tokensSold,
-        uint256 totalRaised
-    );
-    event LBPInitialized(
-        address indexed auction,
-        address indexed lbp,
-        address indexed vesting,
-        uint256 tokenAmount,
-        uint256 ethAmount
-    );
-    event LBPFinalized(
-        address indexed auction,
-        address indexed lbp,
-        address indexed vesting,
-        uint256 ethAmount,
-        uint256 tokenAmount
-    );
-    event AuctionProceedsWithdrawn(address indexed auction, address indexed recipient, uint256 amount);
-    event AuctionDemandCheckExecuted(address indexed auction);
-    event KeeperEnabledUpdated(bool enabled);
 
     constructor() {
         auctionFactory = IAuctionFactory(address(new AuctionFactory(address(this))));

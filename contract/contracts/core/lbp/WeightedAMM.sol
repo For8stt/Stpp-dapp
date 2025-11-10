@@ -8,7 +8,9 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-contract LBPWeightedAMM is ReentrancyGuard, Pausable, Ownable {
+import "./events/WeightedAMMEvents.sol";
+
+contract LBPWeightedAMM is ReentrancyGuard, Pausable, Ownable, WeightedAMMEvents {
     using SafeERC20 for IERC20;
 
     IERC20 public immutable token;
@@ -29,11 +31,6 @@ contract LBPWeightedAMM is ReentrancyGuard, Pausable, Ownable {
 
     uint256 public constant SCALE = 1e18;
 
-    event LiquidityAdded(address indexed user, uint256 tokenAmount, uint256 ethAmount, uint256 lpMinted);
-    event LiquidityAddedSingle(address indexed user, uint256 tokenAmount, uint256 ethAmount, uint256 lpMinted);
-    event LiquidityRemoved(address indexed user, uint256 tokenAmount, uint256 ethAmount, uint256 lpBurned);
-    event SwapTokenForETH(address indexed user, uint256 tokenIn, uint256 ethOut, uint256 feeAmount);
-    event SwapETHForToken(address indexed user, uint256 ethIn, uint256 tokenOut, uint256 feeAmount);
 
     constructor(
         address _token,

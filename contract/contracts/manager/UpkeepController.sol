@@ -7,12 +7,13 @@ import "../interfaces/IAuction.sol";
 import "../interfaces/IAutomationCompatible.sol";
 import "../interfaces/IPresaleManager.sol";
 import "../interfaces/IUpkeepController.sol";
+import "./events/UpkeepControllerEvents.sol";
 
 /**
  * @title UpkeepController
  * @notice Handles Chainlink keeper automation for auction demand checks.
  */
-contract UpkeepController is Ownable, IAutomationCompatible, IUpkeepController {
+contract UpkeepController is Ownable, IAutomationCompatible, IUpkeepController, UpkeepControllerEvents {
     uint256 private constant DEMAND_CHECK_GRACE = 30 minutes;
 
     struct DemandConfig {
@@ -28,10 +29,6 @@ contract UpkeepController is Ownable, IAutomationCompatible, IUpkeepController {
     address[] private monitoredAuctions;
     mapping(address => DemandConfig) private demandConfigs;
     mapping(address => bool) public isRegistered;
-
-    event AuctionRegistered(address indexed auction, uint256 demandCheckTime);
-    event DemandCheckExecuted(address indexed auction);
-    event KeeperEnabledUpdated(bool enabled);
 
     constructor(address manager_) {
         require(manager_ != address(0), "manager zero");

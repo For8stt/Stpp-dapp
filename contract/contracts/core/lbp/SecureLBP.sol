@@ -24,6 +24,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
 
 import "./WeightedAMM.sol"; // Import for dynamic deployment
+import "./events/SecureLBPEvents.sol";
 import "../../libraries/VestingMath.sol";
 
 interface ILBPOracle {
@@ -34,7 +35,7 @@ interface ILBPOracle {
 // Interface for PresaleManager callback (moved from here to avoid duplicate; import from DutchAuction if needed)
 import "../../interfaces/IPresaleManager.sol";
 
-contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
+contract SecureLBP is ReentrancyGuard, Pausable, Ownable, SecureLBPEvents {
     using SafeERC20 for IERC20;
 
     // ============ IMMUTABLE/CONFIG ============
@@ -79,21 +80,6 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
     mapping(address => uint256) public totalContributed;     // total ETH provided by user (for caps)
     mapping(address => uint256) public allocations;          // tokens user purchased (in token units)
 
-    // events
-    event BidPlaced(address indexed user, uint256 ethIn, uint256 netEth, uint256 feeBP, uint256 tokensBought);
-    event PoolInitialized(address poolAddr);
-    event OracleFeeUpdated(uint256 newFeeBP);
-    event OraclePaused(uint256 untilTimestamp);
-    event OracleResumed();
-    event FinalizedToVesting(address vestingContract, uint256 totalTokens);
-    event WithdrawnETH(address to, uint256 amount);
-    event TreasurySet(address treasury);
-    event OracleSet(address oracleAddr);
-    event PoolFinalized(uint256 totalTokens, uint256 totalETH);
-    event FullUnwindExecuted(uint256 ethRemoved, uint256 tokensRemoved);
-    event PartialUnwindExecuted(uint256 percentBP, uint256 ethRemoved, uint256 tokensRemoved);
-    event PoolRebalancedTo5050(uint256 ethAdded, uint256 tokensAdded);
-    event TokensWithdrawn(address to, uint256 amount);
 
     // ============ CONSTRUCTOR ============
     constructor(

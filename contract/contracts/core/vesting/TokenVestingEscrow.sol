@@ -7,21 +7,20 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 import "../lbp/SecureLBP.sol";
+import "./events/TokenVestingEscrowEvents.sol";
 
 /**
  * @title TokenVestingEscrow
  * @notice Holds purchased tokens from SecureLBP finalization and lets users pull vested amounts.
  *         The vesting schedule and per-user allocations are sourced from the SecureLBP contract.
  */
-contract TokenVestingEscrow is ReentrancyGuard, Ownable {
+contract TokenVestingEscrow is ReentrancyGuard, Ownable, TokenVestingEscrowEvents {
     using SafeERC20 for IERC20;
 
     IERC20 public immutable token;
     SecureLBP public immutable secureLBP;
 
     mapping(address => uint256) public claimed;
-
-    event Claimed(address indexed user, uint256 amount, uint256 totalClaimed);
 
     constructor(address token_, address payable secureLBP_) {
         require(token_ != address(0), "token zero");

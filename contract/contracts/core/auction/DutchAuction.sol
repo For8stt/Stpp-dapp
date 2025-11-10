@@ -11,6 +11,8 @@ import "../../libraries/CommitLib.sol";
 import "../../libraries/PriceTickLib.sol";
 import "../../libraries/ReserveDecayLib.sol";
 import "../../libraries/VestingMath.sol";
+import "./events/DutchAuctionEvents.sol";
+import "./errors/DutchAuctionErrors.sol";
 
 /// @title Commit–Reveal Dutch auction with dynamic reserve management and LBP transition
 /// @notice Implements a production oriented Dutch auction with commit / reveal flow, per
@@ -20,7 +22,7 @@ import "../../libraries/VestingMath.sol";
 /// reveal to populate price buckets → optional dynamic reserve adjustment → finalize to determine
 /// clearing price → manager optionally calls `launchLbp` for residual inventory → participants claim
 /// vested tokens / refunds → losers and unrevealed deposits withdraw → manager withdraws proceeds.
-contract DutchAuction is IAuction, Ownable, ReentrancyGuard {
+contract DutchAuction is IAuction, Ownable, ReentrancyGuard, DutchAuctionEvents, DutchAuctionErrors {
     using SafeERC20 for IERC20;
 
     uint256 private constant BPS_DENOMINATOR = 10_000;
@@ -121,31 +123,6 @@ contract DutchAuction is IAuction, Ownable, ReentrancyGuard {
     mapping(address => uint256) public refundedAmount;
     mapping(address => uint256) public tokensClaimed;
 
-    event AuctionInitialized(uint256 startTime, uint256 commitEndTime, uint256 revealEndTime, uint256 tokensForSale);
-    event CommitSubmitted(address indexed bidder, bytes32 indexed commitHash, uint256 deposit, uint256 impliedQty);
-    event BidRevealed(address indexed bidder, uint256 indexed commitIndex, uint256 priceTickIndex, uint256 qty, uint256 bonusPct);
-    event DynamicAdjustment(uint256 decayMultiplier, uint256 newCommitEndTime, uint256 totalDepositCommitted, uint256 totalCommitsCount);
-    event AuctionFinalized(bool success, uint256 clearingPrice, uint256 tokensSold, uint256 totalRaised);
-    event RefundIssued(address indexed bidder, uint256 amount);
-    event BonusAllocated(address indexed bidder, uint256 bonusAmount);
-    event LBPLaunched(address indexed tokenRecipient, address indexed stableRecipient, uint256 tokenAmount, uint256 stableAmount);
-    event VestingUpdated(uint256 vestingStart, uint256 vestingDuration);
-
-    error AuctionNotInitialized();
-    error AuctionNotActive();
-    error CommitPhaseComplete();
-    error RevealPhaseClosed();
-    error CapExceeded();
-    error InvalidProof();
-    error AlreadyRevealed();
-    error InvalidCommit();
-    error AuctionNotFinalized();
-    error AuctionFinalizedAlready();
-    error NothingToClaim();
-    error InvalidPriceTicks();
-    error NotManager();
-    error LBPAlreadyLaunched();
-    error NoInventoryForLBP();
 
     modifier onlyManager() {
         if (msg.sender != presaleManager) revert NotManager();
