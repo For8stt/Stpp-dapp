@@ -11,6 +11,7 @@ import "../../libraries/CommitLib.sol";
 import "../../libraries/PriceTickLib.sol";
 import "../../libraries/ReserveDecayLib.sol";
 import "../../libraries/VestingMath.sol";
+import "./AuctionConfig.sol";
 import "./events/DutchAuctionEvents.sol";
 import "./errors/DutchAuctionErrors.sol";
 
@@ -50,9 +51,6 @@ contract DutchAuction is IAuction, Ownable, ReentrancyGuard, DutchAuctionEvents,
         uint256 paymentDue;
         bool computed;
     }
-
-    IERC20 public immutable saleToken;
-    address public immutable presaleManager;
 
     uint256 public tokensForSale;
     uint256 public bonusReserve;
@@ -122,7 +120,8 @@ contract DutchAuction is IAuction, Ownable, ReentrancyGuard, DutchAuctionEvents,
     mapping(address => AllocationData) public accountAllocations;
     mapping(address => uint256) public refundedAmount;
     mapping(address => uint256) public tokensClaimed;
-
+    IERC20 public saleToken;
+    address public presaleManager;
 
     modifier onlyManager() {
         if (msg.sender != presaleManager) revert NotManager();
@@ -131,11 +130,32 @@ contract DutchAuction is IAuction, Ownable, ReentrancyGuard, DutchAuctionEvents,
 
     /// @notice Sets the ERC20 token being auctioned, presale manager, and initializes decay multiplier baseline.
     constructor(IERC20 saleToken_, address presaleManager_) {
+        _initializeBase(saleToken_, presaleManager_, false);
+    }
+
+    /// @notice Clone-friendly initializer that wires sale token and manager context once.
+    function initializeBase(IERC20 saleToken_, address presaleManager_) external {
+        _initializeBase(saleToken_, presaleManager_, true);
+    }
+
+    /// @notice Allows the owner to hand over manager rights (used by the public factory).
+    function transferManager(address newManager) external onlyOwner {
+        if (newManager == address(0)) revert ManagerZero();
+        presaleManager = newManager;
+    }
+
+    function _initializeBase(IERC20 saleToken_, address presaleManager_, bool setOwner) internal {
+        if (address(saleToken) != address(0)) revert BaseAlreadyInitialized();
         if (address(saleToken_) == address(0)) revert SaleTokenZero();
         if (presaleManager_ == address(0)) revert ManagerZero();
+
         saleToken = saleToken_;
         presaleManager = presaleManager_;
         decayMultiplier = 1e18;
+
+        if (setOwner) {
+            _transferOwnership(presaleManager_);
+        }
     }
 
     /// @notice Returns the number of discrete price ticks configured for the auction.
@@ -155,7 +175,7 @@ contract DutchAuction is IAuction, Ownable, ReentrancyGuard, DutchAuctionEvents,
 
     /// @notice One-time setup for the auction windows, caps, pricing ticks, and vesting details.
     /// @dev Validates timing bounds and descending price ticks before storing configuration.
-    function initializeAuction(IAuction.AuctionConfig calldata config) external override onlyManager {
+    function initializeAuction(AuctionConfig calldata config) external override onlyManager {
         if (initialized) revert AuctionFinalizedAlready();
         if (config.treasury == address(0)) revert TreasuryZero();
         if (config.tokensForSale == 0) revert TokensForSaleZero();

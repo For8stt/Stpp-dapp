@@ -5,6 +5,9 @@ abstract contract PresaleManagerErrors {
     error SaleTokenZero();
     error TreasuryZero();
     error PriceTicksEmpty();
+    error OwnerZero();
+    error ManagerNotInitialized();
+    error ManagerAlreadyInitialized();
     error AuctionExists();
     error UnknownAuction();
     error RecipientZero();

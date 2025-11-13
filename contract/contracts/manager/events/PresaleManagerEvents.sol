@@ -2,6 +2,12 @@
 pragma solidity ^0.8.20;
 
 abstract contract PresaleManagerEvents {
+    event ManagerInitialized(
+        address indexed owner,
+        address indexed auction,
+        address indexed lbp,
+        address vesting
+    );
     event AuctionCreated(address indexed auction, address indexed saleToken, uint256 tokensForSale);
     event AuctionFinalized(
         address indexed auction,

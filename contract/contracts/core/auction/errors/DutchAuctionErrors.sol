@@ -34,4 +34,5 @@ abstract contract DutchAuctionErrors {
     error LbpStableRecipientZero();
     error TransferFailed();
     error InvalidReserveIncrease();
+    error BaseAlreadyInitialized();
 }

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import "../core/auction/AuctionConfig.sol";
 import "../core/auction/DutchAuction.sol";
-import "../interfaces/IAuction.sol";
 
 /// @title Reentrant attacker harness for DutchAuction tests
 /// @notice Provides helper functions to simulate reentrancy attempts from tests.
@@ -36,7 +36,7 @@ contract ReentrantDutchAuctionAttacker {
         auction = DutchAuction(auction_);
     }
 
-    function initializeAuction(IAuction.AuctionConfig calldata config) external onlyOwner {
+    function initializeAuction(AuctionConfig calldata config) external onlyOwner {
         _ensureAuction();
         auction.initializeAuction(config);
     }

@@ -5,7 +5,9 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
+import "../core/auction/AuctionConfig.sol";
 import "../core/lbp/SecureLBP.sol";
+import "../core/vesting/TokenVestingEscrow.sol";
 import "../interfaces/IAuction.sol";
 import "../interfaces/IAuctionFactory.sol";
 import "../interfaces/IAutomationCompatible.sol";
@@ -81,28 +83,50 @@ contract PresaleManager is Ownable, IPresaleManager, IAutomationCompatible, Pres
         bool demandCheckTriggered;
     }
 
-    IAuctionFactory public immutable auctionFactory;
-    IUpkeepController public immutable upkeepController;
+    IAuctionFactory public auctionFactory;
+    IUpkeepController public upkeepController;
+
+    bool public managerInitialized;
 
     address[] private _auctions;
     mapping(address => bool) public isManagedAuction;
     mapping(address => AuctionRecord) private _records;
 
 
-    constructor() {
+    function initializeManager(
+        address owner_,
+        AuctionInput calldata auctionParams,
+        LbpLaunchConfig calldata lbpParams
+    ) external returns (address auctionAddress, address lbpAddress, address vestingAddress) {
+        if (managerInitialized) revert ManagerAlreadyInitialized();
+        if (owner_ == address(0)) revert OwnerZero();
+
         auctionFactory = IAuctionFactory(address(new AuctionFactory(address(this))));
         upkeepController = IUpkeepController(address(new UpkeepController(address(this))));
+        managerInitialized = true;
+
+        auctionAddress = _createManagedAuction(auctionParams);
+        AuctionRecord storage record = _records[auctionAddress];
+        (lbpAddress, vestingAddress) = _prepareInitialStack(record, auctionAddress, lbpParams);
+
+        emit ManagerInitialized(owner_, auctionAddress, lbpAddress, vestingAddress);
+        _transferOwnership(owner_);
     }
 
     /// @notice Deploys and configures a new Dutch auction under manager control.
     function createAuction(AuctionInput calldata params) external onlyOwner returns (address auctionAddress) {
+        auctionAddress = _createManagedAuction(params);
+    }
+
+    function _createManagedAuction(AuctionInput calldata params) internal returns (address auctionAddress) {
+        _ensureManagerInitialized();
         if (params.saleToken == address(0)) revert SaleTokenZero();
         if (params.treasury == address(0)) revert TreasuryZero();
         if (params.priceTicks.length == 0) revert PriceTicksEmpty();
 
         auctionAddress = auctionFactory.deployAuction(params.saleToken, address(this));
 
-        IAuction.AuctionConfig memory config = IAuction.AuctionConfig({
+        AuctionConfig memory config = AuctionConfig({
             startTime: params.startTime,
             commitDuration: params.commitDuration,
             revealDuration: params.revealDuration,
@@ -143,6 +167,7 @@ contract PresaleManager is Ownable, IPresaleManager, IAutomationCompatible, Pres
         upkeepController.registerAuction(auctionAddress, params.demandCheckTime);
 
         emit AuctionCreated(auctionAddress, params.saleToken, params.tokensForSale);
+        return auctionAddress;
     }
 
     /// @notice Allows the manager owner to top up the auction bonus reserve.
@@ -214,6 +239,13 @@ contract PresaleManager is Ownable, IPresaleManager, IAutomationCompatible, Pres
         if (record.lbpInitialized) revert LbpAlreadyLaunched();
         if (cfg.startTime >= cfg.endTime) revert InvalidLbpTimes();
 
+        address payable lbpTarget = record.lbp;
+        if (lbpTarget == address(0)) {
+            if (cfg.startTime >= cfg.endTime) revert InvalidLbpTimes();
+            lbpTarget = _deploySecureLBP(record, cfg, auctionAddress);
+            record.lbp = lbpTarget;
+        }
+
         uint256 tokenBalanceBefore = IERC20(record.saleToken).balanceOf(address(this));
         uint256 ethBalanceBefore = address(this).balance;
         IAuction(auctionAddress).launchLbp();
@@ -222,18 +254,15 @@ contract PresaleManager is Ownable, IPresaleManager, IAutomationCompatible, Pres
         if (tokensReceived == 0) revert NoTokensReceived();
         if (ethReceived == 0) revert NoEthReceived();
 
-        address payable deployedLbp = _deploySecureLBP(record, cfg, auctionAddress);
+        IERC20(record.saleToken).safeTransfer(lbpTarget, tokensReceived);
+        ILBP(lbpTarget).initPoolFromAuction{value: ethReceived}(tokensReceived);
 
-        IERC20(record.saleToken).safeTransfer(deployedLbp, tokensReceived);
-        ILBP(deployedLbp).initPoolFromAuction{value: ethReceived}(tokensReceived);
-
-        record.lbp = deployedLbp;
         record.lbpInitialized = true;
         record.lbpTokensProvided = tokensReceived;
         record.lbpEthProvided = ethReceived;
 
-        lbpAddress = address(deployedLbp);
-        emit LBPInitialized(auctionAddress, lbpAddress, address(0), tokensReceived, ethReceived);
+        lbpAddress = address(lbpTarget);
+        emit LBPInitialized(auctionAddress, lbpAddress, record.vestingEscrow, tokensReceived, ethReceived);
     }
 
     /// @notice Finalizes the LBP phase and seals allocations.
@@ -242,12 +271,18 @@ contract PresaleManager is Ownable, IPresaleManager, IAutomationCompatible, Pres
         if (!isManagedAuction[auctionAddress]) revert UnknownAuction();
         if (!record.lbpInitialized) revert LbpNotLaunched();
         if (record.lbpFinalized) revert AuctionAlreadyFinalized();
-        if (vestingEscrow_ == address(0)) revert EscrowZero();
-        if (IVestingEscrow(vestingEscrow_).token() != record.saleToken) revert EscrowTokenMismatch();
+        address vestingTarget = record.vestingEscrow;
+        if (vestingTarget == address(0)) {
+            if (vestingEscrow_ == address(0)) revert EscrowZero();
+            if (IVestingEscrow(vestingEscrow_).token() != record.saleToken) revert EscrowTokenMismatch();
+            vestingTarget = vestingEscrow_;
+            record.vestingEscrow = vestingEscrow_;
+        } else {
+            if (vestingEscrow_ != address(0) && vestingEscrow_ != vestingTarget) revert EscrowTokenMismatch();
+            if (IVestingEscrow(vestingTarget).token() != record.saleToken) revert EscrowTokenMismatch();
+        }
 
-        record.vestingEscrow = vestingEscrow_;
-
-        ILBP(record.lbp).finalizeToVesting(vestingEscrow_);
+        ILBP(record.lbp).finalizeToVesting(vestingTarget);
         record.lbpFinalized = true;
     }
 
@@ -409,6 +444,33 @@ contract PresaleManager is Ownable, IPresaleManager, IAutomationCompatible, Pres
     /// @inheritdoc IAutomationCompatible
     function performUpkeep(bytes calldata data) external override {
         IAutomationCompatible(address(upkeepController)).performUpkeep(data);
+    }
+
+    function _ensureManagerInitialized() internal {
+        if (managerInitialized) {
+            if (address(auctionFactory) == address(0) || address(upkeepController) == address(0)) {
+                revert ManagerNotInitialized();
+            }
+            return;
+        }
+
+        auctionFactory = IAuctionFactory(address(new AuctionFactory(address(this))));
+        upkeepController = IUpkeepController(address(new UpkeepController(address(this))));
+        managerInitialized = true;
+    }
+
+    function _prepareInitialStack(
+        AuctionRecord storage record,
+        address auctionAddress,
+        LbpLaunchConfig calldata cfg
+    ) internal returns (address payable lbpAddress, address vestingAddress) {
+        if (cfg.startTime >= cfg.endTime) revert InvalidLbpTimes();
+        lbpAddress = _deploySecureLBP(record, cfg, auctionAddress);
+
+        TokenVestingEscrow escrow = new TokenVestingEscrow(record.saleToken, lbpAddress);
+        record.vestingEscrow = address(escrow);
+
+        return (lbpAddress, address(escrow));
     }
 
     function _deploySecureLBP(

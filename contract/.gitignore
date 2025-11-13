@@ -5,6 +5,8 @@ node_modules
 /cache
 /artifacts
 
+/scripts/.DS_Store
+
 # TypeChain files
 /typechain
 /typechain-types
