@@ -66,7 +66,7 @@ describe("Scenario – LBP volatility, rebalancing, and unwind", function () {
         expect(await oracle.isPaused()).to.equal(true);
 
         await expect(lbp.connect(user1).placeBid(0, { value: ethers.parseEther("0.5") }))
-            .to.be.revertedWith("paused by oracle");
+            .to.be.revertedWithCustomError(lbp, "OraclePausedError");
 
         await time.increase(180);
         await oracle.computeAdaptiveFee();

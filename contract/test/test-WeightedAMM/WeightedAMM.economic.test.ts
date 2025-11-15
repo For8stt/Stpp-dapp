@@ -245,8 +245,17 @@ describe("WeightedAMM Economic Simulations", function () {
             try {
                 await amm.swapETHForToken(expectedOutApprox, { value: largeIn });
             } catch (e: any) {
-                if (e.message.includes("slippage") || e.message.includes("empty pool")) {
+                const errorName = e?.errorName || "";
+                const message = e?.message || "";
+                if (
+                    errorName === "SlippageExceeded" ||
+                    errorName === "EmptyPoolState" ||
+                    message.includes("SlippageExceeded") ||
+                    message.includes("EmptyPoolState")
+                ) {
                     drained = true;
+                } else {
+                    throw e;
                 }
             }
 

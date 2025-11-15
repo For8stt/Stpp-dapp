@@ -63,7 +63,7 @@ describe("Scenario – soft cap failure and refunds", function () {
         expect(bobCommit.withdrawn).to.equal(true);
         expect(bobCommit.revealed).to.equal(false);
 
-        await expect(rejector.triggerRefund()).to.be.revertedWith("refund failed");
+        await expect(rejector.triggerRefund()).to.be.revertedWithCustomError(auction, "TransferFailed");
         const rejectorCommit = await auction.commits(await rejector.getAddress(), 0);
         expect(rejectorCommit.withdrawn).to.equal(false);
     });

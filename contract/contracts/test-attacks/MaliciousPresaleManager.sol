@@ -19,4 +19,7 @@ contract MaliciousPresaleManager is IPresaleManager {
             ISecureLBPMinimal(msg.sender).finalizeToVesting(reentryEscrow);
         }
     }
+    function notifyDemandCheck(address) external pure override {}
+
+    function handleDemandCheck(address) external pure override {}
 }

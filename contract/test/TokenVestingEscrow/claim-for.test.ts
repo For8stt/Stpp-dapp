@@ -19,14 +19,18 @@ describe("TokenVestingEscrow claimFor", function () {
 
         expect(await token.balanceOf(user.address)).to.equal(allocation);
         expect(await escrow.claimed(user.address)).to.equal(allocation);
-        await expect(escrow.connect(other).claimFor(user.address)).to.be.revertedWith("nothing claimable");
+        await expect(escrow.connect(other).claimFor(user.address)).to.be.revertedWithCustomError(
+            escrow,
+            "NothingClaimable"
+        );
     });
 
     it("reverts when user is zero address", async function () {
         const { escrow, other } = await loadFixture(deployEscrowFixture);
 
-        await expect(
-            escrow.connect(other).claimFor(ethers.ZeroAddress)
-        ).to.be.revertedWith("user zero");
+        await expect(escrow.connect(other).claimFor(ethers.ZeroAddress)).to.be.revertedWithCustomError(
+            escrow,
+            "UserZero"
+        );
     });
 });

@@ -1,4 +1,3 @@
-
 import { expect } from "chai";
 import { ethers } from "hardhat";
 import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
@@ -73,7 +72,7 @@ describe("SecureLBP – 03_placeBid", function () {
         await time.increaseTo(startTime + 1n);
         await expect(
             lbp.connect(user1).placeBid(0, { value: ethers.parseEther("1") })
-        ).to.be.revertedWith("pool not init");
+        ).to.be.revertedWithCustomError(lbp, "PoolNotInitialized");
     });
 
     it("should revert before startTime or after endTime", async function () {
@@ -81,7 +80,7 @@ describe("SecureLBP – 03_placeBid", function () {
 
         await expect(
             lbp.connect(user1).placeBid(0, { value: ethers.parseEther("1") })
-        ).to.be.revertedWith("outside bid window");
+        ).to.be.revertedWithCustomError(lbp, "OutsideBidWindow");
 
         await time.increaseTo(startTime + 1n);
         await lbp.connect(user1).placeBid(0, { value: ethers.parseEther("1") });
@@ -89,7 +88,7 @@ describe("SecureLBP – 03_placeBid", function () {
         await time.increaseTo(endTime + 1n);
         await expect(
             lbp.connect(user1).placeBid(0, { value: ethers.parseEther("1") })
-        ).to.be.revertedWith("outside bid window");
+        ).to.be.revertedWithCustomError(lbp, "OutsideBidWindow");
     });
 
     it("should revert if msg.value == 0", async function () {
@@ -98,7 +97,7 @@ describe("SecureLBP – 03_placeBid", function () {
         await time.increaseTo(startTime + 1n);
         await expect(
             lbp.connect(user1).placeBid(0, { value: 0 })
-        ).to.be.revertedWith("zero bid");
+        ).to.be.revertedWithCustomError(lbp, "ZeroBid");
     });
 
     it("should revert if user exceeds maxContributionPerAddress", async function () {
@@ -110,16 +109,16 @@ describe("SecureLBP – 03_placeBid", function () {
         await lbp.connect(user1).placeBid(0, { value: ethers.parseEther("1") });
         await expect(
             lbp.connect(user1).placeBid(0, { value: ethers.parseEther("0.1") })
-        ).to.be.revertedWith("exceeds per-address cap");
+        ).to.be.revertedWithCustomError(lbp, "ContributionCapExceeded");
     });
 
     it("should revert if minTokensOut > received tokens (slippage protection)", async function () {
-        const { lbp, user1, startTime } = await loadFixture(deployLbpWithPoolFixture);
+        const { lbp, user1, startTime, pool } = await loadFixture(deployLbpWithPoolFixture);
 
         await time.increaseTo(startTime + 1n);
         await expect(
             lbp.connect(user1).placeBid(ethers.parseEther("1000000"), { value: ethers.parseEther("1") })
-        ).to.be.revertedWith("slippage");
+        ).to.be.revertedWithCustomError(pool, "SlippageExceeded");
     });
 
     it("should correctly accumulate totalEthRaised and feesAccumulated", async function () {
@@ -172,7 +171,7 @@ describe("SecureLBP – 03_placeBid", function () {
 
             await expect(
                 lbp.connect(user1).placeBid(0, { value: ethers.parseEther("0.6") })
-            ).to.be.revertedWith("exceeds per-address cap");
+            ).to.be.revertedWithCustomError(lbp, "ContributionCapExceeded");
         });
 
         it("requires pool to be initialised", async function () {
@@ -181,7 +180,7 @@ describe("SecureLBP – 03_placeBid", function () {
             await time.increaseTo(startTime + 1n);
             await expect(
                 lbp.connect(user1).placeBid(0, { value: ethers.parseEther("1") })
-            ).to.be.revertedWith("pool not init");
+            ).to.be.revertedWithCustomError(lbp, "PoolNotInitialized");
         });
     });
 });

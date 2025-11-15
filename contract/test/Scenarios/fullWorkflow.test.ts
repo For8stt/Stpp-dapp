@@ -357,7 +357,7 @@ describe("Scenario – STPP full lifecycle", function () {
         }
 
         expect(await escrow.claimable(alice.address)).to.equal(0n);
-        await expect(escrow.connect(alice).claim()).to.be.revertedWith("nothing claimable");
+        await expect(escrow.connect(alice).claim()).to.be.revertedWithCustomError(escrow, "NothingClaimable");
 
         // Whale did not request delegated claim, can self-claim once fully vested.
         const whaleRemaining = await escrow.claimable(whale.address);

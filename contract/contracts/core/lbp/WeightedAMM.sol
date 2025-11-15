@@ -8,7 +8,10 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-contract LBPWeightedAMM is ReentrancyGuard, Pausable, Ownable {
+import "./events/WeightedAMMEvents.sol";
+import "./errors/WeightedAMMErrors.sol";
+
+contract LBPWeightedAMM is ReentrancyGuard, Pausable, Ownable, WeightedAMMEvents, WeightedAMMErrors {
     using SafeERC20 for IERC20;
 
     IERC20 public immutable token;
@@ -29,11 +32,6 @@ contract LBPWeightedAMM is ReentrancyGuard, Pausable, Ownable {
 
     uint256 public constant SCALE = 1e18;
 
-    event LiquidityAdded(address indexed user, uint256 tokenAmount, uint256 ethAmount, uint256 lpMinted);
-    event LiquidityAddedSingle(address indexed user, uint256 tokenAmount, uint256 ethAmount, uint256 lpMinted);
-    event LiquidityRemoved(address indexed user, uint256 tokenAmount, uint256 ethAmount, uint256 lpBurned);
-    event SwapTokenForETH(address indexed user, uint256 tokenIn, uint256 ethOut, uint256 feeAmount);
-    event SwapETHForToken(address indexed user, uint256 ethIn, uint256 tokenOut, uint256 feeAmount);
 
     constructor(
         address _token,
@@ -43,11 +41,11 @@ contract LBPWeightedAMM is ReentrancyGuard, Pausable, Ownable {
         uint256 _endTime,
         uint256 _swapFee
     ) {
-        require(_token != address(0), "zero token");
-        require(_startTime < _endTime, "invalid times");
-        require(_startWeightToken > 0 && _endWeightToken > 0, "weights>0");
-        require(_startWeightToken <= SCALE && _endWeightToken <= SCALE, "weight >1");
-        require(_startWeightToken + _endWeightToken <= SCALE * 2, "invalid weights sum");
+        if (_token == address(0)) revert ZeroToken();
+        if (_startTime >= _endTime) revert InvalidTimes();
+        if (_startWeightToken == 0 || _endWeightToken == 0) revert WeightsZero();
+        if (_startWeightToken > SCALE || _endWeightToken > SCALE) revert WeightAboveMax();
+        if (_startWeightToken + _endWeightToken > SCALE * 2) revert InvalidWeightsSum();
 
         token = IERC20(_token);
         startWeightToken = _startWeightToken;
@@ -85,7 +83,7 @@ contract LBPWeightedAMM is ReentrancyGuard, Pausable, Ownable {
 
     // ========= Add / Remove Liquidity =========
     function addLiquidity(uint256 tokenAmount) external payable whenNotPaused nonReentrant returns (uint256 lpMinted) {
-        require(tokenAmount > 0 && msg.value > 0, "zero amounts");
+        if (tokenAmount == 0 || msg.value == 0) revert ZeroAmounts();
 
         token.safeTransferFrom(msg.sender, address(this), tokenAmount);
 
@@ -97,7 +95,7 @@ contract LBPWeightedAMM is ReentrancyGuard, Pausable, Ownable {
             lpMinted = liqFromToken < liqFromEth ? liqFromToken : liqFromEth;
         }
 
-        require(lpMinted > 0, "zero lp minted");
+        if (lpMinted == 0) revert ZeroLPMinted();
 
         reserveToken += tokenAmount;
         reserveETH += msg.value;
@@ -109,11 +107,11 @@ contract LBPWeightedAMM is ReentrancyGuard, Pausable, Ownable {
     }
 
     function addLiquiditySingleETH() external payable onlyOwner whenNotPaused nonReentrant returns (uint256 lpMinted) {
-        require(msg.value > 0, "zero eth");
-        require(totalSupplyLP > 0 && reserveETH > 0, "pool empty");
+        if (msg.value == 0) revert ZeroEth();
+        if (totalSupplyLP == 0 || reserveETH == 0) revert PoolEmpty();
 
         lpMinted = (msg.value * totalSupplyLP) / reserveETH;
-        require(lpMinted > 0, "zero lp minted");
+        if (lpMinted == 0) revert ZeroLPMinted();
 
         reserveETH += msg.value;
 
@@ -124,13 +122,13 @@ contract LBPWeightedAMM is ReentrancyGuard, Pausable, Ownable {
     }
 
     function addLiquiditySingleToken(uint256 tokenAmount) external onlyOwner whenNotPaused nonReentrant returns (uint256 lpMinted) {
-        require(tokenAmount > 0, "zero token");
-        require(totalSupplyLP > 0 && reserveToken > 0, "pool empty");
+        if (tokenAmount == 0) revert ZeroTokenAmount();
+        if (totalSupplyLP == 0 || reserveToken == 0) revert PoolEmpty();
 
         token.safeTransferFrom(msg.sender, address(this), tokenAmount);
 
         lpMinted = (tokenAmount * totalSupplyLP) / reserveToken;
-        require(lpMinted > 0, "zero lp minted");
+        if (lpMinted == 0) revert ZeroLPMinted();
 
         reserveToken += tokenAmount;
 
@@ -141,7 +139,7 @@ contract LBPWeightedAMM is ReentrancyGuard, Pausable, Ownable {
     }
 
     function removeLiquidity(uint256 lpAmount) external nonReentrant whenNotPaused {
-        require(lpAmount > 0 && balanceLP[msg.sender] >= lpAmount, "invalid lp");
+        if (lpAmount == 0 || balanceLP[msg.sender] < lpAmount) revert InvalidLP();
 
         uint256 tokenOut = (reserveToken * lpAmount) / totalSupplyLP;
         uint256 ethOut = (reserveETH * lpAmount) / totalSupplyLP;
@@ -154,31 +152,31 @@ contract LBPWeightedAMM is ReentrancyGuard, Pausable, Ownable {
 
         token.safeTransfer(msg.sender, tokenOut);
         (bool ok,) = payable(msg.sender).call{value: ethOut}("");
-        require(ok, "eth transfer failed");
+        if (!ok) revert EthTransferFailed();
 
         emit LiquidityRemoved(msg.sender, tokenOut, ethOut, lpAmount);
     }
 
     // ========= Swaps =========
     function swapTokenForETH(uint256 tokenIn, uint256 minEthOut) external nonReentrant whenNotPaused returns (uint256 ethOut) {
-        require(tokenIn > 0, "zero in");
+        if (tokenIn == 0) revert ZeroTokenInput();
         token.safeTransferFrom(msg.sender, address(this), tokenIn);
 
         unchecked {
             uint256 feeAmount = (tokenIn * swapFee) / SCALE;
             uint256 tokenInAfterFee = tokenIn - feeAmount;
-            if (tokenInAfterFee == 0) revert("zero after fee");
+            if (tokenInAfterFee == 0) revert ZeroAfterFee();
 
             (uint256 wToken, uint256 wETH) = currentWeights();
 
             ethOut = _calcOutGivenIn(reserveToken, reserveETH, wToken, wETH, tokenInAfterFee);
-            require(ethOut >= minEthOut, "slippage");
+            if (ethOut < minEthOut) revert SlippageExceeded();
 
             reserveToken += tokenIn;
             reserveETH -= ethOut;
 
             (bool ok,) = payable(msg.sender).call{value: ethOut}("");
-            require(ok, "eth transfer failed");
+            if (!ok) revert EthTransferFailed();
 
             emit SwapTokenForETH(msg.sender, tokenIn, ethOut, feeAmount);
         }
@@ -189,23 +187,23 @@ contract LBPWeightedAMM is ReentrancyGuard, Pausable, Ownable {
     }
 
     function swapETHForTokenTo(address to, uint256 minTokenOut) external payable nonReentrant whenNotPaused returns (uint256 tokenOut) {
-        require(to != address(0), "zero to");
+        if (to == address(0)) revert ZeroRecipient();
         return _swapETHForToken(to, minTokenOut);
     }
 
     function _swapETHForToken(address to, uint256 minTokenOut) internal returns (uint256 tokenOut) {
-        require(msg.value > 0, "zero eth");
+        if (msg.value == 0) revert ZeroEth();
         unchecked {
             uint256 feeAmount = (msg.value * swapFee) / SCALE;
             uint256 ethInAfterFee = msg.value - feeAmount;
-            if (ethInAfterFee == 0) revert("zero after fee");
+            if (ethInAfterFee == 0) revert ZeroAfterFee();
 
             (uint256 wToken, uint256 wETH) = currentWeights();
 
             tokenOut = _calcOutGivenIn(reserveETH, reserveToken, wETH, wToken, ethInAfterFee);
 
-            require(tokenOut >= minTokenOut, "slippage");
-            require(token.balanceOf(address(this)) >= tokenOut, "insufficient token balance");
+            if (tokenOut < minTokenOut) revert SlippageExceeded();
+            if (token.balanceOf(address(this)) < tokenOut) revert InsufficientTokenBalance();
 
             reserveETH += msg.value;
             reserveToken -= tokenOut;
@@ -245,7 +243,7 @@ contract LBPWeightedAMM is ReentrancyGuard, Pausable, Ownable {
         uint256 weightOut,
         uint256 amountIn
     ) internal pure returns (uint256) {
-        require(balanceIn > 0 && balanceOut > 0, "empty pool");
+        if (balanceIn == 0 || balanceOut == 0) revert EmptyPoolState();
 
         // Rewritten to avoid log2 on value <1: use b = (balIn + in)/balIn >1, then 1 - 1/b^y
         uint256 b = (balanceIn + amountIn) * SCALE / balanceIn;

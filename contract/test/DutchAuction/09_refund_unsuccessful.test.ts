@@ -208,7 +208,7 @@ describe("DutchAuction – 09_refund_unsuccessful", function () {
             const ctx = await loadFixture(rejectingBidderFixture);
             const { auction, rejector } = ctx;
 
-            await expect(rejector.triggerRefund()).to.be.revertedWith("refund failed");
+            await expect(rejector.triggerRefund()).to.be.revertedWithCustomError(auction, "TransferFailed");
         });
     });
 });

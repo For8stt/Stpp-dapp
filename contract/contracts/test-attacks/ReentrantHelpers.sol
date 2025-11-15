@@ -219,4 +219,7 @@ contract ReentrantPresaleManager is IPresaleManager {
             reentryData = data;
         }
     }
+    function notifyDemandCheck(address) external pure override {}
+
+    function handleDemandCheck(address) external pure override {}
 }

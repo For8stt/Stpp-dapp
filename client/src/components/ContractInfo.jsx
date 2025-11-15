@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { getContractBalanceInETH, getUserBalanceInETH, getUserDepositInETH, subscribeToEvents } from "../utils/contractServices";
+import { getContractBalanceInETH, getUserDepositInETH, subscribeToEvents } from "../utils/lockServices";
+import { getUserBalanceInETH } from "../utils/userServices";
 
 function ContractInfo({ account, refreshFlag }) {
     const [contractBalance, setContractBalance] = useState("0");

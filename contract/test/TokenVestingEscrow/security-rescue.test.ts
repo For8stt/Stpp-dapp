@@ -35,6 +35,6 @@ describe("TokenVestingEscrow security & rescue", function () {
 
         await expect(
             escrow.connect(owner).rescueERC20(await token.getAddress(), owner.address, 1)
-        ).to.be.revertedWith("cannot rescue token");
+        ).to.be.revertedWithCustomError(escrow, "RescueSaleToken");
     });
 });

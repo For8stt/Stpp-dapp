@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import "./events/LBPOracleEvents.sol";
+
 interface IChainlinkPriceFeed {
     function latestRoundData() external view returns (
         uint80 roundId,
@@ -11,7 +13,7 @@ interface IChainlinkPriceFeed {
     );
 }
 
-contract LBPOracle {
+contract LBPOracle is LBPOracleEvents {
     // Chainlink price feed (token/ETH)
     IChainlinkPriceFeed public priceFeed;
 
@@ -29,10 +31,6 @@ contract LBPOracle {
 
     // Price history (for volatility check)
     int256 public lastPrice;
-
-    event PauseActivated(uint256 untilTimestamp);
-    event FeeUpdated(uint256 baseFeeBP, uint256 maxFeeBP);
-    event AnomalyThresholdUpdated(uint256 newThresholdBP);
 
     constructor(address _priceFeed) {
         require(_priceFeed != address(0), "zero price feed");

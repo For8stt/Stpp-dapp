@@ -509,7 +509,7 @@ function applySaleToPool(pool: VirtualPool, saleAmount: bigint, priceSeries: num
 
     const shocks = config.priceShocks ?? { pumpChance: 0, crashChance: 0, shockMagnitude: 0 };
     const magnitude = shocks.shockMagnitude ?? 0;
-    if (magnitude <= 0) return;
+        if (magnitude <= 0) return;
 
     if (randomFraction(baseSeed, `${label}-pump`) < (shocks.pumpChance ?? 0)) {
         const scale = BigInt(Math.floor(magnitude * Number(PRICE_PRECISION)));
@@ -687,8 +687,8 @@ describe("Scenario – STPP lifecycle metrics benchmark", function () {
                 totalDistributed === 0n
                     ? 0
                     : Number(ethers.formatEther(totalSoldWithinWindow)) /
-                    Number(ethers.formatEther(totalDistributed)) *
-                    100;
+                      Number(ethers.formatEther(totalDistributed)) *
+                      100;
 
             const vri = computeVRI(lbpFlow.priceSeries);
 

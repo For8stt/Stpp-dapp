@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { getNetworkName } from "../utils/contractServices";
+import { getNetworkName } from "../utils/userServices";
 
 function NetworkInfo() {
     const [network, setNetwork] = useState("");

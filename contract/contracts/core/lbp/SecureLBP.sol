@@ -24,6 +24,9 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
 
 import "./WeightedAMM.sol"; // Import for dynamic deployment
+import "./events/SecureLBPEvents.sol";
+import "./errors/SecureLBPErrors.sol";
+import "../../libraries/VestingMath.sol";
 
 interface ILBPOracle {
     function isPaused() external view returns (bool);
@@ -31,9 +34,9 @@ interface ILBPOracle {
 }
 
 // Interface for PresaleManager callback (moved from here to avoid duplicate; import from DutchAuction if needed)
-import "./interfaces/IPresaleManager.sol";
+import "../../interfaces/IPresaleManager.sol";
 
-contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
+contract SecureLBP is ReentrancyGuard, Pausable, Ownable, SecureLBPEvents, SecureLBPErrors {
     using SafeERC20 for IERC20;
 
     // ============ IMMUTABLE/CONFIG ============
@@ -78,22 +81,6 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
     mapping(address => uint256) public totalContributed;     // total ETH provided by user (for caps)
     mapping(address => uint256) public allocations;          // tokens user purchased (in token units)
 
-    // events
-    event BidPlaced(address indexed user, uint256 ethIn, uint256 netEth, uint256 feeBP, uint256 tokensBought);
-    event PoolInitialized(address poolAddr);
-    event OracleFeeUpdated(uint256 newFeeBP);
-    event OraclePaused(uint256 untilTimestamp);
-    event OracleResumed();
-    event FinalizedToVesting(address vestingContract, uint256 totalTokens);
-    event WithdrawnETH(address to, uint256 amount);
-    event TreasurySet(address treasury);
-    event OracleSet(address oracleAddr);
-    event PoolFinalized(uint256 totalTokens, uint256 totalETH);
-    event FullUnwindExecuted(uint256 ethRemoved, uint256 tokensRemoved);
-    event PartialUnwindExecuted(uint256 percentBP, uint256 ethRemoved, uint256 tokensRemoved);
-    event PoolRebalancedTo5050(uint256 ethAdded, uint256 tokensAdded);
-    event TokensWithdrawn(address to, uint256 amount);
-
     // ============ CONSTRUCTOR ============
     constructor(
         address _token,
@@ -106,9 +93,9 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
         address _presaleManager,
         address _auction
     ) {
-        require(_token != address(0), "zero token");
-        require(_startTime < _endTime, "invalid times");
-        require(_treasury != address(0), "zero treasury");
+        if (_token == address(0)) revert ZeroToken();
+        if (_startTime >= _endTime) revert InvalidTimes();
+        if (_treasury == address(0)) revert ZeroTreasury();
 
         token = IERC20(_token);
         startTime = _startTime;
@@ -127,15 +114,15 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
     // ============ MODIFIERS ============
     modifier checkOracle() {
         if (address(oracle) != address(0)) {
-            require(!oracle.isPaused(), "paused by oracle");
+            if (oracle.isPaused()) revert OraclePausedError();
         }
         _;
     }
 
     /// @notice Configures the presale manager and originating auction metadata (one-time operation).
     function configurePresaleContext(address presaleManager_, address auction_) external onlyOwner {
-        require(address(presaleManager) == address(0) && auction == address(0), "context already set");
-        require(presaleManager_ != address(0) && auction_ != address(0), "zero context");
+        if (!(address(presaleManager) == address(0) && auction == address(0))) revert ContextAlreadySet();
+        if (presaleManager_ == address(0) || auction_ == address(0)) revert ZeroContext();
         presaleManager = IPresaleManager(presaleManager_);
         auction = auction_;
     }
@@ -144,8 +131,8 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
     /// @notice Init pool after Dutch Auction: create new LBPWeightedAMM, addLiquidity with provided ETH/tokens.
     /// Call from main contract after Dutch ends (onlyOwner). ETH from msg.value, tokens from contract balance (pre-minted).
     function initPoolFromAuction(uint256 tokenAmount) external payable onlyOwner {
-        require(!poolInitialized, "pool already init");
-        require(msg.value > 0 && tokenAmount > 0, "zero amounts");
+        if (poolInitialized) revert PoolAlreadyInitialized();
+        if (msg.value == 0 || tokenAmount == 0) revert ZeroAmounts();
 
         // Deploy new LBPWeightedAMM pool with params
         LBPWeightedAMM newPool = new LBPWeightedAMM(
@@ -172,24 +159,24 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
     /// @notice Execute a real-time bid by swapping ETH for tokens with slippage protection.
     /// @param minTokensOut Minimum acceptable tokens based on caller's tolerance.
     function placeBid(uint256 minTokensOut) external payable whenNotPaused checkOracle nonReentrant {
-        require(poolInitialized, "pool not init");
-        require(block.timestamp >= startTime && block.timestamp <= endTime, "outside bid window");
-        require(msg.value > 0, "zero bid");
+        if (!poolInitialized) revert PoolNotInitialized();
+        if (block.timestamp < startTime || block.timestamp > endTime) revert OutsideBidWindow();
+        if (msg.value == 0) revert ZeroBid();
 
         uint256 newContribution = totalContributed[msg.sender] + msg.value;
-        require(newContribution <= maxContributionPerAddress, "exceeds per-address cap");
+        if (newContribution > maxContributionPerAddress) revert ContributionCapExceeded();
 
         uint256 feeBP = _currentFeeBP();
         uint256 fee = (msg.value * feeBP) / BP_SCALE;
         uint256 netValue = msg.value - fee;
-        require(netValue > 0, "net zero");
+        if (netValue == 0) revert NetValueZero();
 
         totalContributed[msg.sender] = newContribution;
         totalEthRaised += msg.value;
         feesAccumulated += fee;
 
         uint256 tokensBought = pool.swapETHForTokenTo{value: netValue}(address(this), minTokensOut);
-        require(tokensBought > 0, "zero tokens");
+        if (tokensBought == 0) revert ZeroTokensBought();
 
         allocations[msg.sender] += tokensBought;
         totalTokensAllocated += tokensBought;
@@ -222,15 +209,15 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
     }
 
     function oraclePause() external {
-        require(address(oracle) != address(0), "oracle not set");
-        require(msg.sender == address(oracle), "not oracle");
+        if (address(oracle) == address(0)) revert OracleNotSet();
+        if (msg.sender != address(oracle)) revert NotOracle();
         _pause();
         emit OraclePaused(block.timestamp);
     }
 
     function oracleUnpause() external {
-        require(address(oracle) != address(0), "oracle not set");
-        require(msg.sender == address(oracle), "not oracle");
+        if (address(oracle) == address(0)) revert OracleNotSet();
+        if (msg.sender != address(oracle)) revert NotOracle();
         _unpause();
         emit OracleResumed();
     }
@@ -241,9 +228,9 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
         uint256 finalDuration,
         uint256 cliffPercentBP
     ) external onlyOwner {
-        require(!vestingConfigured, "vesting configured");
-        require(cliffPercentBP <= BP_SCALE, "cliff pct");
-        require(finalDuration >= cliffDuration, "invalid durations");
+        if (vestingConfigured) revert VestingConfigured();
+        if (cliffPercentBP > BP_SCALE) revert CliffPercentTooHigh();
+        if (finalDuration < cliffDuration) revert InvalidVestingDurations();
 
         vestingStart = start;
         vestingCliffDuration = cliffDuration;
@@ -254,13 +241,13 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
 
     // ============ FINALIZE / VESTING ============
     function finalizeToVesting(address vestingEscrow_) external onlyOwner nonReentrant {
-        require(block.timestamp > endTime, "not ended");
-        require(poolInitialized, "pool not init");
-        require(!finalized, "already finalized");
-        require(vestingEscrow_ != address(0), "escrow zero");
+        if (block.timestamp <= endTime) revert NotEnded();
+        if (!poolInitialized) revert PoolNotInitialized();
+        if (finalized) revert AlreadyFinalized();
+        if (vestingEscrow_ == address(0)) revert EscrowZero();
 
         uint256 availableTokens = token.balanceOf(address(this));
-        require(availableTokens >= totalTokensAllocated, "insufficient tokens");
+        if (availableTokens < totalTokensAllocated) revert InsufficientTokens();
 
         finalized = true;
 
@@ -279,12 +266,12 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
 
     // ============ POST-SALE CLEANUP ============
     function unwindAllLiquidity() external onlyOwner {
-        require(finalized, "not finalized");
-        require(poolInitialized, "pool not init");
-        require(block.timestamp > endTime, "auction active");
+        if (!finalized) revert NotFinalized();
+        if (!poolInitialized) revert PoolNotInitialized();
+        if (block.timestamp <= endTime) revert AuctionActive();
 
         uint256 lpBalance = pool.balanceLP(address(this));
-        require(lpBalance > 0, "no lp tokens");
+        if (lpBalance == 0) revert NoLPTokens();
 
         uint256 tokenBefore = token.balanceOf(address(this));
         uint256 ethBefore = address(this).balance;
@@ -298,16 +285,16 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
     }
 
     function unwindPartial(uint256 percentBP) external onlyOwner {
-        require(finalized, "not finalized");
-        require(poolInitialized, "pool not init");
-        require(block.timestamp > endTime, "auction active");
-        require(percentBP > 0 && percentBP <= BP_SCALE, "percent invalid");
+        if (!finalized) revert NotFinalized();
+        if (!poolInitialized) revert PoolNotInitialized();
+        if (block.timestamp <= endTime) revert AuctionActive();
+        if (percentBP == 0 || percentBP > BP_SCALE) revert PercentInvalid();
 
         uint256 lpBalance = pool.balanceLP(address(this));
-        require(lpBalance > 0, "no lp tokens");
+        if (lpBalance == 0) revert NoLPTokens();
 
         uint256 lpToBurn = (lpBalance * percentBP) / BP_SCALE;
-        require(lpToBurn > 0, "nothing to unwind");
+        if (lpToBurn == 0) revert NothingToUnwind();
 
         uint256 tokenBefore = token.balanceOf(address(this));
         uint256 ethBefore = address(this).balance;
@@ -321,42 +308,42 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
     }
 
     function rebalanceTo5050() external payable onlyOwner {
-        require(finalized, "not finalized");
-        require(poolInitialized, "pool not init");
-        require(block.timestamp > endTime, "auction active");
+        if (!finalized) revert NotFinalized();
+        if (!poolInitialized) revert PoolNotInitialized();
+        if (block.timestamp <= endTime) revert AuctionActive();
 
         uint256 reserveEth = pool.reserveETH();
         uint256 reserveToken = pool.reserveToken();
-        require(reserveEth > 0 && reserveToken > 0, "empty pool");
+        if (reserveEth == 0 || reserveToken == 0) revert EmptyPool();
 
         (uint256 weightToken, uint256 weightEth) = pool.currentWeights();
-        require(weightToken > 0 && weightEth > 0, "weights zero");
+        if (weightToken == 0 || weightEth == 0) revert WeightZero();
 
         uint256 pricePerToken = Math.mulDiv(reserveEth, weightToken, reserveToken);
         pricePerToken = Math.mulDiv(pricePerToken, 1e18, weightEth);
-        require(pricePerToken > 0, "price zero");
+        if (pricePerToken == 0) revert PriceZero();
 
         uint256 tokenValue = Math.mulDiv(reserveToken, pricePerToken, 1e18);
         uint256 ethValue = reserveEth;
 
         if (tokenValue > ethValue) {
             uint256 ethNeeded = tokenValue - ethValue;
-            require(ethNeeded > 0, "balanced");
-            require(msg.value >= ethNeeded, "insufficient eth");
+            if (ethNeeded == 0) revert Balanced();
+            if (msg.value < ethNeeded) revert InsufficientEth();
 
             pool.addLiquiditySingleETH{value: ethNeeded}();
 
             if (msg.value > ethNeeded) {
                 (bool refundOk, ) = msg.sender.call{value: msg.value - ethNeeded}("");
-                require(refundOk, "refund failed");
+                if (!refundOk) revert RefundFailed();
             }
 
             emit PoolRebalancedTo5050(ethNeeded, 0);
         } else if (ethValue > tokenValue) {
             uint256 diff = ethValue - tokenValue;
             uint256 tokensNeeded = Math.mulDiv(diff, 1e18, pricePerToken);
-            require(tokensNeeded > 0, "balanced");
-            require(msg.value == 0, "eth not needed");
+            if (tokensNeeded == 0) revert Balanced();
+            if (msg.value != 0) revert EthNotNeeded();
 
             uint256 currentBalance = token.balanceOf(address(this));
             if (currentBalance < tokensNeeded) {
@@ -371,47 +358,47 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
 
             emit PoolRebalancedTo5050(0, tokensNeeded);
         } else {
-            revert("already balanced");
+            revert Balanced();
         }
     }
 
     // ============ WITHDRAWALS / TREASURY ============
     /// @notice Owner option #3: pull pure ETH proceeds once trading + vesting allocations are sealed.
     function withdrawETH(uint256 amount) external onlyOwner {
-        require(finalized, "LBP not finalized");
-        require(block.timestamp > endTime, "auction active");
-        require(treasury != address(0), "treasury zero");
-        require(amount <= address(this).balance, "insufficient balance");
+        if (!finalized) revert NotFinalized();
+        if (block.timestamp <= endTime) revert AuctionActive();
+        if (treasury == address(0)) revert TreasuryZero();
+        if (amount > address(this).balance) revert InsufficientBalance();
         (bool ok,) = payable(treasury).call{value: amount}("");
-        require(ok, "withdraw failed");
+        if (!ok) revert WithdrawFailed();
         emit WithdrawnETH(treasury, amount);
     }
 
     /// @notice Owner option #1/#2 helper: withdraw all unsold tokens that currently sit on SecureLBP.
     function withdrawAllTokens() external onlyOwner {
         uint256 balance = token.balanceOf(address(this));
-        require(balance > 0, "no tokens");
+        if (balance == 0) revert NoTokensAvailable();
         _withdrawTokens(balance);
     }
 
     /// @notice Owner option #2 helper: withdraw a specific token amount (post-unwind remainders).
     function withdrawTokens(uint256 amount) external onlyOwner {
-        require(amount > 0, "amount zero");
+        if (amount == 0) revert AmountZero();
         _withdrawTokens(amount);
     }
 
     function _withdrawTokens(uint256 amount) internal {
-        require(finalized, "LBP not finalized");
-        require(treasury != address(0), "treasury zero");
+        if (!finalized) revert NotFinalized();
+        if (treasury == address(0)) revert TreasuryZero();
         uint256 balance = token.balanceOf(address(this));
-        require(amount <= balance, "insufficient tokens");
+        if (amount > balance) revert InsufficientTokens();
         token.safeTransfer(treasury, amount);
         emit TokensWithdrawn(treasury, amount);
     }
 
     function setTreasury(address _treasury) external onlyOwner {
-        require(block.timestamp < startTime, "cannot change treasury after start");
-        require(_treasury != address(0), "zero");
+        if (block.timestamp >= startTime) revert TradingStarted();
+        if (_treasury == address(0)) revert ZeroTreasury();
         treasury = _treasury;
         emit TreasurySet(_treasury);
     }
@@ -422,7 +409,7 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
     }
 
     function rescueERC20(address erc20, address to, uint256 amount) external onlyOwner {
-        require(erc20 != address(token), "cannot rescue sale token");
+        if (erc20 == address(token)) revert RescueSaleToken();
         SafeERC20.safeTransfer(IERC20(erc20), to, amount);
     }
 
@@ -440,23 +427,17 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable {
 
     // ============ VESTING CLAIMS ============
     function vestedAmount(address user) public view returns (uint256) {
-        if (!finalized) return 0;
         uint256 allocation = allocations[user];
-        if (allocation == 0) return 0;
-        if (!vestingConfigured) {
-            return allocation;
-        }
-        uint256 cliffTime = vestingStart + vestingCliffDuration;
-        uint256 finalTime = vestingStart + vestingFinalDuration;
-
-        if (block.timestamp < cliffTime) {
-            return 0;
-        }
-
-        if (vestingFinalDuration == 0 || block.timestamp >= finalTime) {
-            return allocation;
-        }
-
-        return (allocation * vestingCliffPercentBP) / BP_SCALE;
+        return
+            VestingMath.lbpVestedAmount(
+                finalized,
+                allocation,
+                vestingConfigured,
+                vestingStart,
+                vestingCliffDuration,
+                vestingFinalDuration,
+                vestingCliffPercentBP,
+                BP_SCALE
+            );
     }
 }

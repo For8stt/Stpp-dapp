@@ -3,7 +3,8 @@ import ConnectWalletButton from "./components/ConnectWalletButton";
 import ContractInfo from "./components/ContractInfo";
 import ContractActions from "./components/ContractActions";
 import NetworkInfo from "./components/NetworkInfo";
-import { requestAccount, resetProviderAndContract } from "./utils/contractServices";
+import { resetProviderAndContract } from "./utils/lockServices";
+import { requestAccount } from "./utils/userServices";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 

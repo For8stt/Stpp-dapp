@@ -98,13 +98,9 @@ describe("WeightedAMM Fuzz & Property Testing", function () {
 
         it("if amountIn = 0 → amountOut = 0", async function () {
             // Since no callStatic, check that it reverts (implying calc would be 0, but execution blocked)
-            await expect(
-                amm.swapTokenForETH(0n, 0n)
-            ).to.be.revertedWith("zero in");
+            await expect(amm.swapTokenForETH(0n, 0n)).to.be.revertedWithCustomError(amm, "ZeroTokenInput");
 
-            await expect(
-                amm.swapETHForToken(0n, { value: 0 })
-            ).to.be.revertedWith("zero eth");
+            await expect(amm.swapETHForToken(0n, { value: 0 })).to.be.revertedWithCustomError(amm, "ZeroEth");
         });
 
         it("reserves should never go negative after swap", async function () {
@@ -152,9 +148,10 @@ describe("WeightedAMM Fuzz & Property Testing", function () {
         it("swapTokenForETH: when tokenIn = 0, out = 0", async function () {
             const tokenIn = 0n;
             // Since no callStatic, expect revert on execution
-            await expect(
-                amm.connect(bob).swapTokenForETH(tokenIn, 0n)
-            ).to.be.revertedWith("zero in");
+            await expect(amm.connect(bob).swapTokenForETH(tokenIn, 0n)).to.be.revertedWithCustomError(
+                amm,
+                "ZeroTokenInput"
+            );
         });
 
         it("swapETHForToken: amountOut always >= 0 and <= reserveToken", async function () {
@@ -178,9 +175,10 @@ describe("WeightedAMM Fuzz & Property Testing", function () {
         it("swapETHForToken: when ethIn = 0, out = 0", async function () {
             const ethIn = 0n;
             // Expect revert on execution
-            await expect(
-                amm.connect(bob).swapETHForToken(0n, { value: ethIn })
-            ).to.be.revertedWith("zero eth");
+            await expect(amm.connect(bob).swapETHForToken(0n, { value: ethIn })).to.be.revertedWithCustomError(
+                amm,
+                "ZeroEth"
+            );
         });
 
         it("addLiquidity: lpMinted always >= 0 and reserves increase", async function () {

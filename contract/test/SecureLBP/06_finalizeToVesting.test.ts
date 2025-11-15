@@ -87,7 +87,7 @@ describe("SecureLBP – 06_finalizeToVesting", function () {
 
         await expect(
             lbp.connect(owner).finalizeToVesting(await escrow.getAddress())
-        ).to.be.revertedWith("pool not init");
+        ).to.be.revertedWithCustomError(lbp, "PoolNotInitialized");
     });
 
     it("should revert if called before endTime", async function () {
@@ -98,7 +98,7 @@ describe("SecureLBP – 06_finalizeToVesting", function () {
 
         await expect(
             lbp.connect(owner).finalizeToVesting(await escrow.getAddress())
-        ).to.be.revertedWith("not ended");
+        ).to.be.revertedWithCustomError(lbp, "NotEnded");
     });
 
     it("should revert if vestingEscrow is zero address", async function () {
@@ -106,7 +106,7 @@ describe("SecureLBP – 06_finalizeToVesting", function () {
 
         await expect(
             lbp.connect(owner).finalizeToVesting(ethers.ZeroAddress)
-        ).to.be.revertedWith("escrow zero");
+        ).to.be.revertedWithCustomError(lbp, "EscrowZero");
     });
 
     it("should revert if available token balance < totalTokensAllocated", async function () {
@@ -124,7 +124,7 @@ describe("SecureLBP – 06_finalizeToVesting", function () {
 
         await expect(
             lbp.connect(owner).finalizeToVesting(await escrow.getAddress())
-        ).to.be.revertedWith("insufficient tokens");
+        ).to.be.revertedWithCustomError(lbp, "InsufficientTokens");
     });
 
     it("should revert if finalize is called twice", async function () {
@@ -135,6 +135,6 @@ describe("SecureLBP – 06_finalizeToVesting", function () {
 
         await expect(
             lbp.connect(owner).finalizeToVesting(await escrow.getAddress())
-        ).to.be.revertedWith("already finalized");
+        ).to.be.revertedWithCustomError(lbp, "AlreadyFinalized");
     });
 });

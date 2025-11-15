@@ -18,5 +18,9 @@ contract MockPresaleManager is IPresaleManager {
         emit FinalizeCalled(auction, ethAmount, tokenAmount);
     }
 
+    function notifyDemandCheck(address) external pure override {}
+
+    function handleDemandCheck(address) external pure override {}
+
     receive() external payable {}
 }

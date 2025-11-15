@@ -259,7 +259,46 @@ describe("PresaleManager", function () {
 
         await expect(
             manager.finalizeLbp(await auction.getAddress(), await fakeEscrow.getAddress())
-        ).to.be.revertedWith("escrow token mismatch");
+        ).to.be.revertedWithCustomError(manager, "EscrowTokenMismatch");
+    });
+
+    describe("LBP withdrawals via manager", function () {
+        it("withdrawLbpTokens forwards partial token withdrawals to SecureLBP", async function () {
+            const { manager, auction, lbp, token, treasury } = await loadFixture(fullPipelineFixture);
+
+            await manager.unwindLbpAll(await auction.getAddress());
+
+            const lbpAddress = await lbp.getAddress();
+            const treasuryBefore = await token.balanceOf(treasury.address);
+            const contractBalance = await token.balanceOf(lbpAddress);
+            expect(contractBalance).to.be.gt(0n);
+            const partial = contractBalance / 2n;
+
+            await expect(manager.withdrawLbpTokens(await auction.getAddress(), partial))
+                .to.emit(lbp, "TokensWithdrawn")
+                .withArgs(treasury.address, partial);
+
+            expect(await token.balanceOf(treasury.address)).to.equal(treasuryBefore + partial);
+            expect(await token.balanceOf(lbpAddress)).to.equal(contractBalance - partial);
+        });
+
+        it("withdrawLbpAllTokens drains all remaining tokens", async function () {
+            const { manager, auction, lbp, token, treasury } = await loadFixture(fullPipelineFixture);
+
+            await manager.unwindLbpAll(await auction.getAddress());
+
+            const lbpAddress = await lbp.getAddress();
+            const contractBalance = await token.balanceOf(lbpAddress);
+            expect(contractBalance).to.be.gt(0n);
+            const treasuryBefore = await token.balanceOf(treasury.address);
+
+            await expect(manager.withdrawLbpAllTokens(await auction.getAddress()))
+                .to.emit(lbp, "TokensWithdrawn")
+                .withArgs(treasury.address, contractBalance);
+
+            expect(await token.balanceOf(lbpAddress)).to.equal(0n);
+            expect(await token.balanceOf(treasury.address)).to.equal(treasuryBefore + contractBalance);
+        });
     });
 
     describe("LBP withdrawals via manager", function () {

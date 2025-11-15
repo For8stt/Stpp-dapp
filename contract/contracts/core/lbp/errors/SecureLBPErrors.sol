@@ -1,0 +1,47 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+abstract contract SecureLBPErrors {
+    error ZeroToken();
+    error InvalidTimes();
+    error ZeroTreasury();
+    error OraclePausedError();
+    error ContextAlreadySet();
+    error ZeroContext();
+    error PoolAlreadyInitialized();
+    error PoolNotInitialized();
+    error ZeroAmounts();
+    error OutsideBidWindow();
+    error ZeroBid();
+    error ContributionCapExceeded();
+    error NetValueZero();
+    error ZeroTokensBought();
+    error OracleNotSet();
+    error NotOracle();
+    error VestingConfigured();
+    error CliffPercentTooHigh();
+    error InvalidVestingDurations();
+    error NotEnded();
+    error NotFinalized();
+    error AlreadyFinalized();
+    error EscrowZero();
+    error InsufficientTokens();
+    error AuctionActive();
+    error NoLPTokens();
+    error PercentInvalid();
+    error NothingToUnwind();
+    error EmptyPool();
+    error WeightZero();
+    error PriceZero();
+    error Balanced();
+    error InsufficientEth();
+    error RefundFailed();
+    error TreasuryZero();
+    error InsufficientBalance();
+    error AmountZero();
+    error TradingStarted();
+    error EthNotNeeded();
+    error RescueSaleToken();
+    error WithdrawFailed();
+    error NoTokensAvailable();
+}

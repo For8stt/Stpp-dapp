@@ -1,4 +1,3 @@
-
 import { expect } from "chai";
 import { ethers } from "hardhat";
 import { time } from "@nomicfoundation/hardhat-network-helpers";
@@ -103,7 +102,7 @@ describe("SecureLBP – 01_deploy_init", function () {
                 treasury.address,
                 treasury.address
             )
-        ).to.be.revertedWith("zero token");
+        ).to.be.revertedWithCustomError(LBP, "ZeroToken");
     });
 
     it("should revert if treasury address is zero", async function () {
@@ -122,7 +121,7 @@ describe("SecureLBP – 01_deploy_init", function () {
                 presaleManager.address,
                 auction.address
             )
-        ).to.be.revertedWith("zero treasury");
+        ).to.be.revertedWithCustomError(LBP, "ZeroTreasury");
     });
 
     it("should revert if startTime >= endTime", async function () {
@@ -145,7 +144,7 @@ describe("SecureLBP – 01_deploy_init", function () {
                 presaleManager.address,
                 auction.address
             )
-        ).to.be.revertedWith("invalid times");
+        ).to.be.revertedWithCustomError(LBP, "InvalidTimes");
 
         await expect(
             LBP.deploy(
@@ -159,7 +158,7 @@ describe("SecureLBP – 01_deploy_init", function () {
                 presaleManager.address,
                 auction.address
             )
-        ).to.be.revertedWith("invalid times");
+        ).to.be.revertedWithCustomError(LBP, "InvalidTimes");
     });
 
     it("should initialize all immutable variables correctly", async function () {
@@ -197,7 +196,7 @@ describe("SecureLBP – 01_deploy_init", function () {
         await fresh.configurePresaleContext(presaleManager.address, auction.address);
         await expect(
             fresh.configurePresaleContext(presaleManager.address, auction.address)
-        ).to.be.revertedWith("context already set");
+        ).to.be.revertedWithCustomError(fresh, "ContextAlreadySet");
     });
 
     it("should revert if configurePresaleContext is called twice or with zero addresses", async function () {
@@ -206,16 +205,16 @@ describe("SecureLBP – 01_deploy_init", function () {
 
         await expect(
             lbp.configurePresaleContext(ethers.ZeroAddress, auction.address)
-        ).to.be.revertedWith("zero context");
+        ).to.be.revertedWithCustomError(lbp, "ZeroContext");
 
         await expect(
             lbp.configurePresaleContext(presaleManager.address, ethers.ZeroAddress)
-        ).to.be.revertedWith("zero context");
+        ).to.be.revertedWithCustomError(lbp, "ZeroContext");
 
         await lbp.configurePresaleContext(presaleManager.address, auction.address);
         await expect(
             lbp.configurePresaleContext(presaleManager.address, auction.address)
-        ).to.be.revertedWith("context already set");
+        ).to.be.revertedWithCustomError(lbp, "ContextAlreadySet");
     });
 
     it("should verify default values", async function () {

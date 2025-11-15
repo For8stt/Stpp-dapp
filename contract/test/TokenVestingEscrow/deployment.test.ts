@@ -25,6 +25,6 @@ describe("TokenVestingEscrow deployment", function () {
         const Escrow = await ethers.getContractFactory("TokenVestingEscrow");
         await expect(
             Escrow.deploy(await otherToken.getAddress(), await lbp.getAddress())
-        ).to.be.revertedWith("token mismatch");
+        ).to.be.revertedWithCustomError(Escrow, "TokenMismatch");
     });
 });

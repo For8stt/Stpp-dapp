@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "../DutchAuction.sol";
+import "../core/auction/DutchAuction.sol";
 
 /// @dev Helper used in tests to simulate refund recipients that reject ETH transfers.
 contract RefundRejector {

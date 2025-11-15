@@ -9,4 +9,15 @@ interface IPresaleManager {
      * @param tokenAmount Total tokens allocated to participants
      */
     function finalizePresale(address auction, uint256 ethAmount, uint256 tokenAmount) external;
+
+    /**
+     * @notice Notification invoked by the upkeep controller once demand check executes.
+     * @param auction Address of the Dutch auction whose reserve was adjusted.
+     */
+    function notifyDemandCheck(address auction) external;
+
+    /**
+     * @notice Called by the upkeep controller to execute the on-chain demand adjustment through the manager.
+     */
+    function handleDemandCheck(address auction) external;
 }

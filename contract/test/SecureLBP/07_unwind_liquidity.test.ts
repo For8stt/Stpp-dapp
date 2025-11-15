@@ -172,7 +172,7 @@ describe("SecureLBP – 07_unwind_liquidity", function () {
     describe("Reverts", function () {
         it("should revert before finalize", async function () {
             const { lbp, owner } = await loadFixture(deployLbpWithPoolFixture);
-            await expect(lbp.connect(owner).unwindAllLiquidity()).to.be.revertedWith("not finalized");
+            await expect(lbp.connect(owner).unwindAllLiquidity()).to.be.revertedWithCustomError(lbp, "NotFinalized");
         });
 
         it("should revert before endTime", async function () {
@@ -186,7 +186,7 @@ describe("SecureLBP – 07_unwind_liquidity", function () {
             const newValue = current | (finalizedMask as bigint);
             await ethers.provider.send("hardhat_setStorageAt", [lbpAddress, slotHex, ethers.toBeHex(newValue, 32)]);
 
-            await expect(lbp.connect(owner).unwindAllLiquidity()).to.be.revertedWith("auction active");
+            await expect(lbp.connect(owner).unwindAllLiquidity()).to.be.revertedWithCustomError(lbp, "AuctionActive");
         });
 
         it("should revert if LP balance is zero", async function () {
@@ -194,15 +194,15 @@ describe("SecureLBP – 07_unwind_liquidity", function () {
 
             await lbp.connect(owner).unwindAllLiquidity();
 
-            await expect(lbp.connect(owner).unwindAllLiquidity()).to.be.revertedWith("no lp tokens");
-            await expect(lbp.connect(owner).unwindPartial(5000)).to.be.revertedWith("no lp tokens");
+            await expect(lbp.connect(owner).unwindAllLiquidity()).to.be.revertedWithCustomError(lbp, "NoLPTokens");
+            await expect(lbp.connect(owner).unwindPartial(5000)).to.be.revertedWithCustomError(lbp, "NoLPTokens");
         });
 
         it("should revert if percentBP == 0 or > 10000", async function () {
             const { lbp, owner } = await loadFixture(finalizedFixture);
 
-            await expect(lbp.connect(owner).unwindPartial(0)).to.be.revertedWith("percent invalid");
-            await expect(lbp.connect(owner).unwindPartial(10001)).to.be.revertedWith("percent invalid");
+            await expect(lbp.connect(owner).unwindPartial(0)).to.be.revertedWithCustomError(lbp, "PercentInvalid");
+            await expect(lbp.connect(owner).unwindPartial(10001)).to.be.revertedWithCustomError(lbp, "PercentInvalid");
         });
     });
 });

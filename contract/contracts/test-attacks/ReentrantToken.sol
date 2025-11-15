@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "../TokenVestingEscrow.sol";
+import "../core/vesting/TokenVestingEscrow.sol";
 
 contract ReentrantToken is ERC20 {
     TokenVestingEscrow public escrow;
