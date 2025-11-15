@@ -1,20 +1,31 @@
 import React, { useEffect, useState } from "react";
-import { getNetworkName } from "../utils/userServices";
 
-function NetworkInfo() {
-    const [network, setNetwork] = useState("");
+import { getNetworkName, subscribeWalletEvents } from "../services/web3/wallet";
 
-    useEffect(() => {
-        const fetchNetwork = async () => {
-            const name = await getNetworkName();
-            setNetwork(name);
-        };
+const NetworkInfo = () => {
+  const [network, setNetwork] = useState("");
+
+  useEffect(() => {
+    const fetchNetwork = async () => {
+      try {
+        const name = await getNetworkName();
+        setNetwork(name);
+      } catch (error) {
+        console.error("Unable to determine network:", error);
+      }
+    };
+
+    fetchNetwork();
+    const unsubscribe = subscribeWalletEvents({
+      onChainChanged: () => {
         fetchNetwork();
+      }
+    });
 
-        window.ethereum?.on("chainChanged", () => fetchNetwork());
-    }, []);
+    return () => unsubscribe();
+  }, []);
 
-    return <p>Connected Network: {network}</p>;
-}
+  return <p className="network-indicator">Connected Network: {network || "Unknown"}</p>;
+};
 
 export default NetworkInfo;

@@ -1,44 +1,66 @@
 import React, { useState } from "react";
-import { depositFund, withdrawFund } from "../utils/lockServices";
 import { toast } from "react-toastify";
 
-function ContractActions({ refreshBalances }) {
-    const [depositValue, setDepositValue] = useState("");
+import { depositFund, withdrawFund } from "../services/web3/contract";
 
-    const handleDeposit = async () => {
-        try {
-            await depositFund(depositValue);
-            toast.success("Deposit successful!");
-            refreshBalances(); // оновлення ContractInfo
-        } catch (error) {
-            toast.error(error?.reason || error?.message);
-        }
-        setDepositValue("");
-    };
+const ContractActions = ({ onActionComplete = () => {}, disabled }) => {
+  const [depositValue, setDepositValue] = useState("");
+  const [pendingAction, setPendingAction] = useState(false);
 
-    const handleWithdraw = async () => {
-        try {
-            await withdrawFund();
-            toast.success("Withdrawal successful!");
-            refreshBalances();
-        } catch (error) {
-            toast.error(error?.reason || error?.message);
-        }
-    };
+  const handleDeposit = async () => {
+    setPendingAction(true);
+    try {
+      await depositFund(depositValue);
+      toast.success("Deposit successful!");
+      setDepositValue("");
+      onActionComplete();
+    } catch (error) {
+      toast.error(error?.reason || error?.message || "Deposit failed");
+    } finally {
+      setPendingAction(false);
+    }
+  };
 
-    return (
-        <div>
-            <h2>Contract Actions</h2>
-            <input
-                type="text"
-                value={depositValue}
-                onChange={(e) => setDepositValue(e.target.value)}
-                placeholder="Amount in ETH"
-            />
-            <button onClick={handleDeposit}>Deposit Funds</button>
-            <button onClick={handleWithdraw}>Withdraw Funds</button>
+  const handleWithdraw = async () => {
+    setPendingAction(true);
+    try {
+      await withdrawFund();
+      toast.success("Withdrawal successful!");
+      onActionComplete();
+    } catch (error) {
+      toast.error(error?.reason || error?.message || "Withdrawal failed");
+    } finally {
+      setPendingAction(false);
+    }
+  };
+
+  return (
+    <section className="card">
+      <header>
+        <h2>Contract Actions</h2>
+        <p className="muted">Manage deposits and withdrawals</p>
+      </header>
+      <div className="actions">
+        <input
+          type="number"
+          step="0.0001"
+          min="0"
+          value={depositValue}
+          onChange={(event) => setDepositValue(event.target.value)}
+          placeholder="Amount in ETH"
+          disabled={pendingAction || disabled}
+        />
+        <div className="button-row">
+          <button className="btn primary" onClick={handleDeposit} disabled={pendingAction || disabled}>
+            {pendingAction ? "Processing..." : "Deposit Funds"}
+          </button>
+          <button className="btn secondary" onClick={handleWithdraw} disabled={pendingAction || disabled}>
+            {pendingAction ? "Processing..." : "Withdraw Funds"}
+          </button>
         </div>
-    );
-}
+      </div>
+    </section>
+  );
+};
 
 export default ContractActions;

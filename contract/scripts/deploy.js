@@ -26,7 +26,7 @@ async function main() {
         abi: artifact.abi,
     };
 
-    const frontendDir = path.join(__dirname, "../../client/src/utils");
+    const frontendDir = path.join(__dirname, "../../client/src/abi");
     const frontendPath = path.join(frontendDir, "Lock_ABI.json");
     fs.writeFileSync(frontendPath, JSON.stringify(contractData, null, 2));
 
