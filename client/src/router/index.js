@@ -17,7 +17,7 @@ const AppRouter = ({
   <BrowserRouter>
     <div className="app">
       <header className="app-header">
-        <h1 className="logo">STTP Lock dApp</h1>
+        <h1 className="logo">STTP dApp</h1>
         <div className="header-actions">
           <nav>
             <NavLink to="/" end>

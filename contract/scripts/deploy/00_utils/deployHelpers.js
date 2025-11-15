@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { ethers } from "hardhat";
+import hardhat from "hardhat";
 
 import { DEPLOYMENT_OUTPUT_PATHS } from "./constants.js";
 
@@ -21,7 +21,7 @@ export async function deployContract(contractName, constructorArgs = [], options
   const { label = contractName, txOverrides = {} } = options;
   logInfo(`Deploying ${label}...`);
 
-  const factory = await ethers.getContractFactory(contractName);
+  const factory = await hardhat.ethers.getContractFactory(contractName);
   const deployArgs = Array.isArray(constructorArgs) ? [...constructorArgs] : [constructorArgs];
   if (txOverrides && Object.keys(txOverrides).length > 0) {
     deployArgs.push(txOverrides);
@@ -57,11 +57,17 @@ function loadDeploymentFile(filePath) {
   }
 }
 
-function persistEntry(filePath, entry) {
+function persistEntry(filePath, entry, { append = true } = {}) {
   ensureDirectory(path.dirname(filePath));
-  const data = loadDeploymentFile(filePath);
-  data.entries.push(entry);
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+
+  if (append) {
+    const data = loadDeploymentFile(filePath);
+    data.entries.push(entry);
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+  } else {
+    fs.writeFileSync(filePath, JSON.stringify(entry, null, 2));
+  }
+
   logInfo(`Saved deployment graph → ${path.relative(process.cwd(), filePath)}`);
 }
 
@@ -75,9 +81,9 @@ export function persistDeploymentGraph(tag, deployments, metadata = {}) {
     deployments,
   };
 
-  Object.values(DEPLOYMENT_OUTPUT_PATHS).forEach((outputPath) => {
-    persistEntry(outputPath, entry);
-  });
+  if (DEPLOYMENT_OUTPUT_PATHS.latest) {
+    persistEntry(DEPLOYMENT_OUTPUT_PATHS.latest, entry, { append: false });
+  }
 
   return entry;
 }

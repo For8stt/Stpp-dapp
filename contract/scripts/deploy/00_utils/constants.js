@@ -2,12 +2,10 @@ import path from "node:path";
 
 const PROJECT_ROOT = process.cwd();
 
-export const DEPLOY_DIR = path.join(PROJECT_ROOT, "deploy");
-export const DEPLOYMENTS_DIR = path.join(PROJECT_ROOT, "deployments");
+export const DEPLOY_DIR = path.join(PROJECT_ROOT, "scripts", "deploy");
 
 export const DEPLOYMENT_OUTPUT_PATHS = Object.freeze({
-  deployFolder: path.join(DEPLOY_DIR, "stppDeployments.json"),
-  legacyDeploymentsFolder: path.join(DEPLOYMENTS_DIR, "stppDeployments.json"),
+  latest: path.join(DEPLOY_DIR, "deployments-latest.json"),
 });
 
 export const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";

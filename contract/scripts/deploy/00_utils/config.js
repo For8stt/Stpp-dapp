@@ -1,4 +1,4 @@
-import { network } from "hardhat";
+import hardhat from "hardhat";
 
 import { DEFAULT_PRICE_FEEDS } from "./constants.js";
 
@@ -19,6 +19,8 @@ function boolFromEnv(envKey, fallback, overrideValue) {
   if (typeof parsed === "boolean") return parsed;
   return fallback;
 }
+
+const { network } = hardhat;
 
 export function getDeploymentConfig(overrides = {}) {
   const resolvedNetwork =
