@@ -3,6 +3,7 @@ import { BrowserRouter, NavLink, Route, Routes } from "react-router-dom";
 
 import Dashboard from "../pages/Dashboard";
 import Home from "../pages/Home";
+import PresaleDeploy from "../pages/PresaleDeploy";
 
 const AppRouter = ({
   account,
@@ -24,6 +25,7 @@ const AppRouter = ({
               Home
             </NavLink>
             <NavLink to="/dashboard">Dashboard</NavLink>
+            <NavLink to="/deploy">Deploy</NavLink>
           </nav>
           {account ? (
             <button className="btn ghost" onClick={onDisconnect}>
@@ -56,6 +58,7 @@ const AppRouter = ({
               path="/dashboard"
               element={<Dashboard account={account} refreshKey={refreshKey} onActionComplete={onActionComplete} />}
             />
+            <Route path="/deploy" element={<PresaleDeploy />} />
           </Routes>
         )}
       </main>

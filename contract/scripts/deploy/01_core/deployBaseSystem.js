@@ -147,9 +147,7 @@ async function exportFrontendArtifacts(deploymentGraph) {
     { name: "LBPOracle", address: deploymentGraph.lbpOracle },
   ];
 
-  for (const { name, address } of contracts) {
-    if (!address) continue;
-
+  for (const { name } of contracts) {
     const artifactSegments = CONTRACT_ARTIFACTS[name];
     const artifactPath = artifactSegments
       ? path.join(CONTRACT_ROOT, "artifacts", ...artifactSegments)

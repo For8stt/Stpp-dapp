@@ -3,125 +3,125 @@
     {
       "run": 0,
       "participants": 40,
-      "vri": 0.09999015370357428,
-      "gini": 0.5453053040168974,
-      "averageHoldMonths": 8.196619584476451,
-      "speculativeShare": 36.07453832815583
+      "vri": 0.0952039779104424,
+      "gini": 0.5370909120194716,
+      "averageHoldMonths": 8.340471793552812,
+      "speculativeShare": 34.69862366948727
     },
     {
       "run": 1,
       "participants": 40,
-      "vri": 0.10803921692601126,
-      "gini": 0.6537192931485702,
-      "averageHoldMonths": 7.169135366344606,
-      "speculativeShare": 34.97725736890837
+      "vri": 0.10730792862558182,
+      "gini": 0.6085370994989501,
+      "averageHoldMonths": 7.714273533950617,
+      "speculativeShare": 35.94675358532261
     },
     {
       "run": 2,
       "participants": 40,
-      "vri": 0.092437668706514,
-      "gini": 0.5360235187488103,
-      "averageHoldMonths": 7.940657377730295,
-      "speculativeShare": 37.76470037765383
+      "vri": 0.09953053131641933,
+      "gini": 0.6012083334268707,
+      "averageHoldMonths": 8.093286975308642,
+      "speculativeShare": 35.526617963759946
     },
     {
       "run": 3,
       "participants": 40,
-      "vri": 0.09543254072844078,
-      "gini": 0.4971389198998044,
-      "averageHoldMonths": 7.926823661664538,
-      "speculativeShare": 37.89990744825596
+      "vri": 0.09343652514193844,
+      "gini": 0.57323076016299,
+      "averageHoldMonths": 7.156768348765431,
+      "speculativeShare": 35.07566435075981
     },
     {
       "run": 4,
       "participants": 40,
-      "vri": 0.0983576186730622,
-      "gini": 0.5857173511591696,
-      "averageHoldMonths": 7.782228811728395,
-      "speculativeShare": 36.85965789532385
+      "vri": 0.08282032581103027,
+      "gini": 0.5377509941693173,
+      "averageHoldMonths": 8.005170344650207,
+      "speculativeShare": 37.957142096389745
     },
     {
       "run": 5,
       "participants": 40,
-      "vri": 0.09922255120089833,
-      "gini": 0.6016468000569903,
-      "averageHoldMonths": 8.20480017039609,
-      "speculativeShare": 34.56749561742856
+      "vri": 0.09716160663067706,
+      "gini": 0.6073465292325104,
+      "averageHoldMonths": 7.850165107381687,
+      "speculativeShare": 32.84226868087077
     },
     {
       "run": 6,
       "participants": 40,
-      "vri": 0.10942596360107928,
-      "gini": 0.6309557016377803,
-      "averageHoldMonths": 8.155071513748597,
-      "speculativeShare": 37.14900530680196
+      "vri": 0.10385153092784767,
+      "gini": 0.5724423917751751,
+      "averageHoldMonths": 8.221987580128205,
+      "speculativeShare": 36.65834768304465
     },
     {
       "run": 7,
       "participants": 40,
-      "vri": 0.09967030235258222,
-      "gini": 0.608126395566015,
-      "averageHoldMonths": 7.6244592013888886,
-      "speculativeShare": 36.49256046453602
+      "vri": 0.09449353628938034,
+      "gini": 0.5918267610006922,
+      "averageHoldMonths": 8.01055965470679,
+      "speculativeShare": 37.35270976265539
     },
     {
       "run": 8,
       "participants": 40,
-      "vri": 0.10183002552504149,
-      "gini": 0.606414552626668,
-      "averageHoldMonths": 8.840924182098766,
-      "speculativeShare": 33.17094312059662
+      "vri": 0.09859168876690594,
+      "gini": 0.5200570904010444,
+      "averageHoldMonths": 8.429552097111994,
+      "speculativeShare": 36.10920808852459
     },
     {
       "run": 9,
       "participants": 40,
-      "vri": 0.09188897456358866,
-      "gini": 0.5507006096622313,
-      "averageHoldMonths": 6.914106036324787,
-      "speculativeShare": 33.28528930481353
+      "vri": 0.09585437647673005,
+      "gini": 0.511473671398728,
+      "averageHoldMonths": 7.379666600149,
+      "speculativeShare": 37.56641709316256
     }
   ],
   "aggregate": {
-    "averageVRI": 0.09962950159807925,
-    "averageGini": 0.5815748446522937,
-    "averageHoldMonths": 7.875482590590141,
-    "averageSpeculativeShare": 35.824135523247456
+    "averageVRI": 0.09682520278969534,
+    "averageGini": 0.5660964543085749,
+    "averageHoldMonths": 7.920190203570537,
+    "averageSpeculativeShare": 35.97337529739774
   },
   "benchmarkComparisons": [
     {
       "platform": "Balancer",
-      "deltaVRI": 0.019629501598079246,
-      "deltaGini": 0.18157484465229368,
-      "deltaHoldMonths": 5.875482590590141,
-      "deltaSpeculativeShare": -4.175864476752544
+      "deltaVRI": 0.016825202789695334,
+      "deltaGini": 0.1660964543085749,
+      "deltaHoldMonths": 5.920190203570537,
+      "deltaSpeculativeShare": -4.026624702602263
     },
     {
       "platform": "Fjord",
-      "deltaVRI": 0.02962950159807924,
-      "deltaGini": 0.23157484465229372,
-      "deltaHoldMonths": 4.375482590590141,
-      "deltaSpeculativeShare": 0.8241355232474561
+      "deltaVRI": 0.02682520278969533,
+      "deltaGini": 0.21609645430857494,
+      "deltaHoldMonths": 4.420190203570537,
+      "deltaSpeculativeShare": 0.9733752973977374
     },
     {
       "platform": "CoinList",
-      "deltaVRI": 0.03962950159807925,
-      "deltaGini": 0.0815748446522937,
-      "deltaHoldMonths": 4.875482590590141,
-      "deltaSpeculativeShare": 5.824135523247456
+      "deltaVRI": 0.03682520278969534,
+      "deltaGini": 0.06609645430857491,
+      "deltaHoldMonths": 4.920190203570537,
+      "deltaSpeculativeShare": 5.973375297397737
     },
     {
       "platform": "Hyperliquid",
-      "deltaVRI": 0.009629501598079251,
-      "deltaGini": -0.01842515534770628,
-      "deltaHoldMonths": 6.675482590590141,
-      "deltaSpeculativeShare": -14.175864476752544
+      "deltaVRI": 0.006825202789695339,
+      "deltaGini": -0.03390354569142506,
+      "deltaHoldMonths": 6.720190203570537,
+      "deltaSpeculativeShare": -14.026624702602263
     },
     {
       "platform": "Pump.fun",
-      "deltaVRI": -0.020370498401920747,
-      "deltaGini": -0.06842515534770632,
-      "deltaHoldMonths": 7.675482590590141,
-      "deltaSpeculativeShare": -34.175864476752544
+      "deltaVRI": -0.02317479721030466,
+      "deltaGini": -0.08390354569142511,
+      "deltaHoldMonths": 7.720190203570537,
+      "deltaSpeculativeShare": -34.02662470260226
     }
   ]
 }
