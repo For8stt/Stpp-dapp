@@ -12,6 +12,7 @@ import { ensureProvider } from "../services/web3/provider";
 import { ensureSigner } from "../services/web3/signer";
 import { getNetworkName, requestAccount, subscribeWalletEvents } from "../services/web3/wallet";
 import { useAddressBook } from "../services/web3/addressBook";
+import { handleTxError, showTxSuccess, showTxInfo } from "../utils/txErrorHandler";
 import PresaleCreateForm from "../components/presale/PresaleCreateForm";
 import PresaleInfoCard from "../components/presale/PresaleInfoCard";
 import PresaleList from "../components/presale/PresaleList";
@@ -373,13 +374,17 @@ const PresaleDeploy = () => {
     setCreating(true);
     try {
       const factory = await getFactoryContract();
+      showTxInfo("Please confirm the transaction in your wallet", { autoClose: false });
       const tx = await factory.createPresale(auctionPayload, lbpPayload);
+      showTxInfo("Transaction submitted to the network", { autoClose: 3000 });
       setStatusMessage("Transaction submitted, waiting for confirmation…");
       await tx.wait();
+      showTxSuccess("Presale created successfully!", { autoClose: 3000 });
       setStatusMessage("Presale created successfully!");
       await loadPresales();
     } catch (error) {
       console.error(error);
+      handleTxError(error, "Failed to create presale");
       setErrorMessage(error?.message || "Failed to create presale");
     } finally {
       setCreating(false);

@@ -166,4 +166,51 @@ async function exportFrontendArtifacts(deploymentGraph) {
     writeJsonFile(abiOutputPath, { abi });
     logInfo(`Exported ABI for ${name} → ${path.relative(CONTRACT_ROOT, abiOutputPath)}`);
   }
+
+  // Update addresses.json files
+  await updateAddressesJson(deploymentGraph);
+}
+
+async function updateAddressesJson(deploymentGraph) {
+  const network = await hardhat.ethers.provider.getNetwork();
+  const networkId = network.chainId.toString();
+
+  // Address mappings for the JSON structure
+  const addressMappings = {
+    presaleManagerImpl: deploymentGraph.managerImpl,
+    publicPresaleFactory: deploymentGraph.publicFactory,
+    auctionFactory: deploymentGraph.auctionFactory,
+    upkeepController: deploymentGraph.upkeepController,
+    lbpOracle: deploymentGraph.lbpOracle,
+  };
+
+  // Remove null values to keep the JSON clean
+  Object.keys(addressMappings).forEach(key => {
+    if (addressMappings[key] === null) {
+      delete addressMappings[key];
+    }
+  });
+
+  // Update both addresses.json files
+  const addressesFiles = [
+    path.join(FRONTEND_SRC, "abi", "addresses.json"),
+    path.join(FRONTEND_SRC, "..", "public", "abi", "addresses.json")
+  ];
+
+  for (const addressesFile of addressesFiles) {
+    let addressesData = {};
+    if (fs.existsSync(addressesFile)) {
+      addressesData = readJsonFile(addressesFile, {});
+    }
+
+    // Update the network entry (use both numeric and string keys for compatibility)
+    addressesData[networkId] = addressMappings;
+    // Also update "localhost" for hardhat network
+    if (networkId === "31337") {
+      addressesData["localhost"] = addressMappings;
+    }
+
+    writeJsonFile(addressesFile, addressesData);
+    logInfo(`Updated addresses.json → ${path.relative(CONTRACT_ROOT, addressesFile)}`);
+  }
 }

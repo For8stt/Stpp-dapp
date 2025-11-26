@@ -5,6 +5,7 @@ import PresaleCard from "../components/presale/PresaleCard";
 import deployments from "../abi/data/stppDeployments.json";
 import PublicPresaleFactoryABI from "../abi/PublicPresaleFactory.json";
 import PresaleManagerABI from "../abi/PresaleManager.json";
+import styles from "./AllPresales.module.css";
 
 const AllPresales = () => {
   const [items, setItems] = useState([]);
@@ -82,8 +83,16 @@ const AllPresales = () => {
 
       setItems(enriched.filter(Boolean));
     } catch (factoryError) {
-      console.error(factoryError);
-      setError(factoryError?.message || "Failed to load presales");
+      console.error("Factory error:", factoryError);
+
+      // Check if this is a network/contract issue
+      if (factoryError?.code === 'CALL_EXCEPTION') {
+        setError("Contracts not found. Please redeploy contracts to the current network.");
+      } else if (factoryError?.message?.includes('missing revert data')) {
+        setError("Contracts are not deployed. Please run deployment scripts first.");
+      } else {
+        setError(factoryError?.message || "Failed to load presales");
+      }
     } finally {
       setLoading(false);
     }
@@ -94,32 +103,74 @@ const AllPresales = () => {
   }, [loadPresales]);
 
   return (
-    <section className="page space-y-6">
-      <div className="rounded-3xl border border-white/10 bg-slate-900/60 p-8 text-white shadow-lg shadow-black/30">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold">Permissionless presales</h1>
-            <p className="text-white/70">Browse all PresaleManager clones created via the public factory.</p>
+    <section className={styles.page}>
+      <div className={styles.heroCard}>
+        <div className={styles.heroContent}>
+          <h1 className={styles.heroTitle}>Permissionless presales</h1>
+          <p className={styles.heroSubtitle}>Browse all PresaleManager clones created via the public factory.</p>
+          <div className={styles.heroStats}>
+            <div>
+              <p>Live auctions</p>
+              <strong>Real-time tracking</strong>
+            </div>
+            <div>
+              <p>Factory clones</p>
+              <strong>Permissionless creation</strong>
+            </div>
           </div>
-          <button
-            onClick={loadPresales}
-            className="rounded-2xl border border-white/20 px-4 py-2 text-sm font-semibold text-white transition hover:border-white/40"
-          >
+        </div>
+        <div className={styles.heroActions}>
+          <button onClick={loadPresales} className={styles.heroButton}>
             Refresh
+          </button>
+          <button onClick={() => window.location.reload()} className={styles.secondaryButton}>
+             Reload Page
           </button>
         </div>
       </div>
 
-      {error && <p className="rounded-xl border border-rose-400/40 bg-rose-500/10 p-4 text-sm text-rose-300">{error}</p>}
+      {error && (
+        <div className={styles.errorCard}>
+          <div className={styles.errorContent}>
+            <p className={styles.errorTitle}>⚠️ Error Loading Presales</p>
+            <p className={styles.errorText}>{error}</p>
+            {error.includes('not deployed') && (
+              <div className={styles.errorInstructions}>
+                <p>To fix this issue:</p>
+                <ol className={styles.instructionList}>
+                  <li>Make sure Hardhat network is running: <span className={styles.codeBlock}>npx hardhat node</span></li>
+                  <li>Deploy contracts: <span className={styles.codeBlock}>npm run deploy:all</span></li>
+                  <li>Refresh this page</li>
+                </ol>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {loading ? (
-        <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-6 text-center text-white/70">Loading…</div>
+        <div className={styles.loadingCard}>
+          <div className={styles.loadingSpinner}></div>
+          <p className={styles.loadingText}>Loading presales...</p>
+        </div>
       ) : items.length === 0 ? (
-        <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-6 text-center text-white/70">
-          No presales deployed yet.
+        <div className={styles.emptyCard}>
+          <div className={styles.emptyIcon}>
+            <div className={styles.emptyIconBox}>
+              <div className={styles.emptyIconInner}></div>
+            </div>
+          </div>
+          <h3 className={styles.emptyTitle}>No presales deployed yet</h3>
+          <p className={styles.emptyText}>
+            Create your first presale using the PublicPresaleFactory to see it listed here.
+          </p>
         </div>
       ) : (
-        <div className="grid gap-5 md:grid-cols-2">{items.map((presale) => <PresaleCard key={presale.manager} presale={presale} />)}</div>
+        <div className={styles.presalesGrid}>
+          {items.map((presale) => (
+            <PresaleCard key={presale.manager} presale={presale} />
+          ))}
+        </div>
       )}
     </section>
   );

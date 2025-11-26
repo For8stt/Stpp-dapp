@@ -5,6 +5,7 @@ import { ethers } from "ethers";
 
 import TxStatusIndicator from "../components/common/TxStatusIndicator";
 import loadContract from "../services/web3/loadContract";
+import { handleTxError, showTxSuccess, showTxInfo } from "../utils/txErrorHandler";
 
 const toDate = (timestamp) => new Date(Number(timestamp || 0) * 1000).toLocaleString();
 
@@ -132,12 +133,16 @@ const AuctionView = () => {
       }
 
       setTxState({ status: "pending", message: "Submitting commit…" });
+      showTxInfo("Please confirm the commit transaction in your wallet", { autoClose: false });
       const tx = await auctionContract.commit(commitHash, merkleProof, { value: depositValue });
+      showTxInfo("Commit transaction submitted to the network", { autoClose: 3000 });
       setTxState({ status: "pending", message: "Commit in mempool", hash: tx.hash });
       await tx.wait();
+      showTxSuccess("Commit confirmed successfully!", { autoClose: 3000 });
       setTxState({ status: "success", message: "Commit confirmed", hash: tx.hash });
     } catch (err) {
       console.error(err);
+      handleTxError(err, "Commit failed");
       setTxState({ status: "error", message: err?.message || "Commit failed" });
     }
   };
@@ -154,12 +159,16 @@ const AuctionView = () => {
       const commitIndex = Number(revealForm.commitIndex || 0);
 
       setTxState({ status: "pending", message: "Submitting reveal…" });
+      showTxInfo("Please confirm the reveal transaction in your wallet", { autoClose: false });
       const tx = await auctionContract.reveal(priceTickIndex, qty, nonce, commitIndex);
+      showTxInfo("Reveal transaction submitted to the network", { autoClose: 3000 });
       setTxState({ status: "pending", message: "Reveal in mempool", hash: tx.hash });
       await tx.wait();
+      showTxSuccess("Reveal confirmed successfully!", { autoClose: 3000 });
       setTxState({ status: "success", message: "Reveal confirmed", hash: tx.hash });
     } catch (err) {
       console.error(err);
+      handleTxError(err, "Reveal failed");
       setTxState({ status: "error", message: err?.message || "Reveal failed" });
     }
   };

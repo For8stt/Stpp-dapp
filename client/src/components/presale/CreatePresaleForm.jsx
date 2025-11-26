@@ -1,40 +1,41 @@
 import React from "react";
+import styles from "./CreatePresaleForm.module.css";
 
 const Section = ({ title, description, children }) => (
-  <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-6 shadow-inner shadow-black/20">
-    <div className="mb-4">
-      <p className="text-lg font-semibold text-white">{title}</p>
-      {description && <p className="text-sm text-white/60">{description}</p>}
+  <div className="section-card">
+    <div className="section-header">
+      <p className="section-title">{title}</p>
+      {description && <p className="section-description">{description}</p>}
     </div>
-    <div className="grid gap-4 md:grid-cols-2">{children}</div>
+    <div className="section-content">{children}</div>
   </div>
 );
 
 const Input = ({ label, name, value, onChange, type = "text", placeholder, helper }) => (
-  <label className="flex flex-col gap-2 text-sm font-medium text-white/90">
-    <span>{label}</span>
-    {helper && <span className="text-xs font-normal text-white/50">{helper}</span>}
+  <label className="input-wrapper">
+    <span className="input-label">{label}</span>
+    {helper && <span className="input-helper">{helper}</span>}
     <input
       type={type}
       name={name}
       value={value}
       onChange={(event) => onChange(name, event.target.value)}
       placeholder={placeholder}
-      className="rounded-xl border border-white/10 bg-slate-800/60 px-4 py-3 text-white outline-none transition focus:border-white/40 focus:bg-slate-800"
+      className="input-field"
     />
   </label>
 );
 
 const TextArea = ({ label, name, value, onChange, placeholder, helper }) => (
-  <label className="flex h-full flex-col gap-2 text-sm font-medium text-white/90 md:col-span-2">
-    <span>{label}</span>
-    {helper && <span className="text-xs font-normal text-white/50">{helper}</span>}
+  <label className="textarea-wrapper">
+    <span className="input-label">{label}</span>
+    {helper && <span className="input-helper">{helper}</span>}
     <textarea
       name={name}
       value={value}
       onChange={(event) => onChange(name, event.target.value)}
       placeholder={placeholder}
-      className="min-h-[120px] rounded-xl border border-white/10 bg-slate-800/60 px-4 py-3 text-white outline-none transition focus:border-white/40 focus:bg-slate-800"
+      className="textarea-field"
     />
   </label>
 );
@@ -45,7 +46,7 @@ const CreatePresaleForm = ({ values, onChange, onSubmit, submitting }) => (
       event.preventDefault();
       onSubmit();
     }}
-    className="space-y-6"
+    className={styles.form}
   >
     <Section title="Token & Treasury" description="Addresses controlling token supply and treasury withdrawals.">
       <Input
@@ -262,12 +263,12 @@ const CreatePresaleForm = ({ values, onChange, onSubmit, submitting }) => (
       />
     </Section>
 
-    <div className="flex flex-col gap-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 px-6 py-4 text-sm text-white/80 sm:flex-row sm:items-center sm:justify-between">
-      <p>All values are validated before sending the transaction. Gas estimation may take a few seconds.</p>
+    <div className={styles.submitCard}>
+      <p className={styles.submitText}>All values are validated before sending the transaction. Gas estimation may take a few seconds.</p>
       <button
         type="submit"
         disabled={submitting}
-        className="rounded-xl bg-emerald-500 px-6 py-3 text-base font-semibold text-slate-900 transition hover:bg-emerald-400 disabled:opacity-60"
+        className={styles.submitButton}
       >
         {submitting ? "Creating..." : "Create Presale"}
       </button>

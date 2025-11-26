@@ -6,6 +6,7 @@ import TxStatusIndicator from "../components/common/TxStatusIndicator";
 import AuctionControls from "../components/presale/AuctionControls";
 import CreateAuctionForm from "../components/presale/CreateAuctionForm";
 import loadContract from "../services/web3/loadContract";
+import { handleTxError, showTxSuccess, showTxInfo } from "../utils/txErrorHandler";
 
 const toDateInput = (secondsFromNow = 0) =>
   new Date((Math.floor(Date.now() / 1000) + secondsFromNow) * 1000).toISOString().slice(0, 16);
@@ -203,13 +204,17 @@ const PresalePage = ({ account }) => {
       };
 
       setTxStatus({ status: "pending", message: "Creating auction..." });
+      showTxInfo("Please confirm the transaction in your wallet", { autoClose: false });
       const tx = await managerContract.createAuction(payload);
+      showTxInfo("Transaction submitted to the network", { autoClose: 3000 });
       setTxStatus({ status: "pending", message: "Transaction submitted", hash: tx.hash });
       await tx.wait();
+      showTxSuccess("Auction created successfully!", { autoClose: 3000 });
       setTxStatus({ status: "success", message: "Auction created", hash: tx.hash });
       await refreshInfo();
     } catch (err) {
       console.error(err);
+      handleTxError(err, "Unable to create auction");
       setTxStatus({ status: "error", message: err?.message || "Unable to create auction" });
     } finally {
       setCreatingAuction(false);
@@ -220,13 +225,17 @@ const PresalePage = ({ account }) => {
     if (!managerContract || !info?.auction) return;
     try {
       setTxStatus({ status: "pending", message: `${label}…` });
+      showTxInfo(`Please confirm ${label.toLowerCase()} in your wallet`, { autoClose: false });
       const tx = await action();
+      showTxInfo(`${label} submitted to the network`, { autoClose: 3000 });
       setTxStatus({ status: "pending", message: `${label} submitted`, hash: tx.hash });
       await tx.wait();
+      showTxSuccess(`${label} completed successfully!`, { autoClose: 3000 });
       setTxStatus({ status: "success", message: `${label} confirmed`, hash: tx.hash });
       await refreshInfo();
     } catch (err) {
       console.error(err);
+      handleTxError(err, `Failed to ${label.toLowerCase()}`);
       setTxStatus({ status: "error", message: err?.message || `Failed to ${label.toLowerCase()}` });
     }
   };

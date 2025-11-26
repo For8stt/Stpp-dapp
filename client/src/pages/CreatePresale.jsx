@@ -2,11 +2,12 @@ import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ethers } from "ethers";
 
-import TxStatusIndicator from "../components/common/TxStatusIndicator";
 import CreatePresaleForm from "../components/presale/CreatePresaleForm";
 import loadContract from "../services/web3/loadContract";
+import { handleTxError, showTxSuccess, showTxInfo } from "../utils/txErrorHandler";
 import styles from "./CreatePresale.module.css";
 
+const STORAGE_KEY = "sttp:recent-presales";
 const now = () => Math.floor(Date.now() / 1000);
 const toDateInput = (secondsFromNow) =>
   new Date((now() + secondsFromNow) * 1000).toISOString().slice(0, 16);
@@ -53,28 +54,18 @@ const parseEtherValue = (value) => (value ? ethers.parseUnits(value, 18).toStrin
 const parseBps = (value) => Number(value || 0);
 const parseWeight = (value) => ethers.parseUnits(((Number(value || 0) / 100) || 0).toString(), 18).toString();
 
-const fetchPresaleDetails = async (managerAddress) => {
-  if (!managerAddress) {
-    throw new Error("Missing manager address");
-  }
-  const manager = await loadContract("PresaleManager", managerAddress);
-  const owner = await manager.owner();
-  const info = await manager.getLatestPresaleInfo();
-  return {
-    manager: managerAddress,
-    owner,
-    auction: info[1],
-    lbp: info[2],
-    vesting: info[3],
-    timestamp: Date.now(),
-  };
+const persistPresale = (entry) => {
+  if (typeof window === "undefined") return;
+  const current = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || "[]");
+  current.unshift(entry);
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(current.slice(0, 20)));
 };
 
 const CreatePresale = ({ account, onConnect }) => {
   const navigate = useNavigate();
   const [formValues, setFormValues] = useState(getInitialValues);
   const [submitting, setSubmitting] = useState(false);
-  const [txIndicator, setTxIndicator] = useState(null);
+
   const connectedAccount = account;
 
   const handleChange = (field, value) => {
@@ -137,139 +128,107 @@ const CreatePresale = ({ account, onConnect }) => {
       }
 
       setSubmitting(true);
-      setTxIndicator({ status: "pending", message: "Waiting for wallet confirmation..." });
+      showTxInfo("Please confirm the transaction in your wallet", { autoClose: false });
       await window.ethereum.request({ method: "eth_requestAccounts" });
 
       const factory = await loadContract("PublicPresaleFactory");
       const auctionInput = buildAuctionInput();
       const lbpConfig = buildLbpConfig();
       const tx = await factory.createPresale(auctionInput, lbpConfig);
-      setTxIndicator({ status: "pending", message: "Transaction submitted.", hash: tx.hash });
+      showTxInfo("Transaction submitted to the network", { autoClose: 3000 });
 
       const receipt = await tx.wait();
-      const createdEvent = await extractPresaleCreated(factory, receipt);
-      let presaleDetails;
-
-      if (createdEvent) {
-        presaleDetails = {
-          manager: createdEvent.args?.manager,
-          owner: createdEvent.args?.owner,
-          auction: createdEvent.args?.auction,
-          lbp: createdEvent.args?.lbp,
-          vesting: createdEvent.args?.vesting,
-          timestamp: Date.now(),
-        };
-      } else {
-        const onChainList = await factory.getPresales();
-        if (!onChainList || onChainList.length === 0) {
-          throw new Error("Transaction mined but factory returned no presales.");
-        }
-        presaleDetails = await fetchPresaleDetails(onChainList[onChainList.length - 1]);
+      let createdEvent = receipt.events?.find((event) => event.event === "PresaleCreated");
+      if (!createdEvent) {
+        const eventsFromFilter = await factory.queryFilter(
+          factory.filters.PresaleCreated(),
+          receipt.blockNumber,
+          receipt.blockNumber
+        );
+        createdEvent = eventsFromFilter[0];
+      }
+      if (!createdEvent) {
+        const eventParsedLog = receipt.logs
+          .map((log) => {
+            try {
+              return factory.interface.parseLog(log);
+            } catch {
+              return null;
+            }
+          })
+          .find((parsed) => parsed?.name === "PresaleCreated");
+        createdEvent = eventParsedLog;
       }
 
-      setTxIndicator({ status: "success", message: "Presale created successfully!", hash: tx.hash });
-      navigate(`/presale/${presaleDetails.manager}`);
+      if (!createdEvent) {
+        throw new Error("Failed to read PresaleCreated event");
+      }
+
+      const managerAddress = createdEvent.args?.manager;
+      persistPresale({
+        manager: managerAddress,
+        owner: createdEvent.args?.owner,
+        auction: createdEvent.args?.auction,
+        lbp: createdEvent.args?.lbp,
+        vesting: createdEvent.args?.vesting,
+        timestamp: Date.now(),
+      });
+
+      showTxSuccess("Presale created successfully!", { autoClose: 3000 });
+      navigate(`/presale/${managerAddress}`);
     } catch (error) {
       console.error(error);
-      setTxIndicator({ status: "error", message: error?.message || "Failed to create presale" });
+      handleTxError(error, "Failed to create presale");
     } finally {
       setSubmitting(false);
-    }
-  };
-
-  const extractPresaleCreated = async (factory, receipt) => {
-    try {
-      const direct = receipt.events?.find((event) => event.event === "PresaleCreated");
-      if (direct) return direct;
-
-      const eventsFromFilter = await factory.queryFilter(
-        factory.filters.PresaleCreated(),
-        receipt.blockNumber,
-        receipt.blockNumber
-      );
-      if (eventsFromFilter.length > 0) {
-        return eventsFromFilter[0];
-      }
-
-      const parsed = receipt.logs
-        .map((log) => {
-          try {
-            return factory.interface.parseLog(log);
-          } catch {
-            return null;
-          }
-        })
-        .find((entry) => entry?.name === "PresaleCreated");
-      return parsed || null;
-    } catch (error) {
-      console.warn("Failed to parse PresaleCreated event", error);
-      return null;
     }
   };
 
   return (
     <section className={styles.page}>
       <div className={styles.heroCard}>
-        <div>
-          <p className={styles.heroBadge}>Permissionless Presale</p>
-          <h1 className={styles.heroTitle}>Create a dedicated PresaleManager clone</h1>
+        <div className={styles.heroContent}>
+          <h1 className={styles.heroTitle}>Create a permissionless presale</h1>
           <p className={styles.heroSubtitle}>
-            Configure Dutch auction and LBP parameters, then deploy through the public factory. Each field is validated
-            before any on-chain action.
+            Configure your auction parameters and deploy a dedicated PresaleManager clone via the public factory.
+            Launch your token sale with advanced Dutch auction mechanics and automated liquidity bootstrapping.
           </p>
+          <div className={styles.heroStats}>
+            <div>
+              <p>Smart contracts</p>
+              <strong>Automated deployment</strong>
+            </div>
+            <div>
+              <p>Liquidity bootstrap</p>
+              <strong>Built-in LBP</strong>
+            </div>
+          </div>
         </div>
         <div className={styles.heroActions}>
           {!connectedAccount ? (
-            <button className={styles.heroButton} onClick={onConnect}>
-              Connect wallet
+            <button onClick={onConnect} className={styles.heroButton}>
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              Connect Wallet
             </button>
           ) : (
-            <div className={styles.connectedPill}>Wallet connected</div>
+            <div className={styles.connectedPill}>
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Wallet Connected
+            </div>
           )}
-          <div className={styles.heroStats}>
-            <div>
-              <p>Live auctions</p>
-              <strong>Tracked in realtime</strong>
-            </div>
-            <div>
-              <p>Liquidity window</p>
-              <strong>90 days default</strong>
-            </div>
-          </div>
         </div>
       </div>
 
-      <div className={styles.grid}>
-        <article className={styles.infoCard}>
-          <h2>Presale configuration in one place</h2>
-          <p>
-            Supply the sale token, treasury, auction timeline, and liquidity bootstrap settings. The UI serializes the
-            data into the structs the factory expects.
-          </p>
-          <ul className={styles.infoList}>
-            <li>Sale + treasury wiring auto-checked</li>
-            <li>Dutch auction commit/reveal cycle</li>
-            <li>Vesting + LBP launch built-in</li>
-            <li>
-              Results reflected on{" "}
-              <span className={styles.highlight}>/deploy</span> and <span className={styles.highlight}>/all</span>
-            </li>
-          </ul>
-          <p className={styles.note}>After submit, monitor TxStatus and jump directly to the manager view.</p>
-        </article>
-
-        <article className={styles.formCard}>
-          <CreatePresaleForm values={formValues} onChange={handleChange} onSubmit={handleSubmit} submitting={submitting} />
-          <div className={styles.statusWrapper}>
-            <TxStatusIndicator
-              status={txIndicator?.status}
-              message={txIndicator?.message}
-              hash={txIndicator?.hash}
-              onClear={() => setTxIndicator(null)}
-            />
-          </div>
-        </article>
+      {/* Form Section */}
+      <div className={styles.formCard}>
+        <CreatePresaleForm values={formValues} onChange={handleChange} onSubmit={handleSubmit} submitting={submitting} />
       </div>
+
+      {/* Status Indicator */}
     </section>
   );
 };
