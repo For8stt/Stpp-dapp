@@ -1,57 +1,65 @@
-import { formatEther } from "ethers";
+import { formatEther, BrowserProvider } from "ethers";
 
-import {
-  DEFAULT_CHAIN_ID_HEX,
-  ensureProvider,
-  getActiveEip1193Provider,
-  rpcGuard,
-  setTargetChainIdHex
-} from "./provider";
-
-let walletChainIdHex = DEFAULT_CHAIN_ID_HEX;
-
-const refreshWalletChainId = async () => {
-  const injected = getActiveEip1193Provider();
-  if (!injected?.request) {
-    walletChainIdHex = DEFAULT_CHAIN_ID_HEX;
-    return walletChainIdHex;
+export const requestAccount = async () => {
+  if (!window?.ethereum) {
+    throw new Error("Wallet not detected. Please connect your wallet.");
   }
 
-  try {
-    walletChainIdHex = await injected.request({ method: "eth_chainId" });
-    setTargetChainIdHex(walletChainIdHex);
-  } catch {
-    walletChainIdHex = DEFAULT_CHAIN_ID_HEX;
-  }
-
-  return walletChainIdHex;
+  const provider = new BrowserProvider(window.ethereum);
+  const accounts = await provider.send("eth_requestAccounts", []);
+  return accounts[0] ?? null;
 };
-
-export const requestAccount = async () =>
-  rpcGuard(async () => {
-    const provider = ensureProvider();
-    await refreshWalletChainId();
-    const accounts = await provider.send("eth_requestAccounts", []);
-    return accounts[0] ?? null;
-  });
 
 export const getUserBalanceInETH = async (userAddress) => {
   if (!userAddress) {
-    throw new Error("User address is required");
+    return "0";
   }
 
-  return rpcGuard(async () => {
-    const provider = ensureProvider();
-    await refreshWalletChainId();
+  if (!window?.ethereum) {
+    return "0";
+  }
+
+  try {
+    const provider = new BrowserProvider(window.ethereum);
     const balanceWei = await provider.getBalance(userAddress);
-    return formatEther(balanceWei);
-  });
+    
+    // Перевіряємо чи balanceWei валідний
+    if (!balanceWei || balanceWei === null || balanceWei === undefined) {
+      return "0";
+    }
+    
+    // Перевіряємо чи balanceWei є BigInt або числом
+    if (typeof balanceWei === 'bigint' || typeof balanceWei === 'number') {
+      const balance = formatEther(balanceWei);
+      
+      // Перевіряємо чи баланс є валідним числом
+      const numBalance = Number(balance);
+      if (!balance || balance === "NaN" || isNaN(numBalance) || !isFinite(numBalance)) {
+        return "0";
+      }
+      
+      return balance;
+    }
+    
+    return "0";
+  } catch (error) {
+    console.error("Failed to get user balance:", error);
+    return "0";
+  }
 };
 
-export const getNetworkName = async () =>
-  rpcGuard(async () => {
-    const chainId = await refreshWalletChainId();
-    switch (chainId) {
+export const getNetworkName = async () => {
+  if (!window?.ethereum) {
+    return "Unknown network";
+  }
+
+  try {
+    const provider = new BrowserProvider(window.ethereum);
+    const network = await provider.getNetwork();
+    const chainId = Number(network.chainId);
+    const chainIdHex = `0x${chainId.toString(16)}`;
+
+    switch (chainIdHex) {
       case "0x1":
         return "Ethereum Mainnet";
       case "0x5":
@@ -77,30 +85,35 @@ export const getNetworkName = async () =>
       case "0x7a69":
         return "Hardhat Local Network";
       default:
-        return `Unknown network (chainId: ${chainId})`;
+        return `Unknown network (chainId: ${chainIdHex})`;
     }
-  });
+  } catch (error) {
+    console.error("Failed to get network name:", error);
+    return "Unknown network";
+  }
+};
 
 export const subscribeWalletEvents = ({ onAccountsChanged, onChainChanged } = {}) => {
-  const injected = getActiveEip1193Provider();
-  if (!injected?.on) {
+  if (!window?.ethereum) {
     return () => {};
   }
 
+  const ethereum = window.ethereum;
+
   if (onAccountsChanged) {
-    injected.on("accountsChanged", onAccountsChanged);
+    ethereum.on("accountsChanged", onAccountsChanged);
   }
 
   if (onChainChanged) {
-    injected.on("chainChanged", onChainChanged);
+    ethereum.on("chainChanged", onChainChanged);
   }
 
   return () => {
     if (onAccountsChanged) {
-      injected?.removeListener?.("accountsChanged", onAccountsChanged);
+      ethereum?.removeListener?.("accountsChanged", onAccountsChanged);
     }
     if (onChainChanged) {
-      injected?.removeListener?.("chainChanged", onChainChanged);
+      ethereum?.removeListener?.("chainChanged", onChainChanged);
     }
   };
 };

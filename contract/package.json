@@ -8,7 +8,8 @@
     "test:securelbp": "npx hardhat test test/SecureLBP/deployment.test.ts test/SecureLBP/pool.test.ts test/SecureLBP/core.test.ts test/SecureLBP/oracle.test.ts test/SecureLBP/admin.test.ts test/SecureLBP/flow.test.ts test/SecureLBP/security.test.ts test/SecureLBP/gas.test.ts",
     "test:weightedamm": "npx hardhat test test/test-WeightedAMM/WeightedAMM.economic.test.ts test/test-WeightedAMM/WeightedAMM.gas.test.ts test/test-WeightedAMM/WeightedAMM.property.test.ts test/test-WeightedAMM/WeightedAMM.test.ts",
     "test:dutchauction": "npx hardhat test test/DutchAuction/CommitRevealFlow.test.ts test/DutchAuction/ExtendedBehaviors.test.ts",
-    "test:presalemanager": "npx hardhat test test/PresaleManager/PresaleManagerManager.test.ts"
+    "test:presalemanager": "npx hardhat test test/PresaleManager/PresaleManagerManager.test.ts",
+    "deploy:test-token": "npx hardhat run scripts/deployTestToken.ts --network localhost"
   },
   "keywords": [],
   "author": "",

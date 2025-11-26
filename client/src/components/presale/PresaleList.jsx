@@ -21,13 +21,20 @@ const tdStyle = {
 
 const buttonStyle = {
   border: "none",
-  backgroundColor: "#14b8a6",
-  color: "#0c0f15",
-  padding: "0.4rem 0.8rem",
-  borderRadius: "6px",
+  backgroundColor: "#0fa392",
+  color: "#0f172a",
+  padding: "0.55rem 1.1rem",
+  borderRadius: "8px",
   cursor: "pointer",
   textDecoration: "none",
-  fontWeight: 600
+  fontWeight: 600,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  whiteSpace: "nowrap",
+  gap: "0.35rem",
+  boxShadow: "0 10px 20px rgba(15,163,146,0.3)",
+  transition: "transform 120ms ease, box-shadow 120ms ease"
 };
 
 const PresaleList = ({ items }) => {

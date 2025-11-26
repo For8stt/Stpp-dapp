@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from "react";
-
-import { getNetworkName, subscribeWalletEvents } from "../services/web3/wallet";
+import { useChainId } from "wagmi";
+import { getNetworkName } from "../services/web3/wallet";
 
 const NetworkInfo = () => {
   const [network, setNetwork] = useState("");
+  const chainId = useChainId();
 
   useEffect(() => {
     const fetchNetwork = async () => {
@@ -12,18 +13,12 @@ const NetworkInfo = () => {
         setNetwork(name);
       } catch (error) {
         console.error("Unable to determine network:", error);
+        setNetwork("Unknown");
       }
     };
 
     fetchNetwork();
-    const unsubscribe = subscribeWalletEvents({
-      onChainChanged: () => {
-        fetchNetwork();
-      }
-    });
-
-    return () => unsubscribe();
-  }, []);
+  }, [chainId]);
 
   return <p className="network-indicator">Connected Network: {network || "Unknown"}</p>;
 };

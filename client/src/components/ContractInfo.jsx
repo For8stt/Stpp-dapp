@@ -14,6 +14,7 @@ const ContractInfo = ({ account, refreshKey }) => {
 
   const fetchBalances = useCallback(async () => {
     if (!account) {
+      setContractBalance("0");
       setUserBalance("0");
       setUserDeposit("0");
       return;
@@ -26,11 +27,24 @@ const ContractInfo = ({ account, refreshKey }) => {
         getUserDepositInETH(account)
       ]);
 
-      setContractBalance(contractBal);
-      setUserBalance(walletBal);
-      setUserDeposit(deposit);
+      // Детальна перевірка та очищення значень
+      const cleanValue = (value) => {
+        if (!value || value === null || value === undefined) return "0";
+        const str = String(value).trim();
+        if (str === "" || str === "NaN" || str === "null" || str === "undefined") return "0";
+        const num = Number(str);
+        if (isNaN(num) || !isFinite(num)) return "0";
+        return str;
+      };
+
+      setContractBalance(cleanValue(contractBal));
+      setUserBalance(cleanValue(walletBal));
+      setUserDeposit(cleanValue(deposit));
     } catch (error) {
       console.error("Failed to fetch balances:", error);
+      setContractBalance("0");
+      setUserBalance("0");
+      setUserDeposit("0");
     }
   }, [account]);
 
@@ -44,10 +58,21 @@ const ContractInfo = ({ account, refreshKey }) => {
   }, [fetchBalances]);
 
   const formatEth = (value) => {
-    const numeric = Number(value);
-    if (Number.isNaN(numeric)) {
-      return `${value || "0"} ETH`;
+    // Детальна перевірка значення
+    if (!value || value === null || value === undefined) {
+      return "0.0000 ETH";
     }
+    
+    const str = String(value).trim();
+    if (str === "" || str === "NaN" || str === "null" || str === "undefined" || str === "Infinity") {
+      return "0.0000 ETH";
+    }
+    
+    const numeric = Number(str);
+    if (Number.isNaN(numeric) || !isFinite(numeric)) {
+      return "0.0000 ETH";
+    }
+    
     return `${numeric.toFixed(4)} ETH`;
   };
 

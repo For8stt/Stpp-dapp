@@ -3,32 +3,50 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "@base-org/account": "^2.5.0",
     "@chakra-ui/react": "^3.29.0",
+    "@coinbase/wallet-sdk": "^4.3.7",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
+    "@gemini-wallet/core": "^0.3.2",
+    "@metamask/sdk": "^0.34.0",
+    "@rainbow-me/rainbowkit": "^2.2.9",
+    "@safe-global/safe-apps-provider": "^0.18.6",
+    "@safe-global/safe-apps-sdk": "^9.1.0",
+    "@tanstack/react-query": "^5.90.10",
     "@testing-library/jest-dom": "^6.8.0",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^13.5.0",
+    "@walletconnect/ethereum-provider": "^2.23.0",
     "ethers": "^6.13.0",
     "framer-motion": "^12.23.24",
-    "react": "^19.1.1",
-    "react-dom": "^19.1.1",
+    "porto": "^0.2.37",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
     "react-router-dom": "^7.9.6",
     "react-scripts": "5.0.1",
     "react-toastify": "^10.0.5",
+    "viem": "^2.27.6",
+    "wagmi": "^2.12.17",
     "web-vitals": "^2.1.4"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
+    "start": "cross-env GENERATE_SOURCEMAP=false craco start",
+    "build": "cross-env GENERATE_SOURCEMAP=false craco build",
+    "test": "craco test",
     "eject": "react-scripts eject"
   },
   "eslintConfig": {
     "extends": [
       "react-app",
       "react-app/jest"
-    ]
+    ],
+    "rules": {
+      "no-unused-vars": "off",
+      "@typescript-eslint/no-unused-vars": "off",
+      "no-empty-pattern": "off",
+      "react/jsx-no-undef": "off"
+    }
   },
   "browserslist": {
     "production": [
@@ -43,9 +61,14 @@
     ]
   },
   "devDependencies": {
-    "@types/node": "^24.10.1",
-    "@types/react": "^19.2.5",
-    "@types/react-dom": "^19.2.3",
-    "typescript": "^5.9.3"
+    "@craco/craco": "^7.1.0",
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "cross-env": "^7.0.3",
+    "typescript": "4.9.5"
+  },
+  "overrides": {
+    "typescript": "4.9.5"
   }
 }

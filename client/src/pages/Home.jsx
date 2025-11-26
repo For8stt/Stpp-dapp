@@ -4,7 +4,7 @@ import { NavLink } from "react-router-dom";
 import ConnectWalletButton from "../components/ConnectWalletButton";
 import NetworkInfo from "../components/NetworkInfo";
 
-const Home = ({ account, onConnect, onWalletChange, selectedWalletId }) => (
+const Home = ({ account }) => (
   <section className="page home">
     <div className="hero">
       <h1>Lock Contract Dashboard</h1>
@@ -18,11 +18,7 @@ const Home = ({ account, onConnect, onWalletChange, selectedWalletId }) => (
           </NavLink>
         </div>
       ) : (
-        <ConnectWalletButton
-          onConnected={onConnect}
-          onWalletChange={onWalletChange}
-          selectedWalletId={selectedWalletId}
-        />
+        <ConnectWalletButton />
       )}
     </div>
   </section>

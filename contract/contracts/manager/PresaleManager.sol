@@ -386,6 +386,82 @@ contract PresaleManager is Ownable, IPresaleManager, IAutomationCompatible, Pres
         return _records[auctionAddress];
     }
 
+    /// @notice Returns high-level presale info for a given managed auction (owner, downstream addresses, status).
+    function getPresaleInfo(address auctionAddress)
+        external
+        view
+        returns (
+            address ownerAddress,
+            address auction,
+            address lbp,
+            address vesting,
+            bool finalized,
+            bool lbpInitialized,
+            bool lbpFinalized,
+            uint256 tokensForSale,
+            uint256 bonusReserve,
+            uint256 totalRaised,
+            uint256 clearingPrice
+        )
+    {
+        if (!isManagedAuction[auctionAddress]) revert UnknownAuction();
+        AuctionRecord storage record = _records[auctionAddress];
+        return (
+            owner(),
+            auctionAddress,
+            record.lbp,
+            record.vestingEscrow,
+            record.finalized,
+            record.lbpInitialized,
+            record.lbpFinalized,
+            record.tokensForSale,
+            record.bonusReserve,
+            record.totalRaised,
+            record.clearingPrice
+        );
+    }
+
+    /// @notice Convenience getter for the most recently deployed managed auction.
+    function getLatestPresaleInfo()
+        external
+        view
+        returns (
+            address ownerAddress,
+            address auction,
+            address lbp,
+            address vesting,
+            bool finalized,
+            bool lbpInitialized,
+            bool lbpFinalized,
+            uint256 tokensForSale,
+            uint256 bonusReserve,
+            uint256 totalRaised,
+            uint256 clearingPrice
+        )
+    {
+        if (_auctions.length == 0) revert UnknownAuction();
+        address latest = _auctions[_auctions.length - 1];
+        AuctionRecord storage record = _records[latest];
+        return (
+            owner(),
+            latest,
+            record.lbp,
+            record.vestingEscrow,
+            record.finalized,
+            record.lbpInitialized,
+            record.lbpFinalized,
+            record.tokensForSale,
+            record.bonusReserve,
+            record.totalRaised,
+            record.clearingPrice
+        );
+    }
+
+    /// @notice Returns manager level wiring for frontend bootstrapping.
+    function getManagerConfig() external view returns (address auctionFactory_, address upkeepController_, bool initialized, uint256 auctionsCount) {
+        return (address(auctionFactory), address(upkeepController), managerInitialized, _auctions.length);
+    }
+
     /// @inheritdoc IPresaleManager
     function finalizePresale(
         address auctionAddress,

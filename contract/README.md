@@ -1,6 +1,16 @@
 # Sample Hardhat Project
 
-This project demonstrates a basic Hardhat use case. It comes with a sample contract, a test for that contract, and a Hardhat Ignition module that deploys that contract.
+This Hardhat workspace powers the permissionless presale tooling used by the `sttp-dapp` UI.
+
+## Local presale deployment
+
+1. `npx hardhat node` &mdash; keep this running while you deploy contracts.
+2. In another terminal run:
+   - `npx hardhat run scripts/deployPresaleManagerImplementation.ts --network localhost`
+   - `npx hardhat run scripts/deployPublicPresaleFactory.ts --network localhost`
+   - `npx hardhat run scripts/deployTestToken.ts --network localhost` (the newly added helper that deploys `TestToken` and records its address under `client/src/abi/addresses.json`)
+3. Optionally run `npx hardhat run scripts/deploy.js --network localhost` if you need the example `Lock` contract synced into `client/src/abi/Lock_ABI.json`.
+4. Copy the recorded `testToken` address from `client/src/abi/addresses.json` into your presale `saleToken` field when interacting with `PresaleDeploy`.
 
 Try running some of the following tasks:
 
@@ -57,4 +67,8 @@ npm start
 
 
 
+
+     rm -rf contract/cache contract/artifacts
+     npx hardhat node
+     npx hardhat run scripts/deploy.js --network localhost
 ```

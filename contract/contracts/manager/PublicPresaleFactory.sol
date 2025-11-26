@@ -14,6 +14,7 @@ contract PublicPresaleFactory {
     using Clones for address;
 
     address public immutable managerImplementation;
+    address[] public presales;
 
     event PresaleCreated(
         address indexed owner,
@@ -50,5 +51,13 @@ contract PublicPresaleFactory {
         );
 
         emit PresaleCreated(msg.sender, manager, auction, lbp, vesting);
+        presales.push(manager);
+    }
+
+    /**
+     * @notice Returns a list of all presale manager clones created through this factory.
+     */
+    function getPresales() external view returns (address[] memory) {
+        return presales;
     }
 }

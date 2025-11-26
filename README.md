@@ -1,4 +1,4 @@
-# STTP DApp
+# STPP DApp
 
 Build the contracts with Hardhat before you run or package the full stack. Inside `contract` you can run `npx hardhat compile` and, once your contracts are ready, `npx hardhat compile` again before doing a production-style frontend build with `npm run build` inside `client`.
 

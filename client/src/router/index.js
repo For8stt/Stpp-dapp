@@ -1,16 +1,19 @@
 import React from "react";
 import { BrowserRouter, NavLink, Route, Routes } from "react-router-dom";
+import { ConnectButton } from "@rainbow-me/rainbowkit";
 
 import Dashboard from "../pages/Dashboard";
 import Home from "../pages/Home";
 import PresaleDeploy from "../pages/PresaleDeploy";
+import CreatePresale from "../pages/CreatePresale";
+import AllPresales from "../pages/AllPresales";
+import PresalePage from "../pages/PresalePage";
+import AuctionView from "../pages/AuctionView";
 
 const AppRouter = ({
   account,
   onConnect,
   onDisconnect,
-  onWalletChange,
-  selectedWalletId,
   refreshKey,
   onActionComplete,
   initializing
@@ -18,20 +21,21 @@ const AppRouter = ({
   <BrowserRouter>
     <div className="app">
       <header className="app-header">
-        <h1 className="logo">STTP dApp</h1>
+        <h1 className="logo">STPP dApp</h1>
         <div className="header-actions">
           <nav>
             <NavLink to="/" end>
               Home
             </NavLink>
             <NavLink to="/dashboard">Dashboard</NavLink>
+            <NavLink to="/create">Create</NavLink>
+            <NavLink to="/all">All presales</NavLink>
             <NavLink to="/deploy">Deploy</NavLink>
           </nav>
-          {account ? (
-            <button className="btn ghost" onClick={onDisconnect}>
-              Disconnect
-            </button>
-          ) : null}
+          <ConnectButton 
+            showBalance={false}
+            chainStatus="icon"
+          />
         </div>
       </header>
       <main>
@@ -48,9 +52,6 @@ const AppRouter = ({
               element={
                 <Home
                   account={account}
-                  onConnect={onConnect}
-                  onWalletChange={onWalletChange}
-                  selectedWalletId={selectedWalletId}
                 />
               }
             />
@@ -59,6 +60,10 @@ const AppRouter = ({
               element={<Dashboard account={account} refreshKey={refreshKey} onActionComplete={onActionComplete} />}
             />
             <Route path="/deploy" element={<PresaleDeploy />} />
+            <Route path="/create" element={<CreatePresale account={account} onConnect={onConnect} />} />
+            <Route path="/all" element={<AllPresales />} />
+            <Route path="/presale/:address" element={<PresalePage account={account} />} />
+            <Route path="/presale/:address/auction" element={<AuctionView />} />
           </Routes>
         )}
       </main>
