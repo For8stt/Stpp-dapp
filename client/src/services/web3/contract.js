@@ -27,12 +27,22 @@ const ensureContract = async () => {
     !contract || contractSignerAddress !== signerAddress || contractChainId !== chainId;
 
   if (needsReinit) {
-    const code = await provider.getCode(LockABI.address);
-    if (!code || code === "0x") {
-      throw new Error("Lock contract is not deployed on the connected network.");
+    const address = LockABI.address;
+    if (!address || address === "0x0000000000000000000000000000000000000000") {
+      throw new Error("Lock contract address not found in Lock_ABI.json. Please deploy Lock contract first using: npx hardhat run scripts/deploy.js");
     }
 
-    contract = new Contract(LockABI.address, LockABI.abi, signer);
+    const code = await provider.getCode(address);
+    if (!code || code === "0x") {
+      throw new Error("Lock contract is not deployed on the connected network. Please deploy it using: npx hardhat run scripts/deploy.js");
+    }
+
+    const abi = LockABI.abi || [];
+    if (!abi || abi.length === 0) {
+      throw new Error("Lock ABI not found in Lock_ABI.json. Please run deployment script: npx hardhat run scripts/deploy.js");
+    }
+
+    contract = new Contract(address, abi, signer);
     contractSignerAddress = signerAddress;
     contractChainId = chainId;
   }
@@ -46,8 +56,9 @@ export const getContractBalanceInETH = async () => {
   }
 
   try {
+    const address = LockABI.address;
     const provider = new BrowserProvider(window.ethereum);
-    const balanceWei = await provider.getBalance(LockABI.address);
+    const balanceWei = await provider.getBalance(address);
     
     // Перевіряємо чи balanceWei валідний
     if (!balanceWei || balanceWei === null || balanceWei === undefined) {
@@ -101,8 +112,9 @@ export const getUserDepositInETH = async (userAddress) => {
       return "0";
     }
 
+    const address = LockABI.address;
     const provider = new BrowserProvider(window.ethereum);
-    const code = await provider.getCode(LockABI.address);
+    const code = await provider.getCode(address);
     
     // Якщо контракт не розгорнутий, повертаємо 0
     if (!code || code === "0x") {

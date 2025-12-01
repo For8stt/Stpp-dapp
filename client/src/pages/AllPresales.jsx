@@ -3,8 +3,7 @@ import { BrowserProvider, Contract } from "ethers";
 
 import PresaleCard from "../components/presale/PresaleCard";
 import deployments from "../abi/data/stppDeployments.json";
-import PublicPresaleFactoryABI from "../abi/PublicPresaleFactory.json";
-import PresaleManagerABI from "../abi/PresaleManager.json";
+import allAbis from "../abi/allAbis.json";
 import styles from "./AllPresales.module.css";
 
 const AllPresales = () => {
@@ -29,7 +28,8 @@ const AllPresales = () => {
     }
 
     try {
-      const manager = new Contract(managerAddress, PresaleManagerABI.abi, provider);
+      const abi = Array.isArray(allAbis.PresaleManager) ? allAbis.PresaleManager : (allAbis.PresaleManager?.abi || allAbis.PresaleManager);
+      const manager = new Contract(managerAddress, abi, provider);
       const owner = await manager.owner();
       let info = null;
       if (typeof manager.getLatestPresaleInfo === "function") {
@@ -72,7 +72,10 @@ const AllPresales = () => {
         throw new Error("No provider available");
       }
 
-      const factory = new Contract(latestEntry.publicFactory, PublicPresaleFactoryABI.abi, provider);
+      const factoryAbi = Array.isArray(allAbis.PublicPresaleFactory) 
+        ? allAbis.PublicPresaleFactory 
+        : (allAbis.PublicPresaleFactory?.abi || allAbis.PublicPresaleFactory);
+      const factory = new Contract(latestEntry.publicFactory, factoryAbi, provider);
       const presales = await factory.getPresales();
 
       const enriched = await Promise.all(

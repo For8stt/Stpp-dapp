@@ -2,11 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { BrowserProvider, Contract } from "ethers";
 
 import deployments from "../abi/data/stppDeployments.json";
-import PresaleManagerABI from "../abi/PresaleManager.json";
-import PublicPresaleFactoryABI from "../abi/PublicPresaleFactory.json";
-import AuctionFactoryABI from "../abi/AuctionFactory.json";
-import LBPOracleABI from "../abi/LBPOracle.json";
-import UpkeepControllerABI from "../abi/UpkeepController.json";
+import allAbis from "../abi/allAbis.json";
 
 import { ensureProvider } from "../services/web3/provider";
 import { ensureSigner } from "../services/web3/signer";
@@ -67,7 +63,7 @@ const ADDRESS_ALIASES = {
   publicFactory: ["publicPresaleFactory", "publicFactory"],
   auctionFactory: ["auctionFactory"],
   upkeepController: ["upkeepController"],
-  lbpOracle: ["lbpOracle"]
+  lbpOracle: ["lbpOracle", "feeOracle"],
 };
 
 const resolveRegistry = (addressBook, chainId) => {
@@ -89,11 +85,11 @@ const resolveRegistry = (addressBook, chainId) => {
 };
 
 const infoCards = [
-  { name: "PresaleManager Impl", keys: ADDRESS_ALIASES.managerImpl, abi: PresaleManagerABI },
-  { name: "PublicPresaleFactory", keys: ADDRESS_ALIASES.publicFactory, abi: PublicPresaleFactoryABI },
-  { name: "AuctionFactory", keys: ADDRESS_ALIASES.auctionFactory, abi: AuctionFactoryABI },
-  { name: "UpkeepController", keys: ADDRESS_ALIASES.upkeepController, abi: UpkeepControllerABI },
-  { name: "LBPOracle", keys: ADDRESS_ALIASES.lbpOracle, abi: LBPOracleABI }
+  { name: "PresaleManager Impl", keys: ADDRESS_ALIASES.managerImpl, abi: allAbis.PresaleManager },
+  { name: "PublicPresaleFactory", keys: ADDRESS_ALIASES.publicFactory, abi: allAbis.PublicPresaleFactory },
+  { name: "AuctionFactory", keys: ADDRESS_ALIASES.auctionFactory, abi: allAbis.AuctionFactory },
+  { name: "UpkeepController", keys: ADDRESS_ALIASES.upkeepController, abi: allAbis.UpkeepController },
+  { name: "LBPOracle", keys: ADDRESS_ALIASES.lbpOracle, abi: allAbis.FeeOracleMock }
 ];
 
 const createPresaleEntry = (event) => {
@@ -130,7 +126,8 @@ const fetchManagerDetails = async (managerAddress) => {
   }
 
   try {
-    const manager = new Contract(managerAddress, PresaleManagerABI.abi, provider);
+    const abi = Array.isArray(allAbis.PresaleManager) ? allAbis.PresaleManager : (allAbis.PresaleManager?.abi || allAbis.PresaleManager);
+    const manager = new Contract(managerAddress, abi, provider);
     const owner = await manager.owner();
     let info = null;
     if (typeof manager.getLatestPresaleInfo === "function") {
@@ -245,7 +242,8 @@ const PresaleDeploy = () => {
       throw new Error("PublicPresaleFactory address not available");
     }
     const signer = await ensureSigner();
-    return new Contract(factoryAddress, PublicPresaleFactoryABI.abi, signer);
+    const abi = Array.isArray(allAbis.PublicPresaleFactory) ? allAbis.PublicPresaleFactory : (allAbis.PublicPresaleFactory?.abi || allAbis.PublicPresaleFactory);
+    return new Contract(factoryAddress, abi, signer);
   }, [factoryAddress]);
 
   const loadPresales = useCallback(async () => {

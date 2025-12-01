@@ -1,11 +1,6 @@
 import { ethers } from "ethers";
 
-import AuctionFactoryABI from "../../abi/AuctionFactory.json";
-import DutchAuctionABI from "../../abi/DutchAuction.json";
-import LBPOracleABI from "../../abi/LBPOracle.json";
-import PresaleManagerABI from "../../abi/PresaleManager.json";
-import PublicPresaleFactoryABI from "../../abi/PublicPresaleFactory.json";
-import UpkeepControllerABI from "../../abi/UpkeepController.json";
+import allAbis from "../../abi/allAbis.json";
 import fallbackAddresses from "../../abi/addresses.json";
 import { fetchAddressBook } from "./addressBook";
 
@@ -14,7 +9,7 @@ const ADDRESS_ALIASES = {
   PublicPresaleFactory: ["PublicPresaleFactory", "publicPresaleFactory"],
   AuctionFactory: ["AuctionFactory", "auctionFactory"],
   UpkeepController: ["UpkeepController", "upkeepController"],
-  LBPOracle: ["LBPOracle", "lbpOracle"],
+  LBPOracle: ["LBPOracle", "lbpOracle", "feeOracle"],
 };
 
 const resolveRegistry = (addresses, chainId) => {
@@ -44,13 +39,14 @@ const resolveAddress = (registry, name) => {
   return undefined;
 };
 
+// Map contract names to their keys in allAbis.json
 const ABI_MAP = {
-  AuctionFactory: AuctionFactoryABI,
-  DutchAuction: DutchAuctionABI,
-  LBPOracle: LBPOracleABI,
-  PresaleManager: PresaleManagerABI,
-  PublicPresaleFactory: PublicPresaleFactoryABI,
-  UpkeepController: UpkeepControllerABI,
+  AuctionFactory: allAbis.AuctionFactory,
+  DutchAuction: allAbis.DutchAuction,
+  LBPOracle: allAbis.FeeOracleMock, // LBPOracle is stored as FeeOracleMock in allAbis.json
+  PresaleManager: allAbis.PresaleManager,
+  PublicPresaleFactory: allAbis.PublicPresaleFactory,
+  UpkeepController: allAbis.UpkeepController,
 };
 
 /**
@@ -73,7 +69,7 @@ export const loadContract = async (name, addressOverride = null, options = {}) =
     throw new Error(`ABI for ${name} is not registered in loadContract.`);
   }
   
-  const abi = abiEntry.abi ?? abiEntry;
+  const abi = Array.isArray(abiEntry) ? abiEntry : (abiEntry.abi || abiEntry);
   const derivedAddress = resolveAddress(registry, name);
   const address = addressOverride || derivedAddress;
   
