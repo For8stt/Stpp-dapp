@@ -8,55 +8,8 @@ import { ensureProvider } from "../services/web3/provider";
 import { ensureSigner } from "../services/web3/signer";
 import { getNetworkName, requestAccount, subscribeWalletEvents } from "../services/web3/wallet";
 import { useAddressBook } from "../services/web3/addressBook";
-import { handleTxError, showTxSuccess, showTxInfo } from "../utils/txErrorHandler";
-import PresaleCreateForm from "../components/presale/PresaleCreateForm";
 import PresaleInfoCard from "../components/presale/PresaleInfoCard";
 import PresaleList from "../components/presale/PresaleList";
-
-const now = Math.floor(Date.now() / 1000);
-const defaultAuctionInput = JSON.stringify(
-  {
-    saleToken: "0x0000000000000000000000000000000000000000",
-    treasury: "0x0000000000000000000000000000000000000000",
-    startTime: now + 3600,
-    commitDuration: 3600,
-    revealDuration: 3600,
-    perAddressCap: "0",
-    softCap: "0",
-    tokensForSale: "0",
-    bonusReserve: "0",
-    earlyBonusWindow: 0,
-    earlyBonusPct: 0,
-    nonRevealPenaltyBps: 0,
-    lbpStableShareBps: 0,
-    thresholdLow: 0,
-    maxDecayMultiplier: 0,
-    minCommitDuration: 0,
-    demandCheckTime: now + 7200,
-    vestingStart: now + 10800,
-    vestingDuration: 604800,
-    merkleRoot: "0x0000000000000000000000000000000000000000000000000000000000000000",
-    priceTicks: ["1000000000000000000"]
-  },
-  null,
-  2
-);
-
-const defaultLbpConfig = JSON.stringify(
-  {
-    startTime: now + 14400,
-    endTime: now + 17400,
-    poolStartWeightToken: "800000000000000000",
-    poolEndWeightToken: "200000000000000000",
-    poolSwapFee: "3000000000000000",
-    vestingStartTime: now + 20000,
-    vestingCliffDuration: 0,
-    vestingFinalDuration: 604800,
-    vestingCliffPercentBP: 0
-  },
-  null,
-  2
-);
 
 const ADDRESS_ALIASES = {
   managerImpl: ["presaleManagerImpl", "managerImpl"],
@@ -160,15 +113,11 @@ const PresaleDeploy = () => {
   const [walletAddress, setWalletAddress] = useState("");
   const [networkName, setNetworkName] = useState("");
   const [chainId, setChainId] = useState(null);
-  const [auctionInputJSON, setAuctionInputJSON] = useState(defaultAuctionInput);
-  const [lbpConfigJSON, setLbpConfigJSON] = useState(defaultLbpConfig);
   const [presales, setPresales] = useState([]);
   const [userPresales, setUserPresales] = useState([]);
-  const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [initializing, setInitializing] = useState(true);
-  const [creating, setCreating] = useState(false);
   const resolvedRegistry = useMemo(() => resolveRegistry(addressBook, chainId), [addressBook, chainId]);
   const resolvedRecords = useMemo(() => {
     const records = [];
@@ -332,63 +281,6 @@ const PresaleDeploy = () => {
     };
   }, [factoryAddress, getFactoryContract, loadPresales]);
 
-  const handleCreatePresale = async () => {
-    if (!factoryAvailable) {
-      setErrorMessage("PublicPresaleFactory address not available");
-      return;
-    }
-    setStatusMessage("");
-    setErrorMessage("");
-
-    let auctionPayload;
-    let lbpPayload;
-    try {
-      auctionPayload = JSON.parse(auctionInputJSON);
-      lbpPayload = JSON.parse(lbpConfigJSON);
-    } catch (error) {
-      setErrorMessage("Invalid JSON payloads. Please double-check the inputs.");
-      return;
-    }
-
-    const isZeroAddress = (value) =>
-      typeof value === "string" && value.toLowerCase() === "0x0000000000000000000000000000000000000000";
-    const isValidAddress = (value) => typeof value === "string" && /^0x[a-fA-F0-9]{40}$/.test(value);
-
-    if (!isValidAddress(auctionPayload.saleToken) || isZeroAddress(auctionPayload.saleToken)) {
-      setErrorMessage("saleToken must be a valid ERC20 address.");
-      return;
-    }
-
-    if (!isValidAddress(auctionPayload.treasury) || isZeroAddress(auctionPayload.treasury)) {
-      setErrorMessage("treasury must be a valid address.");
-      return;
-    }
-
-    if (!Array.isArray(auctionPayload.priceTicks) || auctionPayload.priceTicks.length === 0) {
-      setErrorMessage("priceTicks array cannot be empty.");
-      return;
-    }
-
-    setCreating(true);
-    try {
-      const factory = await getFactoryContract();
-      showTxInfo("Please confirm the transaction in your wallet", { autoClose: false });
-      const tx = await factory.createPresale(auctionPayload, lbpPayload);
-      showTxInfo("Transaction submitted to the network", { autoClose: 3000 });
-      setStatusMessage("Transaction submitted, waiting for confirmation…");
-      await tx.wait();
-      showTxSuccess("Presale created successfully!", { autoClose: 3000 });
-      setStatusMessage("Presale created successfully!");
-      await loadPresales();
-    } catch (error) {
-      console.error(error);
-      handleTxError(error, "Failed to create presale");
-      setErrorMessage(error?.message || "Failed to create presale");
-    } finally {
-      setCreating(false);
-    }
-  };
-
   if (!latestEntry) {
     return (
       <section className="page">
@@ -427,25 +319,6 @@ const PresaleDeploy = () => {
             <PresaleInfoCard key={card.name} title={card.name} address={resolveAddressValue(card.keys)} />
           ))}
         </div>
-      </div>
-
-      <div className="card">
-        <h2>Create New Presale</h2>
-        {!factoryAvailable ? (
-          <p style={{ color: "#f87171" }}>PublicPresaleFactory address is not yet available.</p>
-        ) : (
-          <PresaleCreateForm
-            auctionJSON={auctionInputJSON}
-            lbpJSON={lbpConfigJSON}
-            onAuctionChange={setAuctionInputJSON}
-            onLbpChange={setLbpConfigJSON}
-            onSubmit={handleCreatePresale}
-            submitting={creating}
-            disabled={!factoryAvailable}
-          />
-        )}
-        {statusMessage && <p style={{ color: "#14b8a6", marginTop: "0.75rem" }}>{statusMessage}</p>}
-        {errorMessage && <p style={{ color: "#f87171", marginTop: "0.5rem" }}>{errorMessage}</p>}
       </div>
 
       <div className="card">

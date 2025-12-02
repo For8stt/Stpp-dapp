@@ -1,0 +1,62 @@
+.finalizedPanel {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: 1.5rem;
+  padding: 2rem;
+  margin-bottom: 2rem;
+}
+
+.finalizedTitle {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: rgb(110, 231, 183);
+  margin-bottom: 1.5rem;
+}
+
+.finalizedGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+}
+
+.finalizedItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.finalizedLabel {
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.7);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.finalizedValue {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: rgb(110, 231, 183);
+  font-family: 'Courier New', monospace;
+}
+
+.actionButton {
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: none;
+  width: 100%;
+}
+
+.actionButton.indigo {
+  background: linear-gradient(135deg, rgb(99, 102, 241), rgb(129, 140, 248));
+  color: white;
+}
+
+.actionButton.indigo:hover {
+  background: linear-gradient(135deg, rgb(129, 140, 248), rgb(99, 102, 241));
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px rgba(99, 102, 241, 0.3);
+}
+

@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ethers } from "ethers";
 
-import TxStatusIndicator from "../components/common/TxStatusIndicator";
 import AuctionControls from "../components/presale/AuctionControls";
 import CreateAuctionForm from "../components/presale/CreateAuctionForm";
 import loadContract from "../services/web3/loadContract";
@@ -332,12 +331,6 @@ const PresalePage = ({ account }) => {
         </>
       )}
 
-      <TxStatusIndicator
-        status={txStatus?.status}
-        message={txStatus?.message}
-        hash={txStatus?.hash}
-        onClear={() => setTxStatus(null)}
-      />
     </section>
   );
 };

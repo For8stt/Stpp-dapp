@@ -15,10 +15,10 @@ const toDateInput = (secondsFromNow) =>
 const getInitialValues = () => ({
   saleToken: "0x5FbDB2315678afecb367f032d93F642f64180aa3",
   treasury: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-  tokensForSale: "1000000",
-  bonusReserve: "50000",
-  perAddressCap: "10000",
-  softCap: "500000",
+  tokensForSale: "100000",
+  bonusReserve: "5000",
+  perAddressCap: "1000",
+  softCap: "50000",
   startTime: toDateInput(3600),
   commitDuration: "3600",
   revealDuration: "3600",
@@ -30,7 +30,7 @@ const getInitialValues = () => ({
   thresholdLow: "0",
   maxDecayMultiplier: "1",
   minCommitDuration: "600",
-  merkleRoot: ethers.ZeroHash,
+  merkleRoot: "",
   vestingStart: toDateInput(86400),
   vestingDuration: "2592000",
   priceTicks: "1,0.9,0.8",
@@ -104,7 +104,9 @@ const CreatePresale = ({ account, onConnect }) => {
       demandCheckTime,
       vestingStart: parseTimestamp(formValues.vestingStart),
       vestingDuration: Number(formValues.vestingDuration || 0),
-      merkleRoot: formValues.merkleRoot || ethers.ZeroHash,
+      merkleRoot: formValues.merkleRoot && formValues.merkleRoot.trim() !== "" 
+        ? formValues.merkleRoot.trim() 
+        : ethers.ZeroHash,
       priceTicks: priceTicks.map((tick) => ethers.parseEther(tick || "0").toString()),
     };
   };

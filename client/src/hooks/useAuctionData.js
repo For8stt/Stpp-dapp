@@ -1,0 +1,215 @@
+import { useState, useCallback, useEffect } from "react";
+import { ethers } from "ethers";
+import { Contract } from "ethers";
+import { safeContractCall } from "../utils/contractUtils";
+import { ensureProvider } from "../services/web3/provider";
+import allAbis from "../abi/allAbis.json";
+
+const DEFAULT_TOKEN_SYMBOL = "TOKEN";
+
+/**
+ * Fetches auction data from contract
+ */
+export const useAuctionData = (auctionContract) => {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const fetchTokenSymbol = useCallback(async (tokenAddress) => {
+    if (!tokenAddress || tokenAddress === ethers.ZeroAddress) {
+      return DEFAULT_TOKEN_SYMBOL;
+    }
+
+    try {
+      const tokenAbi = allAbis.TestToken || [];
+      if (tokenAbi.length === 0) return DEFAULT_TOKEN_SYMBOL;
+
+      const provider = await ensureProvider();
+      const tokenContract = new Contract(tokenAddress, tokenAbi, provider);
+      return await tokenContract.symbol().catch(() => DEFAULT_TOKEN_SYMBOL);
+    } catch {
+      return DEFAULT_TOKEN_SYMBOL;
+    }
+  }, []);
+
+  const fetchPriceTicks = useCallback(async (contract, tickLength) => {
+    const ticks = [];
+    for (let i = 0; i < tickLength; i++) {
+      const tick = await safeContractCall(() => contract.priceTicks(i), 0n);
+      if (tick === null) break; // Stop on error
+      ticks.push(tick);
+    }
+    return ticks;
+  }, []);
+
+  const fetchPriceBuckets = useCallback(async (contract, ticks) => {
+    const buckets = [];
+    for (let i = 0; i < ticks.length; i++) {
+      const total = await safeContractCall(() => contract.priceBucketTotals(i), 0n);
+      buckets.push({ index: i, price: ticks[i], total: total || 0n });
+    }
+    return buckets;
+  }, []);
+
+  const fetchData = useCallback(async () => {
+    if (!auctionContract) {
+      setData(null);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Check if initialized
+      const initialized = await safeContractCall(
+        () => auctionContract.initialized(),
+        false
+      );
+
+      if (!initialized) {
+        console.log("Auction contract is not initialized yet");
+        setData(null);
+        setError("Auction contract is not initialized yet. Please wait for initialization.");
+        setLoading(false);
+        return;
+      }
+
+      // Fetch all contract data in parallel
+      const [
+        startTime,
+        commitEndTime,
+        revealEndTime,
+        tokensForSale,
+        bonusReserve,
+        bonusReserveRemaining,
+        perAddressCap,
+        softCap,
+        treasury,
+        saleTokenAddr,
+        totalDepositCommitted,
+        totalQtyRevealed,
+        totalDepositsRevealed,
+        finalized,
+        successful,
+        clearingPrice,
+        clearingTickIndex,
+        tokensSold,
+        totalRaised,
+        ethForTreasury,
+        decayMultiplier,
+        dynamicAdjustmentCount,
+        thresholdLow,
+        maxDecayMultiplier,
+        priceTicksLength,
+        lbpLaunched,
+        lbpTokenRecipient,
+        lbpStableRecipient,
+        merkleRoot,
+      ] = await Promise.all([
+        safeContractCall(() => auctionContract.startTime(), 0n),
+        safeContractCall(() => auctionContract.commitEndTime(), 0n),
+        safeContractCall(() => auctionContract.revealEndTime(), 0n),
+        safeContractCall(() => auctionContract.tokensForSale(), 0n),
+        safeContractCall(() => auctionContract.bonusReserve(), 0n),
+        safeContractCall(() => auctionContract.bonusReserveRemaining(), 0n),
+        safeContractCall(() => auctionContract.perAddressCap(), 0n),
+        safeContractCall(() => auctionContract.softCap(), 0n),
+        safeContractCall(() => auctionContract.treasury(), ethers.ZeroAddress),
+        safeContractCall(() => auctionContract.saleToken(), ethers.ZeroAddress),
+        safeContractCall(() => auctionContract.totalDepositCommitted(), 0n),
+        safeContractCall(() => auctionContract.totalQtyRevealed(), 0n),
+        safeContractCall(() => auctionContract.totalDepositsRevealed(), 0n),
+        safeContractCall(() => auctionContract.finalized(), false),
+        safeContractCall(() => auctionContract.successful(), false),
+        safeContractCall(() => auctionContract.clearingPrice(), 0n),
+        safeContractCall(() => auctionContract.clearingTickIndex(), 0n),
+        safeContractCall(() => auctionContract.tokensSold(), 0n),
+        safeContractCall(() => auctionContract.totalRaised(), 0n),
+        safeContractCall(() => auctionContract.ethForTreasury(), 0n),
+        safeContractCall(() => auctionContract.decayMultiplier(), 0n),
+        safeContractCall(() => auctionContract.dynamicAdjustmentCount(), 0n),
+        safeContractCall(() => auctionContract.thresholdLow(), 0n),
+        safeContractCall(() => auctionContract.maxDecayMultiplier(), 0n),
+        safeContractCall(() => auctionContract.priceTicksLength(), 0n),
+        safeContractCall(() => auctionContract.lbpLaunched(), false),
+        safeContractCall(
+          () => auctionContract.lbpTokenRecipient?.() || Promise.resolve(ethers.ZeroAddress),
+          ethers.ZeroAddress
+        ),
+        safeContractCall(
+          () => auctionContract.lbpStableRecipient?.() || Promise.resolve(ethers.ZeroAddress),
+          ethers.ZeroAddress
+        ),
+        safeContractCall(() => auctionContract.merkleRoot(), ethers.ZeroHash),
+      ]);
+
+      // Fetch price ticks and buckets
+      const tickLength = Number(priceTicksLength);
+      const ticks = tickLength > 0 ? await fetchPriceTicks(auctionContract, tickLength) : [];
+      const buckets = ticks.length > 0 ? await fetchPriceBuckets(auctionContract, ticks) : [];
+
+      // Fetch token symbol
+      const tokenSymbol = await fetchTokenSymbol(saleTokenAddr);
+
+      setData({
+        startTime: Number(startTime),
+        commitEndTime: Number(commitEndTime),
+        revealEndTime: Number(revealEndTime),
+        tokensForSale,
+        bonusReserve,
+        bonusReserveRemaining,
+        perAddressCap,
+        softCap,
+        treasury,
+        saleToken: saleTokenAddr,
+        tokenSymbol,
+        totalDepositCommitted,
+        totalQtyRevealed,
+        totalDepositsRevealed,
+        finalized,
+        successful,
+        clearingPrice,
+        clearingTickIndex: Number(clearingTickIndex),
+        tokensSold,
+        totalRaised,
+        ethForTreasury,
+        decayMultiplier,
+        dynamicAdjustmentCount: Number(dynamicAdjustmentCount),
+        thresholdLow,
+        maxDecayMultiplier,
+        priceTicks: ticks,
+        priceBuckets: buckets,
+        lbpLaunched,
+        lbpTokenRecipient,
+        lbpStableRecipient,
+        merkleRoot: merkleRoot || ethers.ZeroHash,
+      });
+    } catch (err) {
+      console.error("Failed to fetch auction data:", err);
+      setError(err.message || "Failed to load auction data");
+    } finally {
+      setLoading(false);
+    }
+  }, [auctionContract, fetchPriceTicks, fetchPriceBuckets, fetchTokenSymbol]);
+
+  // Automatically fetch data when auctionContract becomes available
+  useEffect(() => {
+    if (auctionContract) {
+      fetchData();
+    } else {
+      setData(null);
+      setError(null);
+      setLoading(false);
+    }
+  }, [auctionContract, fetchData]);
+
+  return {
+    data,
+    loading,
+    error,
+    fetchData,
+    refetch: fetchData,
+  };
+};
+

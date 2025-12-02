@@ -3,13 +3,11 @@ import { Link } from "react-router-dom";
 import styles from "./css/PresaleCard.module.css";
 
 const PresaleCard = ({ presale }) => {
-  // Helper function to shorten address
   const shortenAddress = (address) => {
     if (!address) return "—";
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
   };
 
-  // Status configuration
   const statusConfig = {
     finalized: {
       color: 'green',
@@ -117,16 +115,6 @@ const PresaleCard = ({ presale }) => {
 
         {/* Action buttons */}
         <div className={styles.actions}>
-          <Link
-            to={`/presale/${presale.manager}`}
-            className={`${styles.actionButton} ${styles.primary}`}
-          >
-            <div className={styles.actionIcon}>
-              <div className={styles.iconEye}></div>
-            </div>
-            <span>View Manager</span>
-          </Link>
-
           {presale.auction && (
             <Link
               to={`/presale/${presale.manager}/auction`}

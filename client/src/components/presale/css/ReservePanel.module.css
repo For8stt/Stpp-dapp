@@ -1,0 +1,63 @@
+.reservePanel {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 1.5rem;
+  padding: 2rem;
+  margin-bottom: 2rem;
+}
+
+.reserveTitle {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: white;
+  margin-bottom: 1.5rem;
+}
+
+.reserveGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+}
+
+.reserveItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.reserveLabel {
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.7);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.reserveValue {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: white;
+  font-family: 'Courier New', monospace;
+}
+
+.actionButton {
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: none;
+  width: 100%;
+}
+
+.actionButton.amber {
+  background: rgba(245, 158, 11, 0.2);
+  color: rgb(251, 191, 36);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.actionButton.amber:hover {
+  background: rgba(245, 158, 11, 0.3);
+  border-color: rgba(245, 158, 11, 0.6);
+  transform: translateY(-2px);
+}
+
