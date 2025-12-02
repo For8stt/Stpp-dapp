@@ -5,7 +5,7 @@ import { ethers } from "ethers";
 import CreatePresaleForm from "../components/presale/CreatePresaleForm";
 import loadContract from "../services/web3/loadContract";
 import { handleTxError, showTxSuccess, showTxInfo } from "../utils/txErrorHandler";
-import styles from "./CreatePresale.module.css";
+import styles from "./css/CreatePresale.module.css";
 
 const STORAGE_KEY = "sttp:recent-presales";
 const now = () => Math.floor(Date.now() / 1000);

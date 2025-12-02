@@ -1,5 +1,5 @@
 import React from "react";
-import styles from "./CreatePresaleForm.module.css";
+import styles from "./css/CreatePresaleForm.module.css";
 
 const Section = ({ title, description, children }) => (
   <div className="section-card">

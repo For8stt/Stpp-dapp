@@ -1,0 +1,563 @@
+/* Price Decay Chart Styles */
+
+.container {
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.7) 0%, rgba(30, 41, 59, 0.7) 100%);
+  padding: 1.5rem;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
+}
+
+.header {
+  margin-bottom: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+@media (min-width: 640px) {
+  .header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.titleSection h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: white;
+  margin-bottom: 0.25rem;
+}
+
+.phaseIndicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.phaseDot {
+  height: 0.5rem;
+  width: 0.5rem;
+  border-radius: 50%;
+}
+
+.phaseDot.commit {
+  background-color: rgb(96, 165, 250);
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.phaseDot.reveal {
+  background-color: rgb(196, 181, 253);
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.phaseDot.finalized {
+  background-color: rgb(52, 211, 153);
+}
+
+.phaseDot.notStarted {
+  background-color: rgb(148, 163, 184);
+}
+
+.phaseText {
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.currentPriceCard {
+  text-align: right;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(37, 99, 235, 0.2) 100%);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  border: 2px solid rgba(59, 130, 246, 0.3);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+}
+
+.currentPriceLabel {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 0.25rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.currentPriceValue {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: rgb(147, 197, 253);
+}
+
+.timeRemaining {
+  font-size: 0.75rem;
+  color: rgba(96, 165, 250, 0.8);
+  margin-top: 0.25rem;
+}
+
+/* Chart Container */
+.chartContainer {
+  position: relative;
+  height: 24rem;
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.6) 0%, rgba(30, 41, 59, 0.4) 50%, rgba(15, 23, 42, 0.6) 100%);
+  border-radius: 0.75rem;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  padding: 1.5rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+.chartSvg {
+  width: 100%;
+  height: 100%;
+}
+
+.axisLabel {
+  position: absolute;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 600;
+}
+
+.axisLabelY {
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%) rotate(-90deg);
+  transform-origin: center;
+}
+
+.axisLabelX {
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%) translateY(2rem);
+}
+
+/* Market Status Indicators */
+.statusGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+
+@media (min-width: 768px) {
+  .statusGrid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.statusCard {
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.6) 0%, rgba(15, 23, 42, 0.6) 100%);
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.statusCard:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 15px 20px -3px rgba(0, 0, 0, 0.4);
+}
+
+.statusCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.statusCardTitle {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.statusBadge {
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.statusBadge.reached {
+  background-color: rgba(16, 185, 129, 0.2);
+  color: rgb(110, 231, 183);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+}
+
+.statusBadge.inProgress {
+  background-color: rgba(59, 130, 246, 0.2);
+  color: rgb(147, 197, 253);
+  border: 1px solid rgba(59, 130, 246, 0.4);
+}
+
+.softCapContent {
+  margin-bottom: 0.5rem;
+}
+
+.softCapAmounts {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 0.25rem;
+}
+
+.softCapCurrent {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: white;
+}
+
+.softCapTotal {
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.softCapRemaining {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.progressBarContainer {
+  width: 100%;
+  background-color: rgba(51, 65, 85, 0.5);
+  border-radius: 9999px;
+  height: 1rem;
+  overflow: hidden;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.progressBar {
+  height: 100%;
+  border-radius: 9999px;
+  transition: width 0.5s ease;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+}
+
+.progressBar.reached {
+  background: linear-gradient(to right, rgb(16, 185, 129), rgb(5, 150, 105));
+  box-shadow: 0 10px 15px -3px rgba(16, 185, 129, 0.5);
+}
+
+.progressBar.inProgress {
+  background: linear-gradient(to right, rgb(59, 130, 246), rgb(37, 99, 235));
+  box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.5);
+}
+
+.progressFooter {
+  margin-top: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.progressText {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.progressPercent {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgb(96, 165, 250);
+}
+
+/* Price Range Card */
+.priceRangeContent {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.priceRangeItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+  background-color: rgba(15, 23, 42, 0.4);
+}
+
+.priceRangeItem.range {
+  background-color: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  margin-top: 0.5rem;
+}
+
+.priceRangeLabel {
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.priceRangeValue {
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+
+.priceRangeValue.high {
+  color: rgb(248, 113, 113);
+}
+
+.priceRangeValue.low {
+  color: rgb(74, 222, 128);
+}
+
+.priceRangeValue.range {
+  color: rgb(96, 165, 250);
+}
+
+/* Time Status Card */
+.timeStatusContent {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.timeStatusItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+  background-color: rgba(15, 23, 42, 0.4);
+}
+
+.timeStatusItem.finalized {
+  background-color: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.timeStatusLabel {
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.timeStatusValue {
+  font-size: 1rem;
+  font-weight: 700;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+}
+
+.timeStatusValue.commit {
+  color: rgb(147, 197, 253);
+  background-color: rgba(59, 130, 246, 0.2);
+  border: 1px solid rgba(59, 130, 246, 0.4);
+}
+
+.timeStatusValue.reveal {
+  color: rgb(196, 181, 253);
+  background-color: rgba(147, 51, 234, 0.2);
+  border: 1px solid rgba(147, 51, 234, 0.4);
+}
+
+.timeStatusValue.finalized {
+  color: rgb(110, 231, 183);
+  background-color: rgba(16, 185, 129, 0.2);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+}
+
+.timeStatusValue.notStarted {
+  color: rgb(148, 163, 184);
+  background-color: rgba(71, 85, 105, 0.2);
+  border: 1px solid rgba(71, 85, 105, 0.4);
+}
+
+.timeStatusValue.white {
+  color: white;
+}
+
+.timeStatusValue.green {
+  color: rgb(52, 211, 153);
+}
+
+/* Animations */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fadeIn {
+  animation: fadeIn 0.5s ease-out;
+}
+
+/* Price line animation */
+@keyframes drawLine {
+  from {
+    stroke-dashoffset: 2000;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes pricePulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.05);
+  }
+}
+
+.priceLineAnimated {
+  animation: drawLine 2s ease-out forwards;
+}
+
+.priceMarkerAnimated {
+  animation: pricePulse 2s ease-in-out infinite;
+}
+
+/* Additional Info Tooltips */
+.infoTooltip {
+  position: relative;
+  display: inline-block;
+}
+
+.infoTooltip:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.5rem;
+  background-color: rgba(15, 23, 42, 0.95);
+  color: white;
+  font-size: 0.75rem;
+  border-radius: 0.375rem;
+  white-space: nowrap;
+  z-index: 10;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+}
+
+/* Chart Legend */
+.chartLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.5);
+  border-radius: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  margin-bottom: 1rem;
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.legendLine {
+  width: 30px;
+  height: 3px;
+  border-radius: 2px;
+}
+
+.legendLine.priceLine {
+  background: linear-gradient(to right, rgb(59, 130, 246), rgb(37, 99, 235));
+}
+
+.legendLine.currentLine {
+  background: rgb(34, 197, 94);
+  height: 2px;
+  border-style: dashed;
+  border-width: 2px;
+  border-color: rgb(34, 197, 94);
+  background: transparent;
+}
+
+.legendLine.commitLine {
+  background: rgb(59, 130, 246);
+  height: 2px;
+  border-style: dashed;
+  border-width: 2px;
+  border-color: rgb(59, 130, 246);
+  background: transparent;
+}
+
+.legendLine.revealLine {
+  background: rgb(147, 51, 234);
+  height: 2px;
+  border-style: dashed;
+  border-width: 2px;
+  border-color: rgb(147, 51, 234);
+  background: transparent;
+}
+
+.legendDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid white;
+}
+
+.legendDot.current {
+  background: rgb(34, 197, 94);
+}
+
+.legendDot.commit {
+  background: rgb(59, 130, 246);
+}
+
+.legendDot.reveal {
+  background: rgb(147, 51, 234);
+}
+
+.chartExplanation {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: rgba(59, 130, 246, 0.1);
+  border-left: 3px solid rgb(59, 130, 246);
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1.6;
+}
+
+.chartExplanationTitle {
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: rgb(147, 197, 253);
+}
+
+.chartExplanationList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.chartExplanationList li {
+  margin-bottom: 0.5rem;
+  padding-left: 1.5rem;
+  position: relative;
+}
+
+.chartExplanationList li::before {
+  content: "→";
+  position: absolute;
+  left: 0;
+  color: rgb(59, 130, 246);
+  font-weight: bold;
+}
+

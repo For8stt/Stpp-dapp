@@ -1,6 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import styles from "./PresaleCard.module.css";
+import styles from "./css/PresaleCard.module.css";
 
 const PresaleCard = ({ presale }) => {
   // Helper function to shorten address

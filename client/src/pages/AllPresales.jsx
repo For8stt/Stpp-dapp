@@ -4,7 +4,7 @@ import { BrowserProvider, Contract } from "ethers";
 import PresaleCard from "../components/presale/PresaleCard";
 import deployments from "../abi/data/stppDeployments.json";
 import allAbis from "../abi/allAbis.json";
-import styles from "./AllPresales.module.css";
+import styles from "./css/AllPresales.module.css";
 
 const AllPresales = () => {
   const [items, setItems] = useState([]);
