@@ -62,7 +62,7 @@ const AppRouter = ({
             <Route path="/deploy" element={<PresaleDeploy />} />
             <Route path="/create" element={<CreatePresale account={account} onConnect={onConnect} />} />
             <Route path="/all" element={<AllPresales />} />
-            <Route path="/presale/:address" element={<PresalePage account={account} />} />
+            <Route path="/manager/:address" element={<PresalePage account={account} />} />
             <Route path="/presale/:address/auction" element={<AuctionView />} />
           </Routes>
         )}

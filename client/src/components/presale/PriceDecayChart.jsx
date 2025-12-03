@@ -701,7 +701,7 @@ const PriceDecayChart = ({
                     fontWeight="bold"
                     textAnchor="middle"
                   >
-                    ✓ Clearing: {formatEth(clearingPrice)} ETH
+                    Clearing: {formatEth(clearingPrice)} ETH
                   </text>
                 </g>
               </>
@@ -776,7 +776,7 @@ const PriceDecayChart = ({
           <div className={styles.statusCardHeader}>
             <p className={styles.statusCardTitle}>Soft Cap Progress</p>
             <div className={`${styles.statusBadge} ${softCapProgress >= 1 ? styles.reached : styles.inProgress}`}>
-              {softCapProgress >= 1 ? "✓ REACHED" : "IN PROGRESS"}
+              {softCapProgress >= 1 ? "REACHED" : "IN PROGRESS"}
             </div>
           </div>
           <div className={styles.softCapContent}>
@@ -804,7 +804,7 @@ const PriceDecayChart = ({
           <div className={styles.progressFooter}>
             <p className={styles.progressText}>
               {softCapProgress >= 1 
-                ? "✓ Soft cap reached" 
+                ? "Soft cap reached"
                 : `${Math.round(softCapProgress * 100)}% complete`
               }
             </p>
@@ -885,7 +885,7 @@ const PriceDecayChart = ({
               <div className={`${styles.timeStatusItem} ${styles.finalized}`}>
                 <span className={styles.timeStatusLabel}>Status:</span>
                 <span className={`${styles.timeStatusValue} ${styles.green}`}>
-                  ✓ Finalized
+                  Finalized
                 </span>
               </div>
             )}

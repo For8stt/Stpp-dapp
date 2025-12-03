@@ -11,7 +11,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import { ethers } from "ethers";
 
 // Components
@@ -26,6 +26,7 @@ import PriceBucketPanel from "../components/presale/PriceBucketPanel";
 import AllocationPanel from "../components/presale/AllocationPanel";
 import FinalizedPanel from "../components/presale/FinalizedPanel";
 import EventsPanel from "../components/presale/EventsPanel";
+import DeveloperTimeControls from "../components/presale/DeveloperTimeControls";
 
 // Hooks
 import { useAuctionContracts } from "../hooks/useAuctionContracts";
@@ -34,6 +35,7 @@ import { useUserAuctionData } from "../hooks/useUserAuctionData";
 import { useAuctionEvents } from "../hooks/useAuctionEvents";
 import { useAccount } from "../hooks/useAccount";
 import { useTransaction } from "../hooks/useTransaction";
+import { useChainId } from "wagmi";
 
 // Utils & Constants
 import { getPhase, getTimeUntil } from "../utils/auctionUtils";
@@ -46,6 +48,7 @@ import styles from "./css/AuctionView.module.css";
 
 const AuctionView = () => {
   const { address } = useParams();
+  const chainId = useChainId();
 
   // ============ ACCOUNT & CONTRACTS ============
   const { account } = useAccount();
@@ -78,6 +81,7 @@ const AuctionView = () => {
   // ============ UI STATE ============
   const [currentTime, setCurrentTime] = useState(Math.floor(Date.now() / 1000));
   const [refreshing, setRefreshing] = useState(false);
+  const [isOwner, setIsOwner] = useState(false);
 
   // Form state
   const [commitForm, setCommitForm] = useState({
@@ -117,10 +121,23 @@ const AuctionView = () => {
     return null;
   }, [phase, auctionData]);
 
-  const isOwner = useMemo(() => {
-    // TODO: Fetch from contract if needed
-    return false;
-  }, []);
+  // Fetch owner status from manager contract
+  useEffect(() => {
+    const fetchOwner = async () => {
+      if (!managerContract || !account) {
+        setIsOwner(false);
+        return;
+      }
+      try {
+        const ownerAddress = await managerContract.owner();
+        setIsOwner(ownerAddress?.toLowerCase() === account?.toLowerCase());
+      } catch (error) {
+        console.warn("Could not fetch owner:", error);
+        setIsOwner(false);
+      }
+    };
+    fetchOwner();
+  }, [managerContract, account]);
 
   const loading = contractsLoading || auctionDataLoading;
   const error = contractsError || auctionDataError;
@@ -129,6 +146,25 @@ const AuctionView = () => {
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
+      // Get blockchain time from the latest block
+      let blockchainTime = Math.floor(Date.now() / 1000);
+      try {
+        if (auctionContract) {
+          const provider = auctionContract.provider || auctionContract.runner?.provider;
+          if (provider) {
+            const block = await provider.getBlock("latest");
+            if (block?.timestamp) {
+              blockchainTime = Number(block.timestamp);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Could not fetch blockchain time, using system time:", err);
+      }
+      
+      // Update currentTime with blockchain time
+      setCurrentTime(blockchainTime);
+      
       await Promise.all([
         refetchAuctionData(),
         account && refetchUserData(),
@@ -137,7 +173,7 @@ const AuctionView = () => {
     } finally {
       setRefreshing(false);
     }
-  }, [refetchAuctionData, refetchUserData, refetchEvents, account]);
+  }, [refetchAuctionData, refetchUserData, refetchEvents, account, auctionContract]);
 
   // ============ TRANSACTION HANDLERS ============
   const handleCommit = useCallback(async () => {
@@ -246,13 +282,29 @@ const AuctionView = () => {
   const handleLaunchLBP = useCallback(async () => {
     if (!managerContract || !auctionAddress) return;
 
+    // Get current blockchain time
+    let blockchainTime = Math.floor(Date.now() / 1000);
+    try {
+      if (auctionContract) {
+        const provider = auctionContract.provider || auctionContract.runner?.provider;
+        if (provider) {
+          const block = await provider.getBlock("latest");
+          if (block?.timestamp) {
+            blockchainTime = Number(block.timestamp);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("Could not fetch blockchain time for LBP config:", err);
+    }
+
     const lbpConfig = {
-      startTime: Math.floor(Date.now() / 1000) + 3600,
-      endTime: Math.floor(Date.now() / 1000) + 86400,
+      startTime: blockchainTime + 3600, // 1 hour from now
+      endTime: blockchainTime + 86400, // 24 hours from now
       poolStartWeightToken: ethers.parseEther(DEFAULT_LBP_CONFIG.poolStartWeightToken),
       poolEndWeightToken: ethers.parseEther(DEFAULT_LBP_CONFIG.poolEndWeightToken),
       poolSwapFee: ethers.parseEther(DEFAULT_LBP_CONFIG.poolSwapFee),
-      vestingStartTime: Math.floor(Date.now() / 1000) + 3600,
+      vestingStartTime: blockchainTime + 3600,
       vestingCliffDuration: DEFAULT_LBP_CONFIG.vestingCliffDuration,
       vestingFinalDuration: DEFAULT_LBP_CONFIG.vestingFinalDuration,
       vestingCliffPercentBP: DEFAULT_LBP_CONFIG.vestingCliffPercentBP,
@@ -273,7 +325,7 @@ const AuctionView = () => {
         },
       }
     );
-  }, [managerContract, auctionAddress, tx, refetchAuctionData, refetchEvents]);
+  }, [managerContract, auctionAddress, auctionContract, tx, refetchAuctionData, refetchEvents]);
 
   const handleDemandCheck = useCallback(async () => {
     if (!managerContract || !auctionAddress) return;
@@ -297,13 +349,38 @@ const AuctionView = () => {
 
   // ============ EFFECTS ============
   // Update current time for countdown
+  // On local networks, use blockchain time; on public networks, use system time
+  const isLocalNetwork = chainId === 31337 || chainId === 1337;
+  
   useEffect(() => {
-    const interval = setInterval(() => {
+    const updateTime = async () => {
+      if (isLocalNetwork && auctionContract) {
+        // On local networks, get time from blockchain
+        try {
+          const provider = auctionContract.provider || auctionContract.runner?.provider;
+          if (provider) {
+            const block = await provider.getBlock("latest");
+            if (block?.timestamp) {
+              setCurrentTime(Number(block.timestamp));
+              return;
+            }
+          }
+        } catch (err) {
+          console.warn("Could not fetch blockchain time, using system time:", err);
+        }
+      }
+      // Fallback to system time
       setCurrentTime(Math.floor(Date.now() / 1000));
-    }, TIME_UPDATE_INTERVAL_MS);
+    };
+
+    // Update immediately
+    updateTime();
+
+    // Then update periodically
+    const interval = setInterval(updateTime, TIME_UPDATE_INTERVAL_MS);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [isLocalNetwork, auctionContract]);
 
   // Auto-refresh data periodically
   useEffect(() => {
@@ -435,23 +512,44 @@ const AuctionView = () => {
 
       {!auctionData.finalized && <AllocationPanel userData={userData} />}
 
-      {/* Finalization Panel (Owner Only) */}
-      {phase === PHASES.FINALIZED && !auctionData.finalized && isOwner && (
+      {/* Finalization Panel - Show after reveal phase ends */}
+      {phase === PHASES.FINALIZED && !auctionData.finalized && (
         <div className={styles.finalizationPanel}>
-          <p className={styles.finalizationTitle}>Auction Finalization (Owner Only)</p>
-          <button onClick={handleFinalize} className={`${styles.actionButton} ${styles.amber}`}>
-            Finalize Auction
-          </button>
+          <p className={styles.finalizationTitle}>Auction Ready for Finalization</p>
+          <p style={{ fontSize: '0.875rem', color: 'rgba(255, 255, 255, 0.7)', marginBottom: '1rem' }}>
+            The reveal phase has ended. {isOwner ? (
+              <>
+                You can finalize the auction on the <Link to={`/manager/${address}`} style={{ color: 'rgb(110, 231, 183)', textDecoration: 'underline' }}>Presale Manager page</Link>.
+              </>
+            ) : (
+              "Waiting for the owner to finalize the auction on the Presale Manager page."
+            )}
+          </p>
+          {isOwner && (
+            <Link
+              to={`/manager/${address}`}
+              className={`${styles.actionButton} ${styles.amber}`}
+              style={{ display: 'inline-block', textDecoration: 'none', textAlign: 'center' }}
+            >
+              Go to Presale Manager →
+            </Link>
+          )}
         </div>
       )}
 
+      {/* Finalized Panel - Shows after finalization with LBP info */}
       <FinalizedPanel
         auctionData={auctionData}
         isOwner={isOwner}
-        onLaunchLBP={handleLaunchLBP}
+        onLaunchLBP={null}
+        managerAddress={address}
+        auctionAddress={auctionAddress}
       />
 
       <EventsPanel events={events} />
+
+      {/* Developer Time Controls - Only visible on localhost/hardhat */}
+      <DeveloperTimeControls onTimeAdvanced={handleRefresh} />
 
     </section>
   );

@@ -65,7 +65,7 @@ const PresaleList = ({ items }) => {
             <td style={tdStyle}>{item.vesting}</td>
             <td style={tdStyle}>{item.blockNumber}</td>
             <td style={tdStyle}>
-              <Link style={buttonStyle} to={`/presale/${item.manager}`}>
+              <Link style={buttonStyle} to={`/manager/${item.manager}`}>
                 Open Presale
               </Link>
             </td>

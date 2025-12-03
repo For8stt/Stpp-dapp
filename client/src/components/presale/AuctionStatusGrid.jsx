@@ -32,7 +32,7 @@ const AuctionStatusGrid = ({ auctionData }) => {
         <p className={`${styles.statusValue} ${auctionData.totalDepositCommitted >= auctionData.softCap ? styles.success : ''}`}>
           {formatEth(auctionData.softCap)}
           {auctionData.totalDepositCommitted >= auctionData.softCap && (
-            <span style={{ marginLeft: '0.5rem' }}>✓ Reached</span>
+            <span style={{ marginLeft: '0.5rem' }}>Reached</span>
           )}
         </p>
       </div>

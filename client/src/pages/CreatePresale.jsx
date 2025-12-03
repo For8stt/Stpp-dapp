@@ -12,13 +12,28 @@ const now = () => Math.floor(Date.now() / 1000);
 const toDateInput = (secondsFromNow) =>
   new Date((now() + secondsFromNow) * 1000).toISOString().slice(0, 16);
 
+// Try to load TestToken address from deployment file
+const getTestTokenAddress = () => {
+  try {
+    // Try to load from deployment file
+    const deployments = require("../abi/data/stppDeployments.json");
+    if (deployments?.entries?.[0]?.testToken) {
+      return deployments.entries[0].testToken;
+    }
+  } catch (e) {
+    console.warn("Could not load TestToken from deployment file:", e);
+  }
+  // Fallback to the correct address from deployment output
+  return "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853";
+};
+
 const getInitialValues = () => ({
-  saleToken: "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+  saleToken: getTestTokenAddress(),
   treasury: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
   tokensForSale: "100000",
   bonusReserve: "5000",
   perAddressCap: "1000",
-  softCap: "50000",
+  softCap: "50", //50000
   startTime: toDateInput(3600),
   commitDuration: "3600",
   revealDuration: "3600",
@@ -167,17 +182,103 @@ const CreatePresale = ({ account, onConnect }) => {
       }
 
       const managerAddress = createdEvent.args?.manager;
+      const auctionAddress = createdEvent.args?.auction;
+      
+      // CRITICAL: Automatically transfer tokens to auction - this is REQUIRED
+      // If token transfer fails, the auction creation is considered failed
+      const { BrowserProvider } = await import("ethers");
+      if (!window.ethereum) {
+        throw new Error("No wallet provider");
+      }
+      const provider = new BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      
+      const saleTokenAddress = auctionInput.saleToken;
+      // Convert string values to BigInt for calculations
+      const tokensForSaleBigInt = ethers.getBigInt(auctionInput.tokensForSale);
+      const bonusReserveBigInt = ethers.getBigInt(auctionInput.bonusReserve);
+      const fundingAmount = tokensForSaleBigInt + bonusReserveBigInt;
+      
+      console.log("=== Token Transfer Info ===");
+      console.log("Sale Token Address:", saleTokenAddress);
+      console.log("Auction Address:", auctionAddress);
+      console.log("Tokens for Sale:", ethers.formatEther(tokensForSaleBigInt) + " tokens (" + tokensForSaleBigInt.toString() + " wei)");
+      console.log("Bonus Reserve:", ethers.formatEther(bonusReserveBigInt) + " tokens (" + bonusReserveBigInt.toString() + " wei)");
+      console.log("Total Funding Amount:", ethers.formatEther(fundingAmount) + " tokens (" + fundingAmount.toString() + " wei)");
+      console.log("==========================");
+      
+      // Check if user has enough tokens
+      const tokenAbi = [
+        { "constant": true, "inputs": [{ "name": "_owner", "type": "address" }], "name": "balanceOf", "outputs": [{ "name": "balance", "type": "uint256" }], "type": "function" },
+        { "constant": false, "inputs": [{ "name": "_to", "type": "address" }, { "name": "_value", "type": "uint256" }], "name": "transfer", "outputs": [{ "name": "", "type": "bool" }], "type": "function" }
+      ];
+      const tokenContract = new ethers.Contract(saleTokenAddress, tokenAbi, signer);
+      
+      const userAddress = await signer.getAddress();
+      const userBalance = await tokenContract.balanceOf(userAddress);
+      const userBalanceBigInt = ethers.getBigInt(userBalance);
+      
+      console.log("User Token Balance:", ethers.formatEther(userBalanceBigInt) + " tokens (" + userBalanceBigInt.toString() + " wei)");
+      
+      // Check if user has enough tokens
+      if (userBalanceBigInt < fundingAmount) {
+        const missing = fundingAmount - userBalanceBigInt;
+        const errorMsg = `Insufficient token balance to fund auction! ` +
+          `Required: ${ethers.formatEther(fundingAmount)} tokens, ` +
+          `Available: ${ethers.formatEther(userBalanceBigInt)} tokens, ` +
+          `Missing: ${ethers.formatEther(missing)} tokens. ` +
+          `Please ensure you have enough tokens before creating the auction.`;
+        console.error("❌", errorMsg);
+        throw new Error(errorMsg);
+      }
+      
+      // Transfer tokens to auction - this is REQUIRED
+      showTxInfo(`Transferring ${ethers.formatEther(fundingAmount)} tokens to auction... Please confirm in your wallet.`, { autoClose: false });
+      const transferTx = await tokenContract.transfer(auctionAddress, fundingAmount);
+      showTxInfo("Token transfer submitted to the network", { autoClose: 3000 });
+      const transferReceipt = await transferTx.wait();
+      
+      console.log("Token Transfer Transaction:", {
+        hash: transferTx.hash,
+        blockNumber: transferReceipt.blockNumber,
+        status: transferReceipt.status === 1 ? "success" : "failed"
+      });
+      
+      // Verify tokens were actually transferred
+      const auctionBalance = await tokenContract.balanceOf(auctionAddress);
+      const auctionBalanceBigInt = ethers.getBigInt(auctionBalance);
+      console.log("Auction Token Balance (after transfer):", ethers.formatEther(auctionBalanceBigInt) + " tokens (" + auctionBalanceBigInt.toString() + " wei)");
+      
+      if (auctionBalanceBigInt < fundingAmount) {
+        const missing = fundingAmount - auctionBalanceBigInt;
+        const errorMsg = `Token transfer verification failed! ` +
+          `Expected: ${ethers.formatEther(fundingAmount)} tokens in auction, ` +
+          `Found: ${ethers.formatEther(auctionBalanceBigInt)} tokens, ` +
+          `Missing: ${ethers.formatEther(missing)} tokens. ` +
+          `Please check the transaction and try again.`;
+        console.error("❌", errorMsg);
+        throw new Error(errorMsg);
+      }
+      
+      console.log("✅ Token transfer successful!");
+      console.log("✅ Amount transferred:", ethers.formatEther(fundingAmount) + " tokens (" + fundingAmount.toString() + " wei)");
+      console.log("✅ Auction now has:", ethers.formatEther(auctionBalanceBigInt) + " tokens");
+      console.log("==========================");
+      
+      showTxSuccess(`Successfully transferred ${ethers.formatEther(fundingAmount)} tokens to auction!`, { autoClose: 3000 });
+      
+      // Only persist and navigate if token transfer succeeded
       persistPresale({
         manager: managerAddress,
         owner: createdEvent.args?.owner,
-        auction: createdEvent.args?.auction,
+        auction: auctionAddress,
         lbp: createdEvent.args?.lbp,
         vesting: createdEvent.args?.vesting,
         timestamp: Date.now(),
       });
 
-      showTxSuccess("Presale created successfully!", { autoClose: 3000 });
-      navigate(`/presale/${managerAddress}`);
+      showTxSuccess("Presale created and funded successfully!", { autoClose: 3000 });
+      navigate(`/manager/${managerAddress}`);
     } catch (error) {
       console.error(error);
       handleTxError(error, "Failed to create presale");

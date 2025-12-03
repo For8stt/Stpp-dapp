@@ -63,6 +63,20 @@ async function main() {
   const tokenAddress = await token.getAddress();
   console.log(`✅ TestToken deployed at ${tokenAddress}`);
 
+  // Transfer tokens to owner wallet (0x1CBd3b2770909D4e10f157cABC84C7264073C9Ec)
+  const ownerAddress = "0x1CBd3b2770909D4e10f157cABC84C7264073C9Ec";
+  console.log(`\n💰 Transferring tokens to owner wallet: ${ownerAddress}`);
+  try {
+    const transferTx = await token.transfer(ownerAddress, initialSupply);
+    await transferTx.wait();
+    const ownerBalance = await token.balanceOf(ownerAddress);
+    console.log(`✅ Successfully transferred ${ethers.formatEther(ownerBalance)} tokens to owner wallet`);
+  } catch (error) {
+    console.error(`❌ Failed to transfer tokens to owner wallet:`, error);
+    // Don't fail the deployment if transfer fails - user can do it manually
+    console.log(`⚠️  You may need to transfer tokens manually to ${ownerAddress}`);
+  }
+
   const book = readAddressBook();
   const keys = await resolveAddressKeys();
   if (keys.length === 0) {

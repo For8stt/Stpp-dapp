@@ -291,10 +291,10 @@ function printSummary(addresses: DeploymentAddresses): void {
   console.log("─".repeat(80));
 
   console.log("\n📁 Configuration Files Updated:");
-  console.log(`  ✓ client/src/abi/data/stppDeployments.json`);
-  console.log(`  ✓ client/src/abi/addresses.json`);
-  console.log(`  ✓ client/public/abi/addresses.json`);
-  console.log(`  ✓ client/src/abi/allAbis.json`);
+  console.log(`   client/src/abi/data/stppDeployments.json`);
+  console.log(`   client/src/abi/addresses.json`);
+  console.log(`   client/public/abi/addresses.json`);
+  console.log(`   client/src/abi/allAbis.json`);
 
   console.log("\n🚀 Next Steps:");
   console.log("─".repeat(80));
@@ -380,6 +380,20 @@ async function main() {
       "TestToken"
     );
     addresses.testToken = await testToken.getAddress();
+    
+    // Transfer tokens to owner wallet (0x1CBd3b2770909D4e10f157cABC84C7264073C9Ec)
+    const ownerAddress = "0x1CBd3b2770909D4e10f157cABC84C7264073C9Ec";
+    console.log(`\n💰 Transferring tokens to owner wallet: ${ownerAddress}`);
+    try {
+      const transferTx = await testToken.transfer(ownerAddress, initialSupply);
+      await transferTx.wait();
+      const ownerBalance = await testToken.balanceOf(ownerAddress);
+      console.log(`✅ Successfully transferred ${ethers.formatEther(ownerBalance)} tokens to owner wallet`);
+    } catch (error) {
+      console.error(`❌ Failed to transfer tokens to owner wallet:`, error);
+      // Don't fail the deployment if transfer fails - user can do it manually
+      console.log(`⚠️  You may need to transfer tokens manually to ${ownerAddress}`);
+    }
 
     // 8. Deploy SecureLBP implementation (with dummy parameters for frontend reference)
     // Note: Actual SecureLBP instances are deployed dynamically by PresaleManager
