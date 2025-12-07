@@ -109,9 +109,9 @@ function updateAllAbis(abis: Record<string, any>): void {
 
   try {
     fs.writeFileSync(allAbisFile, JSON.stringify(abis, null, 2));
-    console.log(`\n📝 Saved all ABIs to: ${allAbisFile}`);
+    console.log(`\n Saved all ABIs to: ${allAbisFile}`);
   } catch (error) {
-    console.error(`❌ Failed to write ${allAbisFile}:`, error);
+    console.error(` Failed to write ${allAbisFile}:`, error);
     throw error;
   }
 }
@@ -132,10 +132,10 @@ async function deploy(
     const contract = await ContractFactory.deploy(...constructorArgs);
     await contract.waitForDeployment();
     const address = await contract.getAddress();
-    console.log(`✅ ${displayName} deployed at: ${address}`);
+    console.log(` ${displayName} deployed at: ${address}`);
     return contract;
   } catch (error) {
-    console.error(`❌ Failed to deploy ${displayName}:`, error);
+    console.error(` Failed to deploy ${displayName}:`, error);
     throw error;
   }
 }
@@ -163,7 +163,7 @@ function saveDeploymentJSON(addresses: DeploymentAddresses): void {
 
   try {
     fs.writeFileSync(deploymentsFile, JSON.stringify(config, null, 2));
-    console.log(`\n📝 Saved deployment config to: ${deploymentsFile}`);
+    console.log(`\n Saved deployment config to: ${deploymentsFile}`);
   } catch (error) {
     console.error(`❌ Failed to write ${deploymentsFile}:`, error);
     throw error;
@@ -223,9 +223,9 @@ function writeAddressesFile(addresses: DeploymentAddresses): void {
       addressesData[network.name] = addressMappings;
 
       fs.writeFileSync(addressesFile, JSON.stringify(addressesData, null, 2));
-      console.log(`📝 Updated addresses file: ${addressesFile}`);
+      console.log(` Updated addresses file: ${addressesFile}`);
     } catch (error) {
-      console.error(`❌ Failed to write ${addressesFile}:`, error);
+      console.error(`Failed to write ${addressesFile}:`, error);
       throw error;
     }
   }
@@ -257,15 +257,15 @@ function collectAndSaveAbis(): void {
     try {
       const abi = loadAbi(mapping.artifactName);
       abis[mapping.jsonKey] = abi;
-      console.log(`  ✅ Loaded ABI for ${mapping.jsonKey}`);
+      console.log(`Loaded ABI for ${mapping.jsonKey}`);
     } catch (error) {
-      console.error(`  ❌ Failed to load ABI for ${mapping.jsonKey}:`, error);
+      console.error(`Failed to load ABI for ${mapping.jsonKey}:`, error);
       throw error;
     }
   }
 
   updateAllAbis(abis);
-  console.log(`\n✅ Successfully collected and saved ${Object.keys(abis).length} ABIs`);
+  console.log(`\nSuccessfully collected and saved ${Object.keys(abis).length} ABIs`);
 }
 
 /**
@@ -388,11 +388,11 @@ async function main() {
       const transferTx = await testToken.transfer(ownerAddress, initialSupply);
       await transferTx.wait();
       const ownerBalance = await testToken.balanceOf(ownerAddress);
-      console.log(`✅ Successfully transferred ${ethers.formatEther(ownerBalance)} tokens to owner wallet`);
+      console.log(`Successfully transferred ${ethers.formatEther(ownerBalance)} tokens to owner wallet`);
     } catch (error) {
-      console.error(`❌ Failed to transfer tokens to owner wallet:`, error);
+      console.error(` Failed to transfer tokens to owner wallet:`, error);
       // Don't fail the deployment if transfer fails - user can do it manually
-      console.log(`⚠️  You may need to transfer tokens manually to ${ownerAddress}`);
+      console.log(`️You may need to transfer tokens manually to ${ownerAddress}`);
     }
 
     // 8. Deploy SecureLBP implementation (with dummy parameters for frontend reference)

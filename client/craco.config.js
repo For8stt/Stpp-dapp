@@ -10,14 +10,20 @@ module.exports = {
           __dirname,
           'src/shims/asyncStorage.js'
         ),
+        // Fix for MetaMask SDK openapi-fetch import issue
+        // Use CommonJS version instead of ESM
         "openapi-fetch": path.resolve(
           __dirname,
           "node_modules",
           "openapi-fetch",
           "dist",
-          "cjs",
-          "index.cjs"
+          "index.js"
         ),
+      };
+
+      // Add fallback for openapi-fetch
+      config.resolve.fallback = {
+        ...(config.resolve.fallback || {}),
       };
 
       return config;

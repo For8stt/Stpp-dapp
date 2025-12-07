@@ -101,6 +101,12 @@
   color: #bbf7d0;
 }
 
+.statusBadge.lbp {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.3);
+  color: #bfdbfe;
+}
+
 .statusBadge.active {
   background: rgba(245, 158, 11, 0.15);
   border-color: rgba(245, 158, 11, 0.3);
@@ -752,7 +758,6 @@
     font-size: 0.9rem;
   }
 }
-
 
 
 

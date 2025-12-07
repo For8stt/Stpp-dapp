@@ -3,9 +3,9 @@ import { Link, useParams } from "react-router-dom";
 import { ethers } from "ethers";
 
 import AuctionControls from "../components/presale/AuctionControls";
-import CreateAuctionForm from "../components/presale/CreateAuctionForm";
 import loadContract from "../services/web3/loadContract";
 import { handleTxError, showTxSuccess, showTxInfo } from "../utils/txErrorHandler";
+import "./css/presalePage.css";
 
 const toDateInput = (secondsFromNow = 0) =>
   new Date((Math.floor(Date.now() / 1000) + secondsFromNow) * 1000).toISOString().slice(0, 16);
@@ -43,6 +43,12 @@ const parseTimestamp = (value) => {
 const parseEtherValue = (value) => (value ? ethers.parseUnits(value, 18).toString() : "0");
 const parseBps = (value) => Number(value || 0);
 const parseWeight = (value) => ethers.parseUnits(((Number(value || 0) / 100) || 0).toString(), 18).toString();
+
+const shortenHash = (hash) => {
+  if (!hash) return "";
+  if (hash.length <= 12) return hash;
+  return `${hash.slice(0, 6)}…${hash.slice(-4)}`;
+};
 
 const PresalePage = ({ account }) => {
   const { address } = useParams();
@@ -759,82 +765,83 @@ const PresalePage = ({ account }) => {
   const handleFinalizeLbp = () =>
     runAction("Finalize LBP", () => managerContract.finalizeLbp(info.auction, info.vesting));
 
-  const handleUnwind = () => runAction("Unwind LBP", () => managerContract.unwindLbpAll(info.auction));
+  const handleUnwind = () =>
+    runAction("Unwind LBP", () => managerContract.unwindLbpAll(info.auction));
+
+  const heroStats = info
+    ? [
+        { label: "Owner", value: info.owner || "—" },
+        { label: "Auction", value: info.auction || "Pending" },
+        { label: "LBP", value: info.lbp || "Not initialized" },
+        { label: "Vesting escrow", value: info.vesting || "Not created" },
+      ]
+    : [];
 
   return (
-    <section className="page space-y-6">
-      <div className="rounded-3xl border border-white/10 bg-slate-900/60 p-7 text-white shadow-xl shadow-black/30">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <section className="page presale-page space-y-6">
+      <div className="manager-hero">
+        <div className="hero-top">
           <div>
-            <p className="text-sm text-white/70">Presale manager</p>
-            <h1 className="text-2xl font-semibold">{address}</h1>
+            <p className="hero-subtitle">Presale manager</p>
+            <h1 className="hero-title">{address}</h1>
           </div>
           {info?.auction && (
-            <Link
-              to={`/presale/${address}/auction`}
-              className="rounded-2xl bg-emerald-500 px-5 py-2 text-sm font-semibold text-slate-900 transition hover:bg-emerald-400"
-            >
+            <Link to={`/presale/${address}/auction`} className="open-auction-link">
               Open auction view
             </Link>
           )}
         </div>
         {info && (
-          <div className="mt-5 grid gap-4 text-sm text-white/70 md:grid-cols-2">
-            <div>
-              <p className="text-xs uppercase tracking-wide text-white/40">Owner</p>
-              <p className="font-mono">{info.owner}</p>
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-wide text-white/40">Auction</p>
-              <p className="font-mono">{info.auction || "Pending"}</p>
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-wide text-white/40">LBP</p>
-              <p className="font-mono">{info.lbp || "Not initialized"}</p>
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-wide text-white/40">Vesting escrow</p>
-              <p className="font-mono">{info.vesting || "Not created"}</p>
-            </div>
+          <div className="hero-meta">
+            {heroStats.map((stat) => (
+              <div key={stat.label} className="manager-stat">
+                <span>{stat.label}</span>
+                <strong>{stat.value}</strong>
+              </div>
+            ))}
           </div>
         )}
       </div>
 
+      {txStatus && (
+        <div className={`transaction-banner transaction-banner--${txStatus.status || "pending"}`}>
+          <span>{txStatus.message}</span>
+          {txStatus.hash && <span className="transaction-banner__hash">{shortenHash(txStatus.hash)}</span>}
+        </div>
+      )}
+
       {loading ? (
-        <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-6 text-center text-white/70">Loading…</div>
+        <div className="presale-panel placeholder">Loading…</div>
       ) : error ? (
-        <div className="rounded-2xl border border-rose-400/40 bg-rose-500/10 p-6 text-rose-200">{error}</div>
+        <div className="presale-panel error">{error}</div>
       ) : (
         <>
-          <AuctionControls
-            isOwner={isOwner}
-            auctionAddress={info?.auction}
-            onFinalizeAuction={handleFinalizeAuction}
-            onLaunchLbp={handleLaunchLbp}
-            onFinalizeLbp={handleFinalizeLbp}
-            onUnwind={handleUnwind}
-            lbpConfig={lbpConfig}
-            onLbpConfigChange={handleLbpConfigChange}
-            disabled={!info?.auction}
-          />
-
-          {/* CreateAuctionForm hidden - user doesn't need additional auctions */}
+          <div className="presale-panel">
+            <AuctionControls
+              isOwner={isOwner}
+              auctionAddress={info?.auction}
+              onFinalizeAuction={handleFinalizeAuction}
+              onLaunchLbp={handleLaunchLbp}
+              onFinalizeLbp={handleFinalizeLbp}
+              onUnwind={handleUnwind}
+              lbpConfig={lbpConfig}
+              onLbpConfigChange={handleLbpConfigChange}
+              disabled={!info?.auction}
+            />
+          </div>
 
           {auctions.length > 0 && (
-            <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-6 text-sm text-white/70">
+            <div className="presale-panel auction-panel">
               <p className="text-base font-semibold text-white">Deployed auctions</p>
-              <ul className="mt-3 space-y-2 font-mono">
+              <ul>
                 {auctions.map((auctionAddress) => (
-                  <li key={auctionAddress} className="rounded-lg border border-white/5 bg-black/20 px-3 py-2">
-                    {auctionAddress}
-                  </li>
+                  <li key={auctionAddress}>{auctionAddress}</li>
                 ))}
               </ul>
             </div>
           )}
         </>
       )}
-
     </section>
   );
 };

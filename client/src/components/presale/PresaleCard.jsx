@@ -2,6 +2,8 @@ import React from "react";
 import { Link } from "react-router-dom";
 import styles from "./css/PresaleCard.module.css";
 
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+
 const PresaleCard = ({ presale }) => {
   const shortenAddress = (address) => {
     if (!address) return "—";
@@ -9,6 +11,13 @@ const PresaleCard = ({ presale }) => {
   };
 
   const statusConfig = {
+    lbp: {
+      color: "blue",
+      bgColor: "bg-blue-500/20",
+      borderColor: "border-blue-500/30",
+      icon: "●",
+      text: "LBP",
+    },
     finalized: {
       color: 'green',
       bgColor: 'bg-green-500/20',
@@ -25,7 +34,12 @@ const PresaleCard = ({ presale }) => {
     }
   };
 
-  const currentStatus = presale.finalized ? statusConfig.finalized : statusConfig.active;
+  const hasLBP = presale.lbp && presale.lbp !== ZERO_ADDRESS;
+  const currentStatus = presale.finalized
+    ? hasLBP
+      ? statusConfig.lbp
+      : statusConfig.finalized
+    : statusConfig.active;
 
   return (
     <div className={styles.card}>
@@ -124,6 +138,17 @@ const PresaleCard = ({ presale }) => {
                 <div className={styles.iconBolt}></div>
               </div>
               <span>Auction</span>
+            </Link>
+          )}
+          {presale.lbp && presale.lbp !== "0x0000000000000000000000000000000000000000" && (
+            <Link
+              to={`/lbp/${presale.lbp}`}
+              className={`${styles.actionButton} ${styles.primary}`}
+            >
+              <div className={styles.actionIcon}>
+                <div className={styles.iconWave}></div>
+              </div>
+              <span>LBP</span>
             </Link>
           )}
         </div>

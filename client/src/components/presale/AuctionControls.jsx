@@ -1,17 +1,18 @@
 import React from "react";
+import "../../pages/css/presalePage.css";
 
 const ControlButton = ({ label, onClick, disabled }) => (
   <button
     onClick={onClick}
     disabled={disabled}
-    className="rounded-xl bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/20 disabled:opacity-50"
+    className="control-button"
   >
-    {label}
+    <span>{label}</span>
   </button>
 );
 
 const Input = ({ label, name, value, onChange, type = "text", placeholder }) => (
-  <label className="flex flex-col gap-1 text-xs text-white/70">
+  <label className="control-input-label">
     <span>{label}</span>
     <input
       type={type}
@@ -19,7 +20,7 @@ const Input = ({ label, name, value, onChange, type = "text", placeholder }) => 
       value={value}
       placeholder={placeholder}
       onChange={(event) => onChange(name, event.target.value)}
-      className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-white outline-none transition focus:border-white/40"
+      className="control-input"
     />
   </label>
 );
@@ -37,7 +38,7 @@ const AuctionControls = ({
 }) => {
   if (!isOwner) {
     return (
-      <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-5 text-sm text-white/80">
+      <div className="owner-message">
         Only the owner of this presale manager can run administrative actions. Connect the wallet used to deploy the
         presale to unlock controls.
       </div>
@@ -45,13 +46,13 @@ const AuctionControls = ({
   }
 
   return (
-    <div className="space-y-5 rounded-2xl border border-white/10 bg-slate-900/80 p-5">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+    <div className="auction-controls-container">
+      <div className="auction-controls-header">
         <div>
-          <p className="text-lg font-semibold text-white">Auction controls</p>
-          <p className="text-sm text-white/60">Manage the Dutch auction and downstream LBP deployment.</p>
+          <p className="auction-controls-title">Auction controls</p>
+          <p className="auction-controls-description">Manage the Dutch auction and downstream LBP deployment.</p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="auction-controls-buttons">
           <ControlButton label="Finalize auction" onClick={onFinalizeAuction} disabled={disabled || !auctionAddress} />
           <ControlButton label="Launch LBP" onClick={onLaunchLbp} disabled={disabled || !auctionAddress} />
           <ControlButton label="Finalize LBP" onClick={onFinalizeLbp} disabled={disabled} />
@@ -59,9 +60,9 @@ const AuctionControls = ({
         </div>
       </div>
 
-      <div className="rounded-xl border border-white/10 bg-slate-950/50 p-4">
-        <p className="mb-3 text-sm font-semibold text-white">LBP config override</p>
-        <div className="grid gap-3 md:grid-cols-2">
+      <div className="lbp-config-section">
+        <p className="lbp-config-title">LBP config override</p>
+        <div className="lbp-config-grid">
           <Input
             label="Start time"
             type="datetime-local"

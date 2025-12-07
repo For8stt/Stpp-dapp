@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { BrowserProvider, Contract } from "ethers";
+import { BrowserProvider, Contract, ethers } from "ethers";
 
 import PresaleCard from "../components/presale/PresaleCard";
 import deployments from "../abi/data/stppDeployments.json";
@@ -41,7 +41,7 @@ const AllPresales = () => {
         manager: managerAddress,
         owner,
         auction: info ? info[1] : "",
-        lbp: info ? info[2] : "",
+        lbp: info && info[2] && info[2] !== ethers.ZeroAddress ? info[2] : "",
         vesting: info ? info[3] : "",
         finalized: info ? info[4] : false,
       };
