@@ -6,7 +6,7 @@ import allAbis from "../abi/allAbis.json";
 
 const MAX_CHART_POINTS = 1000;
 const POLL_INTERVAL_MS = 1000; // Poll every 1 second for smooth updates
-const LOCAL_TIME_ADVANCE_SEC = 10; // Advance time by 10 seconds per poll on local hardhat (for faster weight changes)
+const LOCAL_TIME_ADVANCE_SEC = 1; // Advance time by 10 seconds per poll on local hardhat (for faster weight changes)
 
 /**
  * Custom hook for real-time LBP data updates
@@ -56,6 +56,8 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
   const tokenInfoRef = useRef(null);
   const chartDomainRef = useRef({ startTime: null, endTime: null });
   const lbpAddressRef = useRef(null);
+  const lbpEndTimeRef = useRef(null); // Store endTime to check if LBP has ended
+  const lbpFinalizedRef = useRef(false); // Store finalized status to stop all requests
 
   /**
    * Advance blockchain time for local hardhat (CRITICAL for time-dependent values)
@@ -98,6 +100,7 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
   /**
    * Fetch ONLY pool data (weights, reserves, price) - called frequently
    * This is the critical function that must run every second to see weight changes
+   * STOPS updating when LBP has ended (currentTime >= endTime)
    */
   const fetchPoolDataOnly = useCallback(async () => {
     if (!poolAddressRef.current || !tokenInfoRef.current) {
@@ -112,22 +115,43 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
     const provider = ensureProvider();
     if (!provider) return;
 
+    // Get fresh block timestamp FIRST to check if LBP has ended
+    let now = Math.floor(Date.now() / 1000);
+    try {
+      const block = await provider.getBlock("latest");
+      if (block?.timestamp) {
+        now = Number(block.timestamp);
+      }
+    } catch (err) {
+      console.warn("Could not get latest block:", err);
+    }
+
+    // CRITICAL: Stop updating if LBP has ended
+    if (lbpEndTimeRef.current !== null && now >= lbpEndTimeRef.current) {
+      // LBP has ended - stop updating chart and weights
+      console.log(`[LBP] LBP ended at ${lbpEndTimeRef.current}, stopping updates. Current time: ${now}`);
+      // Don't set guard since we're returning early
+      return;
+    }
+
     // Set fetching guard to prevent overlapping calls
     isFetchingRef.current = true;
 
     try {
       // Advance time for local hardhat FIRST (before fetching)
-      await advanceBlockchainTime(provider);
-
-      // Get fresh block timestamp
-      let now = Math.floor(Date.now() / 1000);
-      try {
-        const block = await provider.getBlock("latest");
-        if (block?.timestamp) {
-          now = Number(block.timestamp);
+      // Only advance if LBP hasn't ended yet
+      if (lbpEndTimeRef.current === null || now < lbpEndTimeRef.current) {
+        await advanceBlockchainTime(provider);
+        
+        // Re-fetch block timestamp after advancing time
+        try {
+          const block = await provider.getBlock("latest");
+          if (block?.timestamp) {
+            now = Number(block.timestamp);
+          }
+        } catch (err) {
+          console.warn("Could not get latest block after advancing time:", err);
         }
-      } catch (err) {
-        console.warn("Could not get latest block:", err);
       }
 
       const ammAbi = Array.isArray(allAbis.LBPWeightedAMM)
@@ -284,9 +308,12 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
       };
       setPoolData(poolDataObj);
 
-      // ALWAYS add a new point to chart, even if price doesn't change
-      // This creates progressive drawing effect
-      setChartData((prev) => {
+      // Only add new chart points if LBP hasn't ended
+      // This prevents chart from updating after LBP ends
+      if (lbpEndTimeRef.current === null || now < lbpEndTimeRef.current) {
+        // ALWAYS add a new point to chart, even if price doesn't change
+        // This creates progressive drawing effect
+        setChartData((prev) => {
         // Use last price if current price is 0 or invalid
         const lastPrice = prev.length > 0 ? prev[prev.length - 1].price : (price > 0 ? price : 0);
         const chartPrice = price > 0 ? price : lastPrice;
@@ -339,7 +366,9 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
         }, []);
 
         return deduplicated.slice(-MAX_CHART_POINTS);
-      });
+        });
+      }
+      // If LBP has ended, chartData won't be updated (already frozen)
     } catch (err) {
       console.error("Error fetching pool data:", err);
     } finally {
@@ -482,6 +511,12 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
         };
       }
 
+      // Store endTime in ref for checking if LBP has ended
+      lbpEndTimeRef.current = endTimeNum;
+      
+      // CRITICAL: Store finalized status - if true, stop ALL future requests
+      lbpFinalizedRef.current = finalized;
+
       // Store LBP data for compatibility
       const lbpDataObj = {
         address: lbpAddress,
@@ -510,9 +545,12 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
       setLbpData(lbpDataObj);
 
       // Store pool address for continuous polling
+      // CRITICAL: If finalized, keep poolData/reserves/weights to show final metrics
       if (poolInitialized && poolAddress !== ethers.ZeroAddress && tokenInfo) {
         poolAddressRef.current = poolAddress;
-      } else {
+        // Don't clear existing poolData/reserves/weights if finalized - we need them for display
+      } else if (!poolInitialized) {
+        // Only clear if pool is truly not initialized (not just finalized)
         poolAddressRef.current = null;
         setReserves({ token: null, eth: null });
         setWeights({ token: null, eth: null });
@@ -521,11 +559,20 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
         setChartData([]);
       }
 
-      // Immediately fetch pool data if initialized
+      // Fetch pool data if initialized
+      // If finalized, fetch ONCE to get final metrics, then stop
       if (poolInitialized && poolAddress !== ethers.ZeroAddress && tokenInfo) {
-        // Release guard before calling fetchPoolDataOnly (it will set its own guard)
-        isFetchingRef.current = false;
-        await fetchPoolDataOnly();
+        if (!finalized) {
+          // Not finalized - normal continuous polling
+          isFetchingRef.current = false;
+          await fetchPoolDataOnly();
+        } else {
+          // Finalized - fetch pool data ONCE to get final metrics for display
+          console.log("[LBP] LBP is finalized - fetching final pool metrics once");
+          isFetchingRef.current = false;
+          // Fetch final pool data one time (won't update again due to finalized check)
+          await fetchPoolDataOnly();
+        }
       }
     } catch (err) {
       console.error("Error fetching LBP data:", err);
@@ -562,6 +609,8 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
       tokenInfoRef.current = null;
       lbpAddressRef.current = null;
       lbpContractRef.current = null;
+      lbpEndTimeRef.current = null;
+      lbpFinalizedRef.current = false;
       return;
     }
 
@@ -573,7 +622,30 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
     if (provider && typeof provider.on === "function") {
       const handleBlock = async (blockNumber) => {
         // On each new block, fetch pool data (weights change with time!)
+        // But only if LBP hasn't ended AND not finalized
         if (!isFetchingRef.current && poolAddressRef.current) {
+          // CRITICAL: Stop if finalized
+          if (lbpFinalizedRef.current) {
+            provider.off("block", handleBlock);
+            blockListenerRef.current = null;
+            console.log("[LBP] Block listener removed - LBP finalized");
+            return;
+          }
+
+          // Check if LBP has ended
+          try {
+            const block = await provider.getBlock("latest");
+            const currentTime = block?.timestamp ? Number(block.timestamp) : Math.floor(Date.now() / 1000);
+            if (lbpEndTimeRef.current !== null && currentTime >= lbpEndTimeRef.current) {
+              // LBP has ended - remove block listener
+              provider.off("block", handleBlock);
+              blockListenerRef.current = null;
+              return;
+            }
+          } catch (err) {
+            // Continue if we can't check time
+          }
+
           // Use a small delay to ensure block is fully processed
           setTimeout(() => {
             fetchPoolDataOnly().catch((err) => {
@@ -589,8 +661,55 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
 
     // CRITICAL: Set up aggressive interval polling (every 1 second)
     // This ensures weights and prices update continuously even without blocks
+    // STOPS automatically when LBP ends OR finalized (checked inside fetchPoolDataOnly)
     const intervalId = setInterval(() => {
       if (!isFetchingRef.current) {
+        // CRITICAL: Stop polling if finalized
+        if (lbpFinalizedRef.current) {
+          if (intervalRef.current) {
+            clearInterval(intervalRef.current);
+            intervalRef.current = null;
+          }
+          // Also remove block listener
+          if (blockListenerRef.current) {
+            try {
+              blockListenerRef.current.provider.off(
+                "block",
+                blockListenerRef.current.handler
+              );
+            } catch (err) {
+              console.warn("Error removing block listener:", err);
+            }
+            blockListenerRef.current = null;
+          }
+          console.log("[LBP] Polling stopped - LBP is finalized");
+          return;
+        }
+
+        // Check if LBP has ended before polling
+        const currentTime = Math.floor(Date.now() / 1000);
+        if (lbpEndTimeRef.current !== null && currentTime >= lbpEndTimeRef.current) {
+          // LBP has ended - stop polling
+          if (intervalRef.current) {
+            clearInterval(intervalRef.current);
+            intervalRef.current = null;
+          }
+          // Also remove block listener
+          if (blockListenerRef.current) {
+            try {
+              blockListenerRef.current.provider.off(
+                "block",
+                blockListenerRef.current.handler
+              );
+            } catch (err) {
+              console.warn("Error removing block listener:", err);
+            }
+            blockListenerRef.current = null;
+          }
+          console.log("[LBP] Polling stopped - LBP has ended");
+          return;
+        }
+
         if (poolAddressRef.current) {
           // Pool is initialized - fetch pool data frequently
           fetchPoolDataOnly().catch((err) => {
@@ -598,9 +717,12 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
           });
         } else {
           // Pool not initialized - fetch LBP data less frequently
-          fetchLBPData().catch((err) => {
-            console.error("Error in LBP polling interval:", err);
-          });
+          // But only if not finalized
+          if (!lbpFinalizedRef.current) {
+            fetchLBPData().catch((err) => {
+              console.error("Error in LBP polling interval:", err);
+            });
+          }
         }
       }
     }, POLL_INTERVAL_MS); // Poll every 1 second

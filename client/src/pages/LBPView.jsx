@@ -97,10 +97,18 @@ const LbpView = () => {
 
   /**
    * Fetch user-specific data
+   * Fetches once even if finalized to show final user metrics
    */
   const fetchUserData = useCallback(async () => {
     if (!lbpAddress || !account || !lbpData) {
       setUserData(null);
+      return;
+    }
+
+    // Fetch user data even if finalized (to show final metrics)
+    // If finalized and we already have userData, don't refetch continuously
+    if (lbpData.finalized && userData) {
+      console.log("[LBP] LBP finalized - using cached user data");
       return;
     }
 
@@ -129,9 +137,12 @@ const LbpView = () => {
   }, [lbpAddress, account, lbpData, getProvider]);
 
   // Fetch user data when account or lbpData changes
+  // If finalized, fetch once to show final user metrics
   useEffect(() => {
-    fetchUserData();
-  }, [fetchUserData]);
+    if (lbpData && account) {
+      fetchUserData();
+    }
+  }, [lbpAddress, account, lbpData?.finalized]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
    * Generate weight schedule data when pool data is available
@@ -762,7 +773,9 @@ const LbpView = () => {
         </div>
 
         {/* ============ 2. Pool State Overview ============ */}
-        {poolData && (
+        {/* Show pool state even if finalized - display final metrics */}
+        {/* Display if: poolData exists OR pool is initialized (even if finalized) */}
+        {(poolData || (lbpData?.poolInitialized && lbpData?.amm && lbpData.amm !== ethers.ZeroAddress)) && (
           <div className={styles.poolPanel}>
             <h2 className={styles.poolTitle}>Pool State Overview</h2>
             <div className={styles.poolGrid}>
