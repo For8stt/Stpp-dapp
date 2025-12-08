@@ -1265,9 +1265,17 @@ const LbpView = () => {
             </p>
             {lbpData.vestingEscrow &&
               lbpData.vestingEscrow !== ethers.ZeroAddress && (
-                <p className={styles.finalizedSubtext}>
-                  Vesting Escrow: {shortenAddress(lbpData.vestingEscrow)}
-                </p>
+                <>
+                  <p className={styles.finalizedSubtext}>
+                    Vesting Escrow: {shortenAddress(lbpData.vestingEscrow)}
+                  </p>
+                  <Link
+                    to={`/vesting/${lbpData.vestingEscrow}?lbp=${lbpAddress}`}
+                    className={styles.vestingLink}
+                  >
+                    View Vesting Page →
+                  </Link>
+                </>
               )}
           </div>
         )}

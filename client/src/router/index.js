@@ -10,6 +10,7 @@ import AllPresales from "../pages/AllPresales";
 import PresalePage from "../pages/PresalePage";
 import AuctionView from "../pages/AuctionView";
 import LbpView from "../pages/LBPView";
+import VestingView from "../pages/VestingView";
 
 const AppRouter = ({
   account,
@@ -66,6 +67,7 @@ const AppRouter = ({
             <Route path="/manager/:address" element={<PresalePage account={account} />} />
             <Route path="/presale/:address/auction" element={<AuctionView />} />
             <Route path="/lbp/:lbpAddress" element={<LbpView />} />
+            <Route path="/vesting/:escrowAddress" element={<VestingView />} />
           </Routes>
         )}
       </main>

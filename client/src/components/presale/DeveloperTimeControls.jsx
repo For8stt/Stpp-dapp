@@ -7,10 +7,13 @@ import { handleTxError } from "../../utils/txErrorHandler";
 /**
  * Developer-only component to fast-forward time on local development networks
  * Only visible on localhost/hardhat networks (chainId 31337)
+ * @param {Function} onTimeAdvanced - Callback when time is advanced
+ * @param {boolean} useDays - If true, use days instead of minutes
  */
-const DeveloperTimeControls = ({ onTimeAdvanced }) => {
+const DeveloperTimeControls = ({ onTimeAdvanced, useDays = false }) => {
   const chainId = useChainId();
   const [minutes, setMinutes] = useState("");
+  const [days, setDays] = useState("");
   const [loading, setLoading] = useState(false);
 
   // Only show on localhost/hardhat networks
@@ -84,22 +87,41 @@ const DeveloperTimeControls = ({ onTimeAdvanced }) => {
   };
 
   const handleFastForward = async () => {
-    const minutesValue = parseFloat(minutes);
-    
-    if (!minutesValue || minutesValue <= 0) {
-      handleTxError(new Error("Please enter a valid number of minutes (greater than 0)"));
-      return;
-    }
+    let amountSec = 0;
+    let displayText = "";
 
-    // Convert minutes to seconds
-    const amountSec = Math.floor(minutesValue * 60);
+    if (useDays) {
+      const daysValue = parseFloat(days);
+      
+      if (!daysValue || daysValue <= 0) {
+        handleTxError(new Error("Please enter a valid number of days (greater than 0)"));
+        return;
+      }
+
+      // Convert days to seconds
+      amountSec = Math.floor(daysValue * 24 * 60 * 60);
+      const daysText = daysValue === 1 ? "day" : "days";
+      displayText = `${daysValue} ${daysText} (${amountSec} seconds)`;
+    } else {
+      const minutesValue = parseFloat(minutes);
+      
+      if (!minutesValue || minutesValue <= 0) {
+        handleTxError(new Error("Please enter a valid number of minutes (greater than 0)"));
+        return;
+      }
+
+      // Convert minutes to seconds
+      amountSec = Math.floor(minutesValue * 60);
+      const minutesText = minutesValue === 1 ? "minute" : "minutes";
+      displayText = `${minutesValue} ${minutesText} (${amountSec} seconds)`;
+    }
 
     setLoading(true);
     try {
       await fastForwardTime(amountSec);
-      const minutesText = minutesValue === 1 ? "minute" : "minutes";
-      showTxSuccess(`Time advanced by ${minutesValue} ${minutesText} (${amountSec} seconds)`, { autoClose: 4000 });
+      showTxSuccess(`Time advanced by ${displayText}`, { autoClose: 4000 });
       setMinutes("");
+      setDays("");
       
       // Notify parent component to refetch auction data
       if (onTimeAdvanced) {
@@ -121,30 +143,30 @@ const DeveloperTimeControls = ({ onTimeAdvanced }) => {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
         <div className="flex-1">
           <label className="mb-1.5 block text-xs font-medium text-amber-300/80">
-            Minutes to fast-forward
+            {useDays ? "Days to fast-forward" : "Minutes to fast-forward"}
           </label>
           <div className="relative">
             <input
               type="number"
-              value={minutes}
-              onChange={(e) => setMinutes(e.target.value)}
-              placeholder="e.g., 60 for 1 hour"
-              step="0.1"
+              value={useDays ? days : minutes}
+              onChange={(e) => useDays ? setDays(e.target.value) : setMinutes(e.target.value)}
+              placeholder={useDays ? "e.g., 30 for 30 days" : "e.g., 60 for 1 hour"}
+              step={useDays ? "1" : "0.1"}
               className="w-full rounded-lg border-2 border-amber-500/40 bg-black/40 px-4 py-2.5 text-sm font-medium text-white placeholder:text-amber-400/50 focus:border-amber-400 focus:bg-black/60 focus:outline-none focus:ring-2 focus:ring-amber-400/50"
               disabled={loading}
-              min="0.1"
+              min={useDays ? "1" : "0.1"}
             />
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-amber-400/70">
-              min
+              {useDays ? "days" : "min"}
             </span>
           </div>
         </div>
         <button
           onClick={handleFastForward}
-          disabled={loading || !minutes}
+          disabled={loading || (useDays ? !days : !minutes)}
           className="rounded-lg bg-gradient-to-r from-amber-600 to-amber-500 px-6 py-2.5 text-sm font-bold text-white shadow-md shadow-amber-600/30 transition-all hover:from-amber-500 hover:to-amber-400 hover:shadow-lg hover:shadow-amber-500/40 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:from-amber-600 disabled:hover:to-amber-500 disabled:hover:shadow-md"
         >
-          {loading ? "Fast-forwarding..." : "Fast-forward Auction"}
+          {loading ? "Fast-forwarding..." : useDays ? "Fast-forward Time" : "Fast-forward Auction"}
         </button>
       </div>
     </div>
