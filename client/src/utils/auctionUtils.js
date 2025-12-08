@@ -31,8 +31,8 @@ export const getPhase = (now, startTime, commitEndTime, revealEndTime, finalized
   return "Finalized";
 };
 
-export const getTimeUntil = (targetTime) => {
-  const now = Math.floor(Date.now() / 1000);
+export const getTimeUntil = (targetTime, currentTime = null) => {
+  const now = currentTime !== null ? currentTime : Math.floor(Date.now() / 1000);
   const diff = Number(targetTime) - now;
   if (diff <= 0) return null;
   const hours = Math.floor(diff / 3600);

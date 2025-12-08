@@ -45,6 +45,8 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
 
   // Guards to prevent overlapping calls
   const isFetchingRef = useRef(false);
+  const isAdvancingTimeRef = useRef(false);
+  const lastTimeAdvanceRef = useRef(0);
   const intervalRef = useRef(null);
   const blockListenerRef = useRef(null);
   const providerRef = useRef(null);
@@ -63,6 +65,9 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
    * Advance blockchain time for local hardhat (CRITICAL for time-dependent values)
    * This ensures block.timestamp advances, which makes weights and fees update
    * Uses direct connection to Hardhat RPC (like DeveloperTimeControls) for reliability
+   * 
+   * IMPORTANT: This function has guards to prevent rapid time advancement.
+   * It only advances time once per second maximum, and only if enough time has passed.
    */
   const advanceBlockchainTime = useCallback(async (provider) => {
     const isLocal = 
@@ -71,6 +76,21 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
        window.location.hostname === "127.0.0.1");
     
     if (!isLocal) return;
+    
+    // Prevent concurrent calls
+    if (isAdvancingTimeRef.current) {
+      return;
+    }
+    
+    // Throttle: only advance time once per second maximum
+    const now = Date.now();
+    const timeSinceLastAdvance = now - lastTimeAdvanceRef.current;
+    if (timeSinceLastAdvance < 1000) {
+      return; // Skip if less than 1 second has passed
+    }
+    
+    isAdvancingTimeRef.current = true;
+    lastTimeAdvanceRef.current = now;
     
     try {
       // Connect directly to Hardhat node (not through MetaMask)
@@ -94,6 +114,132 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
       if (err.code !== "ECONNREFUSED") {
         console.warn("[LBP] Could not advance blockchain time:", err.message);
       }
+    } finally {
+      isAdvancingTimeRef.current = false;
+    }
+  }, []);
+
+  /**
+   * Fetch ONLY pool data WITHOUT advancing time
+   * Used by block listener to avoid double time advancement
+   */
+  const fetchPoolDataOnlyWithoutTimeAdvance = useCallback(async () => {
+    if (!poolAddressRef.current || !tokenInfoRef.current) {
+      return;
+    }
+
+    // Check guard AFTER checking refs to avoid race conditions
+    if (isFetchingRef.current) {
+      return;
+    }
+
+    const provider = ensureProvider();
+    if (!provider) return;
+
+    // Get fresh block timestamp FIRST to check if LBP has ended
+    let now = Math.floor(Date.now() / 1000);
+    try {
+      const block = await provider.getBlock("latest");
+      if (block?.timestamp) {
+        now = Number(block.timestamp);
+      }
+    } catch (err) {
+      console.warn("Could not get latest block:", err);
+    }
+
+    // CRITICAL: Stop updating if LBP has ended
+    if (lbpEndTimeRef.current !== null && now >= lbpEndTimeRef.current) {
+      return;
+    }
+
+    // Set fetching guard to prevent overlapping calls
+    isFetchingRef.current = true;
+
+    try {
+      // DO NOT advance time here - this is called from block listener
+      // Time advancement is handled by interval polling only
+
+      const ammAbi = Array.isArray(allAbis.LBPWeightedAMM)
+        ? allAbis.LBPWeightedAMM
+        : allAbis.LBPWeightedAMM?.abi || allAbis.LBPWeightedAMM;
+
+      const ammContract = ammContractRef.current || new Contract(poolAddressRef.current, ammAbi, provider);
+      ammContractRef.current = ammContract;
+
+      // Fetch data (same as fetchPoolDataOnly but without time advancement)
+      const [
+        reserveToken,
+        reserveETH,
+        tokenWeight,
+        ethWeight,
+      ] = await Promise.all([
+        ammContract.reserveToken().catch(() => 0n),
+        ammContract.reserveETH().catch(() => 0n),
+        ammContract.getCurrentWeightToken().catch(() => 0n),
+        ammContract.getCurrentWeightETH().catch(() => 0n),
+      ]);
+
+      setReserves({
+        token: reserveToken,
+        eth: reserveETH,
+      });
+
+      const tokenWeightNum = Number(ethers.formatEther(tokenWeight));
+      const ethWeightNum = Number(ethers.formatEther(ethWeight));
+      
+      setWeights({
+        token: tokenWeight,
+        eth: ethWeight,
+      });
+
+      // Calculate spot price
+      let price = 0;
+      if (reserveETH > 0n && reserveToken > 0n && tokenWeight > 0n && ethWeight > 0n) {
+        try {
+          const oneETH = ethers.parseEther("1");
+          const tokensForOneETH = await ammContract.quoteETHForToken(oneETH).catch(() => null);
+          
+          if (tokensForOneETH !== null && tokensForOneETH > 0n) {
+            const tokensForOneETHNum = Number(
+              ethers.formatUnits(tokensForOneETH, tokenInfoRef.current?.decimals || 18)
+            );
+            if (tokensForOneETHNum > 0) {
+              price = 1 / tokensForOneETHNum;
+            }
+          } else {
+            const reserveETHNum = Number(ethers.formatEther(reserveETH));
+            const reserveTokenNum = Number(
+              ethers.formatUnits(reserveToken, tokenInfoRef.current?.decimals || 18)
+            );
+            const tokenWeightNum = Number(ethers.formatEther(tokenWeight));
+            const ethWeightNum = Number(ethers.formatEther(ethWeight));
+
+            if (reserveTokenNum > 0 && ethWeightNum > 0 && tokenWeightNum > 0) {
+              price = (reserveETHNum * tokenWeightNum) / (reserveTokenNum * ethWeightNum);
+            }
+          }
+        } catch (priceErr) {
+          console.warn("Could not calculate spot price:", priceErr);
+        }
+      }
+
+      setSpotPrice(price);
+
+      const poolDataObj = {
+        address: poolAddressRef.current,
+        reserveToken,
+        reserveETH,
+        tokenWeight,
+        ethWeight,
+        price,
+        lastUpdate: Date.now(),
+        blockchainTime: now,
+      };
+      setPoolData(poolDataObj);
+    } catch (err) {
+      console.error("Error fetching pool data:", err);
+    } finally {
+      isFetchingRef.current = false;
     }
   }, []);
 
@@ -101,6 +247,7 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
    * Fetch ONLY pool data (weights, reserves, price) - called frequently
    * This is the critical function that must run every second to see weight changes
    * STOPS updating when LBP has ended (currentTime >= endTime)
+   * ADVANCES TIME for local hardhat development
    */
   const fetchPoolDataOnly = useCallback(async () => {
     if (!poolAddressRef.current || !tokenInfoRef.current) {
@@ -356,7 +503,7 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
         }
 
         // Keep only latest N points to prevent memory leaks
-        // Also ensure no duplicate timestamps
+        // Also ensure no duplicate timestamps and sort by timestamp
         const deduplicated = updated.reduce((acc, point, index) => {
           const isDuplicate = acc.some(p => p.timestamp === point.timestamp);
           if (!isDuplicate) {
@@ -365,7 +512,10 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
           return acc;
         }, []);
 
-        return deduplicated.slice(-MAX_CHART_POINTS);
+        // Sort by timestamp to ensure correct order
+        const sorted = deduplicated.sort((a, b) => a.timestamp - b.timestamp);
+        
+        return sorted.slice(-MAX_CHART_POINTS);
         });
       }
       // If LBP has ended, chartData won't be updated (already frozen)
@@ -623,6 +773,8 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
       const handleBlock = async (blockNumber) => {
         // On each new block, fetch pool data (weights change with time!)
         // But only if LBP hasn't ended AND not finalized
+        // NOTE: Block listener does NOT advance time - only interval polling does
+        // This prevents double time advancement
         if (!isFetchingRef.current && poolAddressRef.current) {
           // CRITICAL: Stop if finalized
           if (lbpFinalizedRef.current) {
@@ -647,8 +799,10 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
           }
 
           // Use a small delay to ensure block is fully processed
+          // IMPORTANT: Don't advance time here - only fetch data
           setTimeout(() => {
-            fetchPoolDataOnly().catch((err) => {
+            // Fetch pool data WITHOUT advancing time (time is advanced by interval only)
+            fetchPoolDataOnlyWithoutTimeAdvance().catch((err) => {
               console.error("Error in block listener:", err);
             });
           }, 100);

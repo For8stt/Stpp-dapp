@@ -36,10 +36,12 @@ import { useAuctionEvents } from "../hooks/useAuctionEvents";
 import { useAccount } from "../hooks/useAccount";
 import { useTransaction } from "../hooks/useTransaction";
 import { useChainId } from "wagmi";
+import { useNow } from "../hooks/useNow";
 
 // Utils & Constants
 import { getPhase, getTimeUntil } from "../utils/auctionUtils";
 import { ensureSigner } from "../services/web3/signer";
+import { ensureProvider } from "../services/web3/provider";
 import { generateCommitHash, parseMerkleProof, calculateDeposit } from "../utils/commitUtils";
 import { REFRESH_INTERVAL_MS, TIME_UPDATE_INTERVAL_MS, PHASES, DEFAULT_LBP_CONFIG } from "../constants/auction";
 import styles from "./css/AuctionView.module.css";
@@ -79,9 +81,32 @@ const AuctionView = () => {
   } = useAuctionEvents(auctionContract);
 
   // ============ UI STATE ============
-  const [currentTime, setCurrentTime] = useState(Math.floor(Date.now() / 1000));
   const [refreshing, setRefreshing] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
+  const [provider, setProvider] = useState(null);
+  
+  // Get provider for time updates
+  useEffect(() => {
+    const getProvider = async () => {
+      try {
+        // Prefer provider from contract, fallback to ensureProvider
+        const contractProvider = auctionContract?.provider || auctionContract?.runner?.provider;
+        if (contractProvider) {
+          setProvider(contractProvider);
+        } else {
+          const defaultProvider = await ensureProvider();
+          setProvider(defaultProvider);
+        }
+      } catch (err) {
+        console.warn("Could not get provider:", err);
+        setProvider(null);
+      }
+    };
+    getProvider();
+  }, [auctionContract]);
+  
+  // Get current time with automatic updates
+  const { currentTime, refreshTime } = useNow(provider, TIME_UPDATE_INTERVAL_MS);
 
   // Form state
   const [commitForm, setCommitForm] = useState({
@@ -115,11 +140,11 @@ const AuctionView = () => {
 
   const countdown = useMemo(() => {
     if (!auctionData) return null;
-    if (phase === PHASES.NOT_STARTED) return getTimeUntil(auctionData.startTime);
-    if (phase === PHASES.COMMIT) return getTimeUntil(auctionData.commitEndTime);
-    if (phase === PHASES.REVEAL) return getTimeUntil(auctionData.revealEndTime);
+    if (phase === PHASES.NOT_STARTED) return getTimeUntil(auctionData.startTime, currentTime);
+    if (phase === PHASES.COMMIT) return getTimeUntil(auctionData.commitEndTime, currentTime);
+    if (phase === PHASES.REVEAL) return getTimeUntil(auctionData.revealEndTime, currentTime);
     return null;
-  }, [phase, auctionData]);
+  }, [phase, auctionData, currentTime]);
 
   // Fetch owner status from manager contract
   useEffect(() => {
@@ -146,24 +171,8 @@ const AuctionView = () => {
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      // Get blockchain time from the latest block
-      let blockchainTime = Math.floor(Date.now() / 1000);
-      try {
-        if (auctionContract) {
-          const provider = auctionContract.provider || auctionContract.runner?.provider;
-          if (provider) {
-            const block = await provider.getBlock("latest");
-            if (block?.timestamp) {
-              blockchainTime = Number(block.timestamp);
-            }
-          }
-        }
-      } catch (err) {
-        console.warn("Could not fetch blockchain time, using system time:", err);
-      }
-      
-      // Update currentTime with blockchain time
-      setCurrentTime(blockchainTime);
+      // Refresh time from blockchain
+      await refreshTime();
       
       await Promise.all([
         refetchAuctionData(),
@@ -173,7 +182,7 @@ const AuctionView = () => {
     } finally {
       setRefreshing(false);
     }
-  }, [refetchAuctionData, refetchUserData, refetchEvents, account, auctionContract]);
+  }, [refetchAuctionData, refetchUserData, refetchEvents, account, refreshTime]);
 
   // ============ TRANSACTION HANDLERS ============
   const handleCommit = useCallback(async () => {
@@ -282,21 +291,8 @@ const AuctionView = () => {
   const handleLaunchLBP = useCallback(async () => {
     if (!managerContract || !auctionAddress) return;
 
-    // Get current blockchain time
-    let blockchainTime = Math.floor(Date.now() / 1000);
-    try {
-      if (auctionContract) {
-        const provider = auctionContract.provider || auctionContract.runner?.provider;
-        if (provider) {
-          const block = await provider.getBlock("latest");
-          if (block?.timestamp) {
-            blockchainTime = Number(block.timestamp);
-          }
-        }
-      }
-    } catch (err) {
-      console.warn("Could not fetch blockchain time for LBP config:", err);
-    }
+    // Use currentTime from useNow hook (already synced with blockchain on local networks)
+    const blockchainTime = currentTime;
 
     const lbpConfig = {
       startTime: blockchainTime + 3600, // 1 hour from now
@@ -325,7 +321,7 @@ const AuctionView = () => {
         },
       }
     );
-  }, [managerContract, auctionAddress, auctionContract, tx, refetchAuctionData, refetchEvents]);
+  }, [managerContract, auctionAddress, currentTime, tx, refetchAuctionData, refetchEvents]);
 
   const handleDemandCheck = useCallback(async () => {
     if (!managerContract || !auctionAddress) return;
@@ -348,39 +344,13 @@ const AuctionView = () => {
   }, [managerContract, auctionAddress, tx, refetchAuctionData, refetchEvents]);
 
   // ============ EFFECTS ============
-  // Update current time for countdown
-  // On local networks, use blockchain time; on public networks, use system time
-  const isLocalNetwork = chainId === 31337 || chainId === 1337;
-  
+  // Debug: Log currentTime and countdown changes
   useEffect(() => {
-    const updateTime = async () => {
-      if (isLocalNetwork && auctionContract) {
-        // On local networks, get time from blockchain
-        try {
-          const provider = auctionContract.provider || auctionContract.runner?.provider;
-          if (provider) {
-            const block = await provider.getBlock("latest");
-            if (block?.timestamp) {
-              setCurrentTime(Number(block.timestamp));
-              return;
-            }
-          }
-        } catch (err) {
-          console.warn("Could not fetch blockchain time, using system time:", err);
-        }
-      }
-      // Fallback to system time
-      setCurrentTime(Math.floor(Date.now() / 1000));
-    };
-
-    // Update immediately
-    updateTime();
-
-    // Then update periodically
-    const interval = setInterval(updateTime, TIME_UPDATE_INTERVAL_MS);
-
-    return () => clearInterval(interval);
-  }, [isLocalNetwork, auctionContract]);
+    if (auctionData) {
+      const timeStr = new Date(currentTime * 1000).toLocaleTimeString();
+      console.log("currentTime:", currentTime, timeStr, "countdown:", countdown);
+    }
+  }, [currentTime, countdown, auctionData]);
 
   // Auto-refresh data periodically
   useEffect(() => {
@@ -549,7 +519,20 @@ const AuctionView = () => {
       <EventsPanel events={events} />
 
       {/* Developer Time Controls - Only visible on localhost/hardhat */}
-      <DeveloperTimeControls onTimeAdvanced={handleRefresh} />
+      <DeveloperTimeControls 
+        onTimeAdvanced={async () => {
+          console.log("Time advanced, refreshing...");
+          // Wait a bit for blockchain to update after mining blocks
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          // Immediately refresh time after fast-forwarding
+          await refreshTime();
+          // Wait again to ensure time is updated
+          await new Promise(resolve => setTimeout(resolve, 500));
+          // Then refresh all data
+          await handleRefresh();
+          console.log("All data refreshed, currentTime:", currentTime);
+        }} 
+      />
 
     </section>
   );

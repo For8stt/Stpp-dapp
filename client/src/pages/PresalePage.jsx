@@ -25,8 +25,8 @@ const defaultAuctionForm = {
 };
 
 const defaultLbpConfig = {
-  startTime: toDateInput(7200),
-  endTime: toDateInput(17200),
+  startTime: toDateInput(10800), // +3 година від зараз
+  endTime: toDateInput(21600), // +6 години від зараз (кінець через 1 годину після початку)
   poolStartWeightToken: "80",
   poolEndWeightToken: "20",
   poolSwapFee: "0.003",

@@ -329,27 +329,52 @@ export const useVestingData = (escrowAddress, userAddress = null, overrideLBPAdd
     }
   }, [escrowAddress, userAddress, overrideLBPAddress]);
 
-  /**
-   * Set up polling and block listeners
-   */
   useEffect(() => {
-    if (!escrowAddress) return;
+    if (!escrowAddress) {
+      setData(null);
+      setLoading(false);
+      setError(null);
+      return;
+    }
 
-    // Initial fetch
+    const cleanup = () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      if (blockListenerRef.current && providerRef.current?.off) {
+        try {
+          providerRef.current.off("block", blockListenerRef.current);
+        } catch (err) {
+          console.warn("Error removing block listener:", err);
+        }
+        blockListenerRef.current = null;
+      }
+    };
+
+    cleanup();
+
+    setLoading(true);
+    setError(null);
+    isFetchingRef.current = false;
+
     fetchVestingData();
 
-    // Set up interval polling
     intervalRef.current = setInterval(() => {
-      fetchVestingData();
+      if (!isFetchingRef.current) {
+        fetchVestingData();
+      }
     }, REFRESH_RATE_MS);
 
-    // Set up block listener for real-time updates
     const setupBlockListener = async () => {
       try {
         const provider = await ensureProvider();
         if (provider && provider.on) {
+          providerRef.current = provider;
           blockListenerRef.current = (blockNumber) => {
-            fetchVestingData();
+            if (!isFetchingRef.current) {
+              fetchVestingData();
+            }
           };
           provider.on("block", blockListenerRef.current);
         }
@@ -360,16 +385,27 @@ export const useVestingData = (escrowAddress, userAddress = null, overrideLBPAdd
 
     setupBlockListener();
 
-    // Cleanup
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-      if (blockListenerRef.current && providerRef.current?.off) {
-        providerRef.current.off("block", blockListenerRef.current);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && !isFetchingRef.current) {
+        fetchVestingData();
       }
     };
-  }, [escrowAddress, userAddress, fetchVestingData]);
+
+    const handleFocus = () => {
+      if (!isFetchingRef.current) {
+        fetchVestingData();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      cleanup();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [escrowAddress, userAddress, overrideLBPAddress, fetchVestingData]);
 
   return {
     data,

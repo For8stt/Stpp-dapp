@@ -39,7 +39,7 @@
 .errorContainer,
 .emptyContainer {
   min-height: 100vh;
-  background: linear-gradient(to bottom right, rgb(15, 23, 42), rgb(30, 41, 59), rgb(15, 23, 42));
+  background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -71,15 +71,14 @@
 }
 
 .errorCard {
+  background: linear-gradient(to bottom right, rgb(15, 23, 42), rgb(30, 41, 59), rgb(15, 23, 42));
   background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(220, 38, 38, 0.1) 100%);
   border: 1px solid rgba(239, 68, 68, 0.5);
   border-radius: 1rem;
   padding: 2rem;
   max-width: 32rem;
-  backdrop-filter: blur(8px);
-  box-shadow: 
-    0 20px 25px -5px rgba(239, 68, 68, 0.2),
-    0 10px 10px -5px rgba(0, 0, 0, 0.2);
+  backdrop-filter: none;
+  box-shadow: none;
   position: relative;
   overflow: hidden;
 }
@@ -112,7 +111,7 @@
 }
 
 .retryButton {
-  background: linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(220, 38, 38, 0.15) 100%);
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(220, 38, 38, 0.1) 100%);
   border: 1px solid rgba(239, 68, 68, 0.5);
   color: white;
   padding: 0.75rem 1.5rem;
@@ -140,7 +139,6 @@
     0 10px 10px -5px rgba(0, 0, 0, 0.2);
 }
 
-/* Header */
 .header {
   background: linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.9) 100%);
   backdrop-filter: blur(12px) saturate(180%);
@@ -223,7 +221,6 @@
   box-shadow: 0 4px 12px -3px rgba(59, 130, 246, 0.3);
 }
 
-/* Info Grid */
 .infoGrid {
   display: grid;
   grid-template-columns: repeat(1, 1fr);
@@ -303,7 +300,6 @@
   z-index: 1;
 }
 
-/* Config Card */
 .configCard {
   background: linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.9) 100%);
   backdrop-filter: blur(12px) saturate(180%);
@@ -347,7 +343,6 @@
   font-weight: 700;
 }
 
-/* Stats Grid */
 .statsGrid {
   display: grid;
   grid-template-columns: repeat(1, 1fr);
@@ -449,7 +444,6 @@
   z-index: 1;
 }
 
-/* Section Title */
 .sectionTitle {
   font-size: 1.75rem;
   font-weight: 800;
@@ -461,7 +455,6 @@
   letter-spacing: -0.02em;
 }
 
-/* Progress Section */
 .progressSection {
   background: linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.9) 100%);
   backdrop-filter: blur(12px) saturate(180%);
@@ -569,7 +562,6 @@
   font-size: 0.8125rem;
 }
 
-/* Chart Panel */
 .chartPanel {
   background: linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.9) 100%);
   backdrop-filter: blur(12px) saturate(180%);
@@ -600,7 +592,6 @@
   animation: shimmer 3s ease-in-out infinite;
 }
 
-/* Claim Section */
 .claimSection {
   background: linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.9) 100%);
   backdrop-filter: blur(12px) saturate(180%);
