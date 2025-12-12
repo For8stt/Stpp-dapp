@@ -18,9 +18,10 @@ const BP_SCALE = 10000n;
  * @param {string} escrowAddress - The TokenVestingEscrow contract address
  * @param {string} userAddress - The user's wallet address (optional)
  * @param {string} overrideLBPAddress - Override LBP address from escrow (optional)
+ * @param {number} currentTime - Current timestamp in seconds from unified time layer (optional, falls back to block timestamp)
  * @returns {object} - Vesting data with real-time updates
  */
-export const useVestingData = (escrowAddress, userAddress = null, overrideLBPAddress = null) => {
+export const useVestingData = (escrowAddress, userAddress = null, overrideLBPAddress = null, currentTime = null) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -155,9 +156,16 @@ export const useVestingData = (escrowAddress, userAddress = null, overrideLBPAdd
         tokenContract.decimals().catch(() => 18),
       ]);
 
-      // Get current block timestamp
-      const currentBlock = await provider.getBlock("latest");
-      const currentTime = BigInt(currentBlock.timestamp);
+      // Use provided currentTime from unified time layer, or fallback to block timestamp
+      let timeToUse;
+      if (currentTime !== null && currentTime !== undefined) {
+        timeToUse = BigInt(currentTime);
+      } else {
+        // Fallback: get from block (for backward compatibility)
+        const currentBlock = await provider.getBlock("latest");
+        timeToUse = BigInt(currentBlock.timestamp);
+      }
+      const currentTimeBigInt = timeToUse;
 
       // Get vesting config from SecureLBP
       let finalized = false;
@@ -277,8 +285,8 @@ export const useVestingData = (escrowAddress, userAddress = null, overrideLBPAdd
       // Calculate time remaining
       const cliffTime = vestingStart + vestingCliffDuration;
       const finalTime = vestingStart + vestingFinalDuration;
-      const timeUntilCliff = cliffTime > currentTime ? Number(cliffTime - currentTime) : 0;
-      const timeUntilFinal = finalTime > currentTime ? Number(finalTime - currentTime) : 0;
+      const timeUntilCliff = cliffTime > currentTimeBigInt ? Number(cliffTime - currentTimeBigInt) : 0;
+      const timeUntilFinal = finalTime > currentTimeBigInt ? Number(finalTime - currentTimeBigInt) : 0;
 
       setData({
         // Contract addresses
@@ -306,7 +314,7 @@ export const useVestingData = (escrowAddress, userAddress = null, overrideLBPAdd
         vestingPercent,
         
         // Time calculations
-        currentTime: Number(currentTime),
+        currentTime: Number(currentTimeBigInt),
         cliffTime: Number(cliffTime),
         finalTime: Number(finalTime),
         timeUntilCliff,
@@ -327,54 +335,29 @@ export const useVestingData = (escrowAddress, userAddress = null, overrideLBPAdd
     } finally {
       isFetchingRef.current = false;
     }
-  }, [escrowAddress, userAddress, overrideLBPAddress]);
+  }, [escrowAddress, userAddress, overrideLBPAddress, currentTime]);
 
+  /**
+   * Set up polling and block listeners
+   */
   useEffect(() => {
-    if (!escrowAddress) {
-      setData(null);
-      setLoading(false);
-      setError(null);
-      return;
-    }
+    if (!escrowAddress) return;
 
-    const cleanup = () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-      if (blockListenerRef.current && providerRef.current?.off) {
-        try {
-          providerRef.current.off("block", blockListenerRef.current);
-        } catch (err) {
-          console.warn("Error removing block listener:", err);
-        }
-        blockListenerRef.current = null;
-      }
-    };
-
-    cleanup();
-
-    setLoading(true);
-    setError(null);
-    isFetchingRef.current = false;
-
+    // Initial fetch
     fetchVestingData();
 
+    // Set up interval polling
     intervalRef.current = setInterval(() => {
-      if (!isFetchingRef.current) {
-        fetchVestingData();
-      }
+      fetchVestingData();
     }, REFRESH_RATE_MS);
 
+    // Set up block listener for real-time updates
     const setupBlockListener = async () => {
       try {
         const provider = await ensureProvider();
         if (provider && provider.on) {
-          providerRef.current = provider;
           blockListenerRef.current = (blockNumber) => {
-            if (!isFetchingRef.current) {
-              fetchVestingData();
-            }
+            fetchVestingData();
           };
           provider.on("block", blockListenerRef.current);
         }
@@ -385,27 +368,16 @@ export const useVestingData = (escrowAddress, userAddress = null, overrideLBPAdd
 
     setupBlockListener();
 
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && !isFetchingRef.current) {
-        fetchVestingData();
-      }
-    };
-
-    const handleFocus = () => {
-      if (!isFetchingRef.current) {
-        fetchVestingData();
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('focus', handleFocus);
-
+    // Cleanup
     return () => {
-      cleanup();
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('focus', handleFocus);
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+      if (blockListenerRef.current && providerRef.current?.off) {
+        providerRef.current.off("block", blockListenerRef.current);
+      }
     };
-  }, [escrowAddress, userAddress, overrideLBPAddress, fetchVestingData]);
+  }, [escrowAddress, userAddress, fetchVestingData]);
 
   return {
     data,

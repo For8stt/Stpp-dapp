@@ -24,14 +24,14 @@ import { useAuctionEvents } from "../hooks/useAuctionEvents";
 import { useAccount } from "../hooks/useAccount";
 import { useTransaction } from "../hooks/useTransaction";
 import { useChainId } from "wagmi";
-import { useNow } from "../hooks/useNow";
+import { useTime } from "../time";
 
 
 import { getPhase, getTimeUntil } from "../utils/auctionUtils";
 import { ensureSigner } from "../services/web3/signer";
 import { ensureProvider } from "../services/web3/provider";
 import { generateCommitHash, parseMerkleProof, calculateDeposit } from "../utils/commitUtils";
-import { REFRESH_INTERVAL_MS, TIME_UPDATE_INTERVAL_MS, PHASES, DEFAULT_LBP_CONFIG } from "../constants/auction";
+import { REFRESH_INTERVAL_MS, PHASES, DEFAULT_LBP_CONFIG } from "../constants/auction";
 import styles from "./css/AuctionView.module.css";
 
 
@@ -67,27 +67,35 @@ const AuctionView = () => {
 
   const [refreshing, setRefreshing] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
-  const [provider, setProvider] = useState(null);
 
+  // Unified time layer
+  const { currentTime, refreshTime, setProvider: setTimeProvider } = useTime();
+
+  // Set provider for time service when auction contract is available
   useEffect(() => {
-    const getProvider = async () => {
-      try {
-        const contractProvider = auctionContract?.provider || auctionContract?.runner?.provider;
-        if (contractProvider) {
-          setProvider(contractProvider);
-        } else {
-          const defaultProvider = await ensureProvider();
-          setProvider(defaultProvider);
+    const bindProvider = async () => {
+      const contractProvider = auctionContract?.provider || auctionContract?.runner?.provider;
+      let providerToUse = contractProvider;
+      
+      if (!providerToUse) {
+        try {
+          providerToUse = ensureProvider();
+        } catch (err) {
+          // Provider not available
+          console.warn("Could not get provider for time service:", err);
         }
-      } catch (err) {
-        console.warn("Could not get provider:", err);
-        setProvider(null);
+      }
+      
+      if (providerToUse) {
+        setTimeProvider(providerToUse);
+        refreshTime().catch((err) => {
+          console.warn("Failed to refresh time service:", err);
+        });
       }
     };
-    getProvider();
-  }, [auctionContract]);
 
-  const { currentTime, refreshTime } = useNow(provider, TIME_UPDATE_INTERVAL_MS);
+    bindProvider();
+  }, [auctionContract, refreshTime, setTimeProvider]);
 
   const [commitForm, setCommitForm] = useState({
     quantity: "",
@@ -316,8 +324,6 @@ const AuctionView = () => {
     );
   }, [managerContract, auctionAddress, tx, refetchAuctionData, refetchEvents]);
 
-  // ============ EFFECTS ============
-  // Debug: Log currentTime and countdown changes
   useEffect(() => {
     if (auctionData) {
       const timeStr = new Date(currentTime * 1000).toLocaleTimeString();

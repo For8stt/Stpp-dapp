@@ -8,9 +8,8 @@ import React, { useEffect, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { useAccount } from "../hooks/useAccount";
 import { useTransaction } from "../hooks/useTransaction";
-import { useChainId } from "wagmi";
 import { useVestingData } from "../hooks/useVestingData";
-import { ensureProvider } from "../services/web3/provider";
+import { useTime } from "../time";
 import { calculateVestingCurveData, formatToken } from "../components/vesting/vesting.utils";
 import { useEscrowCheck } from "../components/vesting/useEscrowCheck";
 import { useClaimHandler } from "../components/vesting/useClaimHandler";
@@ -26,8 +25,10 @@ const VestingView = () => {
   const expectedLBPAddress = searchParams.get("lbp");
   const lbpAddressParam = searchParams.get("lbpAddress");
   const { account } = useAccount();
-  const chainId = useChainId();
   const tx = useTransaction();
+  
+  // Unified time layer
+  const { currentTime, refreshTime } = useTime();
   
   const lbpAddressToCheck = lbpAddressParam || expectedLBPAddress;
 
@@ -36,9 +37,8 @@ const VestingView = () => {
     loading,
     error,
     refetch: refetchVestingData,
-  } = useVestingData(escrowAddress, account, lbpAddressToCheck || undefined);
+  } = useVestingData(escrowAddress, account, lbpAddressToCheck || undefined, currentTime);
 
-  const [currentTime, setCurrentTime] = useState(Math.floor(Date.now() / 1000));
   const [vestingCurveData, setVestingCurveData] = useState([]);
 
   const { correctEscrowAddress, checkingEscrow, lbpFinalized } = useEscrowCheck(
@@ -68,36 +68,6 @@ const VestingView = () => {
     const curveData = calculateVestingCurveData(vestingData, currentTime, formatToken);
     setVestingCurveData(curveData);
   }, [vestingData, currentTime]);
-
-  /**
-   * Update current time
-   */
-  useEffect(() => {
-    const updateTime = async () => {
-      try {
-        const provider = await ensureProvider();
-        if (provider) {
-          try {
-            const block = await provider.getBlock("latest");
-            if (block?.timestamp) {
-              setCurrentTime(Number(block.timestamp));
-              return;
-            }
-          } catch (blockErr) {
-            console.warn("Could not fetch blockchain time:", blockErr);
-          }
-        }
-      } catch (err) {
-        console.warn("Could not get provider for time update:", err);
-      }
-      
-      setCurrentTime(Math.floor(Date.now() / 1000));
-    };
-
-    updateTime();
-    const interval = setInterval(updateTime, 1000);
-    return () => clearInterval(interval);
-  }, [chainId]);
 
   if (loading) {
     return <VestingLoading />;
@@ -132,7 +102,16 @@ const VestingView = () => {
       canClaim={canClaim}
       isPending={tx.isPending}
       onClaim={handleClaim}
-      onTimeAdvanced={refetchVestingData}
+      onTimeAdvanced={async () => {
+        // Wait for blockchain to update after time advancement
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Refresh time from blockchain
+        await refreshTime();
+        // Wait for time to propagate
+        await new Promise(resolve => setTimeout(resolve, 500));
+        // Refresh vesting data
+        await refetchVestingData();
+      }}
     />
   );
 };

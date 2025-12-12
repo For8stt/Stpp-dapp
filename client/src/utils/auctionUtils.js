@@ -31,8 +31,14 @@ export const getPhase = (now, startTime, commitEndTime, revealEndTime, finalized
   return "Finalized";
 };
 
-export const getTimeUntil = (targetTime, currentTime = null) => {
-  const now = currentTime !== null ? currentTime : Math.floor(Date.now() / 1000);
+/**
+ * Calculate time remaining until target time
+ * @param {number|bigint} targetTime - Target timestamp in seconds
+ * @param {number} currentTime - Current timestamp in seconds (from unified time layer)
+ * @returns {string|null} - Formatted time string or null if time has passed
+ */
+export const getTimeUntil = (targetTime, currentTime) => {
+  const now = Number(currentTime);
   const diff = Number(targetTime) - now;
   if (diff <= 0) return null;
   const hours = Math.floor(diff / 3600);

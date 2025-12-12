@@ -3,6 +3,12 @@
  */
 
 export const REFRESH_INTERVAL_MS = 30000; // 30 seconds
+
+/**
+ * @deprecated TIME_UPDATE_INTERVAL_MS is no longer used.
+ * Time updates are now handled by the unified TimeService via useTime hook.
+ * This constant is kept for backward compatibility but should not be used in new code.
+ */
 export const TIME_UPDATE_INTERVAL_MS = 1000; // 1 second
 
 export const PHASES = {

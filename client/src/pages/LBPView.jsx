@@ -1,10 +1,10 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useParams } from "react-router-dom";
-import { useChainId } from "wagmi";
 import { useAccount } from "../hooks/useAccount";
 import { useRealtimeLbpData } from "../hooks/useRealtimeLbpData";
 import { useLbpData } from "../hooks/useLbpData";
 import { useLbpActions } from "../hooks/useLbpActions";
+import { useTime } from "../time";
 import DeveloperTimeControls from "../components/common/DeveloperTimeControls";
 import LBPHeader from "../components/lbp/LBPHeader";
 import PoolStateOverview from "../components/lbp/PoolStateOverview";
@@ -12,7 +12,6 @@ import PriceChart from "../components/lbp/PriceChart";
 import WeightScheduleChart from "../components/lbp/WeightScheduleChart";
 import BidForm from "../components/lbp/BidForm";
 import FinalizedPanel from "../components/lbp/FinalizedPanel";
-import { ensureProvider } from "../services/web3/provider";
 import styles from "./css/LBPView.module.css";
 
 const REFRESH_RATE_MS = 2000;
@@ -20,8 +19,10 @@ const REFRESH_RATE_MS = 2000;
 const LbpView = () => {
   const { lbpAddress } = useParams();
   const { account } = useAccount();
-  const chainId = useChainId();
-  const [currentTime, setCurrentTime] = useState(Math.floor(Date.now() / 1000));
+  
+  // Unified time layer
+  const { currentTime, refreshTime } = useTime();
+  
   const [error, setError] = useState("");
 
   const {
@@ -64,35 +65,6 @@ const LbpView = () => {
     refetchLbpData,
     refetchUserData
   );
-
-  useEffect(() => {
-    const updateTime = async () => {
-      try {
-        const provider = ensureProvider();
-        if (provider) {
-          try {
-            const block = await provider.getBlock("latest");
-            if (block?.timestamp) {
-              setCurrentTime(Number(block.timestamp));
-              return;
-            }
-          } catch (blockErr) {
-            console.warn("Could not fetch blockchain time:", blockErr);
-          }
-        }
-      } catch (err) {
-        console.warn("Could not get provider for time update:", err);
-      }
-      
-      setCurrentTime(Math.floor(Date.now() / 1000));
-    };
-
-    updateTime();
-    
-    const interval = setInterval(updateTime, 1000);
-    
-    return () => clearInterval(interval);
-  }, [chainId]);
 
   useEffect(() => {
     if (lbpError) {
@@ -209,7 +181,18 @@ const LbpView = () => {
           lbpData={lbpData}
         />
 
-        <DeveloperTimeControls onTimeAdvanced={refetchLbpData} />
+        <DeveloperTimeControls 
+          onTimeAdvanced={async () => {
+            // Wait for blockchain to update after time advancement
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            // Refresh time from blockchain
+            await refreshTime();
+            // Wait for time to propagate
+            await new Promise(resolve => setTimeout(resolve, 500));
+            // Refresh LBP data
+            await refetchLbpData();
+          }} 
+        />
       </div>
     </div>
   );
