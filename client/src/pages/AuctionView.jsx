@@ -1,34 +1,22 @@
 /* eslint-env es2020 */
-/**
- * AuctionView - Production-ready refactored component
- * 
- * Improvements:
- * - Extracted custom hooks for contract management, data fetching, and transactions
- * - Separated concerns: contracts, data, UI state
- * - Optimized re-renders with proper memoization
- * - Consistent error handling
- * - Clean, maintainable structure
- */
-
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { ethers } from "ethers";
 
-// Components
-import PriceDecayChart from "../components/presale/PriceDecayChart";
-import AuctionHeader from "../components/presale/AuctionHeader";
-import AuctionStatusGrid from "../components/presale/AuctionStatusGrid";
-import AuctionTimeline from "../components/presale/AuctionTimeline";
-import ReservePanel from "../components/presale/ReservePanel";
-import CommitForm from "../components/presale/CommitForm";
-import RevealForm from "../components/presale/RevealForm";
-import PriceBucketPanel from "../components/presale/PriceBucketPanel";
-import AllocationPanel from "../components/presale/AllocationPanel";
-import FinalizedPanel from "../components/presale/FinalizedPanel";
-import EventsPanel from "../components/presale/EventsPanel";
-import DeveloperTimeControls from "../components/presale/DeveloperTimeControls";
+import PriceDecayChart from "../components/auction/PriceDecayChart";
+import AuctionHeader from "../components/auction/AuctionHeader";
+import AuctionStatusGrid from "../components/auction/AuctionStatusGrid";
+import AuctionTimeline from "../components/auction/AuctionTimeline";
+import ReservePanel from "../components/auction/ReservePanel";
+import CommitForm from "../components/auction/CommitForm";
+import RevealForm from "../components/auction/RevealForm";
+import PriceBucketPanel from "../components/auction/PriceBucketPanel";
+import AllocationPanel from "../components/auction/AllocationPanel";
+import FinalizedPanel from "../components/auction/FinalizedPanel";
+import EventsPanel from "../components/auction/EventsPanel";
+import DeveloperTimeControls from "../components/common/DeveloperTimeControls";
 
-// Hooks
+
 import { useAuctionContracts } from "../hooks/useAuctionContracts";
 import { useAuctionData } from "../hooks/useAuctionData";
 import { useUserAuctionData } from "../hooks/useUserAuctionData";
@@ -38,7 +26,7 @@ import { useTransaction } from "../hooks/useTransaction";
 import { useChainId } from "wagmi";
 import { useNow } from "../hooks/useNow";
 
-// Utils & Constants
+
 import { getPhase, getTimeUntil } from "../utils/auctionUtils";
 import { ensureSigner } from "../services/web3/signer";
 import { ensureProvider } from "../services/web3/provider";
@@ -46,13 +34,11 @@ import { generateCommitHash, parseMerkleProof, calculateDeposit } from "../utils
 import { REFRESH_INTERVAL_MS, TIME_UPDATE_INTERVAL_MS, PHASES, DEFAULT_LBP_CONFIG } from "../constants/auction";
 import styles from "./css/AuctionView.module.css";
 
-// ============ COMPONENT ============
 
 const AuctionView = () => {
   const { address } = useParams();
   const chainId = useChainId();
 
-  // ============ ACCOUNT & CONTRACTS ============
   const { account } = useAccount();
   const {
     managerContract,
@@ -62,7 +48,6 @@ const AuctionView = () => {
     error: contractsError,
   } = useAuctionContracts(address);
 
-  // ============ DATA FETCHING ============
   const {
     data: auctionData,
     loading: auctionDataLoading,
@@ -80,16 +65,13 @@ const AuctionView = () => {
     refetch: refetchEvents,
   } = useAuctionEvents(auctionContract);
 
-  // ============ UI STATE ============
   const [refreshing, setRefreshing] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
   const [provider, setProvider] = useState(null);
-  
-  // Get provider for time updates
+
   useEffect(() => {
     const getProvider = async () => {
       try {
-        // Prefer provider from contract, fallback to ensureProvider
         const contractProvider = auctionContract?.provider || auctionContract?.runner?.provider;
         if (contractProvider) {
           setProvider(contractProvider);
@@ -104,11 +86,9 @@ const AuctionView = () => {
     };
     getProvider();
   }, [auctionContract]);
-  
-  // Get current time with automatic updates
+
   const { currentTime, refreshTime } = useNow(provider, TIME_UPDATE_INTERVAL_MS);
 
-  // Form state
   const [commitForm, setCommitForm] = useState({
     quantity: "",
     priceTickIndex: "0",
@@ -123,10 +103,8 @@ const AuctionView = () => {
     nonce: "",
   });
 
-  // Transaction management
   const tx = useTransaction();
 
-  // ============ COMPUTED VALUES ============
   const phase = useMemo(() => {
     if (!auctionData) return "Loading";
     return getPhase(
@@ -146,7 +124,6 @@ const AuctionView = () => {
     return null;
   }, [phase, auctionData, currentTime]);
 
-  // Fetch owner status from manager contract
   useEffect(() => {
     const fetchOwner = async () => {
       if (!managerContract || !account) {
@@ -167,11 +144,9 @@ const AuctionView = () => {
   const loading = contractsLoading || auctionDataLoading;
   const error = contractsError || auctionDataError;
 
-  // ============ REFRESH HANDLER ============
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      // Refresh time from blockchain
       await refreshTime();
       
       await Promise.all([
@@ -184,7 +159,6 @@ const AuctionView = () => {
     }
   }, [refetchAuctionData, refetchUserData, refetchEvents, account, refreshTime]);
 
-  // ============ TRANSACTION HANDLERS ============
   const handleCommit = useCallback(async () => {
     if (!auctionContract || !auctionData) return;
 
@@ -291,7 +265,6 @@ const AuctionView = () => {
   const handleLaunchLBP = useCallback(async () => {
     if (!managerContract || !auctionAddress) return;
 
-    // Use currentTime from useNow hook (already synced with blockchain on local networks)
     const blockchainTime = currentTime;
 
     const lbpConfig = {
@@ -352,17 +325,14 @@ const AuctionView = () => {
     }
   }, [currentTime, countdown, auctionData]);
 
-  // Auto-refresh data periodically
   useEffect(() => {
     if (!auctionContract || loading || error || !auctionData) return;
 
     const interval = setInterval(() => {
       refetchAuctionData().catch(() => {
-        // Silently handle refresh errors
       });
       if (account) {
         refetchUserData().catch(() => {
-          // Silently handle refresh errors
         });
       }
     }, REFRESH_INTERVAL_MS);
@@ -370,8 +340,6 @@ const AuctionView = () => {
     return () => clearInterval(interval);
   }, [auctionContract, loading, error, auctionData, account, refetchAuctionData, refetchUserData]);
 
-  // ============ RENDER ============
-  // Debug logging
   useEffect(() => {
     console.log("AuctionView state:", {
       address,
@@ -461,7 +429,6 @@ const AuctionView = () => {
         )}
       </div>
 
-      {/* Price Decay Chart */}
       {auctionData?.priceTicks && auctionData.priceTicks.length > 0 && (
         <PriceDecayChart
           priceTicks={auctionData.priceTicks}
@@ -482,7 +449,6 @@ const AuctionView = () => {
 
       {!auctionData.finalized && <AllocationPanel userData={userData} />}
 
-      {/* Finalization Panel - Show after reveal phase ends */}
       {phase === PHASES.FINALIZED && !auctionData.finalized && (
         <div className={styles.finalizationPanel}>
           <p className={styles.finalizationTitle}>Auction Ready for Finalization</p>
@@ -506,8 +472,6 @@ const AuctionView = () => {
           )}
         </div>
       )}
-
-      {/* Finalized Panel - Shows after finalization with LBP info */}
       <FinalizedPanel
         auctionData={auctionData}
         isOwner={isOwner}
@@ -518,17 +482,14 @@ const AuctionView = () => {
 
       <EventsPanel events={events} />
 
-      {/* Developer Time Controls - Only visible on localhost/hardhat */}
       <DeveloperTimeControls 
         onTimeAdvanced={async () => {
           console.log("Time advanced, refreshing...");
-          // Wait a bit for blockchain to update after mining blocks
+
           await new Promise(resolve => setTimeout(resolve, 1000));
-          // Immediately refresh time after fast-forwarding
           await refreshTime();
-          // Wait again to ensure time is updated
           await new Promise(resolve => setTimeout(resolve, 500));
-          // Then refresh all data
+
           await handleRefresh();
           console.log("All data refreshed, currentTime:", currentTime);
         }} 

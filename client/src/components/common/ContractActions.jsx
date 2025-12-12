@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { toast } from "react-toastify";
 
-import { depositFund, withdrawFund } from "../services/web3/contract";
+import { depositFund, withdrawFund } from "../../services/web3/contract";
 
 const ContractActions = ({ onActionComplete = () => {}, disabled }) => {
   const [depositValue, setDepositValue] = useState("");

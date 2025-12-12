@@ -74,9 +74,7 @@ const PresalePage = ({ account }) => {
       let factoryContract = null;
       try {
         factoryContract = await loadContract("PublicPresaleFactory");
-      } catch {
-        // ignore missing factory configuration
-      }
+      } catch {}
       if (factoryContract) {
         const factoryAddress = (factoryContract.target || factoryContract.address || "").toString().toLowerCase();
         if (factoryAddress === normalizedAddress) {
@@ -229,17 +227,13 @@ const PresalePage = ({ account }) => {
   const runAction = async (label, action, preCheckAction = null) => {
     if (!managerContract || !info?.auction) return;
     try {
-      // Try to simulate the call first to get better error messages
       if (preCheckAction) {
         try {
           await preCheckAction();
         } catch (preCheckErr) {
-          // If preCheck fails with "missing revert data", we'll still try the transaction
-          // because sometimes it's a false negative from the RPC
           if (preCheckErr?.message?.includes("missing revert data")) {
-            console.warn("⚠️ Pre-check failed with 'missing revert data', but will attempt transaction anyway");
+            console.warn("Pre-check failed with 'missing revert data', but will attempt transaction anyway");
           } else {
-            // If staticCall fails with a specific error, show it before attempting the real transaction
             console.warn("Pre-check failed:", preCheckErr);
             throw preCheckErr;
           }
@@ -257,11 +251,9 @@ const PresalePage = ({ account }) => {
       await refreshInfo();
     } catch (err) {
       console.error("Transaction error:", err);
-      
-      // Try to extract more detailed error message
+
       let errorMessage = err?.message || `Failed to ${label.toLowerCase()}`;
-      
-      // Check for common revert reasons
+
       if (err?.reason) {
         errorMessage = err.reason;
       } else if (err?.data?.message) {
@@ -269,18 +261,15 @@ const PresalePage = ({ account }) => {
       } else if (err?.error?.message) {
         errorMessage = err.error.message;
       }
-      
-      // Check for transaction receipt to get revert reason
+
       if (err?.receipt) {
         console.log("Transaction receipt:", err.receipt);
       }
-      
-      // Check for transaction hash to get more info
+
       if (err?.transaction?.hash) {
         console.log("Transaction hash:", err.transaction.hash);
       }
-      
-      // Provide more helpful error messages
+
       if (errorMessage.includes("RevealPhaseClosed") || errorMessage.includes("reveal")) {
         errorMessage = "Reveal phase has not ended yet. Wait for the reveal phase to complete before finalizing.";
       } else if (errorMessage.includes("AuctionNotFinalized") || errorMessage.includes("not finalized")) {
@@ -304,14 +293,11 @@ const PresalePage = ({ account }) => {
 
   const handleFinalizeAuction = async () => {
     if (!managerContract || !info?.auction) return;
-    
-    // Check if auction is already finalized
+
     if (info.finalized) {
       handleTxError(new Error("Auction is already finalized"));
       return;
     }
-
-    // Try to get auction contract to check revealEndTime
     try {
       const { BrowserProvider } = await import("ethers");
       if (!window.ethereum) {
@@ -335,10 +321,8 @@ const PresalePage = ({ account }) => {
       }
     } catch (err) {
       console.warn("Could not check reveal end time:", err);
-      // Continue anyway - let the contract handle the error
     }
 
-    // Try staticCall first to get better error message
     const preCheck = async () => {
       try {
         await managerContract.finalizeAuction.staticCall(info.auction);
@@ -352,26 +336,22 @@ const PresalePage = ({ account }) => {
 
   const handleLaunchLbp = async () => {
     if (!managerContract || !info?.auction) return;
-    
-    // Check if auction is finalized
+
     if (!info.finalized) {
       handleTxError(new Error("Auction must be finalized before launching LBP"));
       return;
     }
 
-    // Check if LBP is already launched
     if (info.lbpInitialized) {
       handleTxError(new Error("LBP has already been launched"));
       return;
     }
 
-    // Validate LBP config
     if (launchLbpConfig.startTime >= launchLbpConfig.endTime) {
       handleTxError(new Error("LBP start time must be before end time"));
       return;
     }
 
-    // Detailed diagnostics: Check auction state directly
     try {
       const { BrowserProvider } = await import("ethers");
       if (!window.ethereum) {
@@ -381,8 +361,7 @@ const PresalePage = ({ account }) => {
       const allAbis = await import("../abi/allAbis.json");
       const auctionAbi = allAbis.DutchAuction || [];
       const auctionContract = new ethers.Contract(info.auction, auctionAbi, provider);
-      
-      // Check auction state
+
       const [finalized, successful, tokensForSale, tokensSold, lbpLaunched, lbpTokenRecipient, lbpStableRecipient, ethForTreasury, totalRaised] = await Promise.all([
         auctionContract.finalized(),
         auctionContract.successful(),
@@ -400,13 +379,12 @@ const PresalePage = ({ account }) => {
       const lbpStableShareBps = await auctionContract.lbpStableShareBps();
       const BPS_DENOMINATOR = 10000n;
       let stableForLBP = (totalRaised * lbpStableShareBps) / BPS_DENOMINATOR;
-      
-      // Cap stableForLBP at ethForTreasury (as done in contract)
+
       if (stableForLBP > ethForTreasury) {
         stableForLBP = ethForTreasury;
       }
       
-      const actualStableForLBP = stableForLBP; // This is what will be sent
+      const actualStableForLBP = stableForLBP;
 
       console.log("=== LBP Launch Diagnostics ===");
       console.log("Auction state:", {
@@ -430,33 +408,29 @@ const PresalePage = ({ account }) => {
       console.log("actualStableForLBP > 0:", actualStableForLBP > 0n);
       console.log("CRITICAL: PresaleManager.launchLBP() requires ethReceived > 0 (line 255), but auction.launchLbp() only sends ETH if stableForLBP > 0");
       if (actualStableForLBP === 0n) {
-        console.error("❌ PROBLEM: actualStableForLBP is 0! This will cause 'NoEthReceived' error in PresaleManager.launchLBP()");
+        console.error("PROBLEM: actualStableForLBP is 0! This will cause 'NoEthReceived' error in PresaleManager.launchLBP()");
       }
       console.log("=============================");
-      
-      // Try to call auction.launchLbp() directly to see if it works
+
       try {
         console.log("Testing auction.launchLbp() directly...");
-        // This will fail because we're not the manager, but it will show us the error
         const signer = await provider.getSigner();
         const auctionContractWithSigner = auctionContract.connect(signer);
         try {
           await auctionContractWithSigner.launchLbp.staticCall();
-          console.log("✅ auction.launchLbp() would succeed (but we're not the manager)");
+          console.log("auction.launchLbp() would succeed (but we're not the manager)");
         } catch (auctionErr) {
-          console.error("❌ auction.launchLbp() would fail:", auctionErr?.reason || auctionErr?.message || auctionErr);
+          console.error("auction.launchLbp() would fail:", auctionErr?.reason || auctionErr?.message || auctionErr);
         }
       } catch (testErr) {
         console.warn("Could not test auction.launchLbp() directly:", testErr);
       }
 
-      // Check conditions (order matters - check most critical first)
       if (!finalized) {
         handleTxError(new Error("Auction is not finalized. Please finalize the auction first."));
         return;
       }
 
-      // CRITICAL: Auction must be successful to launch LBP
       if (!successful) {
         handleTxError(new Error("Auction was not successful (did not reach soft cap or no tokens sold). LBP can only be launched for successful auctions."));
         return;
@@ -472,8 +446,7 @@ const PresalePage = ({ account }) => {
         return;
       }
 
-      // CRITICAL: lbpTokenRecipient and lbpStableRecipient must be set to PresaleManager address
-      // because PresaleManager.launchLBP() expects to receive tokens/ETH from auction.launchLbp()
+      //lbpTokenRecipient and lbpStableRecipient must be set to PresaleManager address
       if (lbpTokenRecipient === ethers.ZeroAddress) {
         handleTxError(new Error("LBP token recipient is not set in auction. This must be set to PresaleManager address during auction initialization."));
         return;
@@ -485,24 +458,20 @@ const PresalePage = ({ account }) => {
         return;
       }
 
-      // CRITICAL: PresaleManager.launchLBP() requires BOTH tokens AND ETH to be received
-      // If actualStableForLBP is 0, auction.launchLbp() won't send ETH, causing NoEthReceived() error
+      // PresaleManager.launchLBP() requires BOTH tokens AND ETH to be received
       if (actualStableForLBP === 0n) {
         const errorMsg = `Cannot launch LBP: stableForLBP is 0, but PresaleManager.launchLBP() requires ETH to be received. ` +
           `This will cause 'NoEthReceived' error. ` +
           `Please ensure lbpStableShareBps > 0 (current: ${lbpStableShareBps.toString()}) and totalRaised > 0 (current: ${ethers.formatEther(totalRaised)} ETH).`;
-        console.error("❌", errorMsg);
+        console.error("", errorMsg);
         handleTxError(new Error(errorMsg));
         return;
       }
-      
-      // Verify lbpStableRecipient is set correctly
+
       if (lbpStableRecipient === ethers.ZeroAddress) {
         handleTxError(new Error(`LBP stable recipient is not set but ETH share is required (${ethers.formatEther(actualStableForLBP)} ETH). Please check auction configuration.`));
         return;
       }
-      
-      // Verify that lbpStableRecipient is the PresaleManager
       if (lbpStableRecipient.toLowerCase() !== address.toLowerCase()) {
         handleTxError(new Error(`LBP stable recipient (${lbpStableRecipient}) is not set to PresaleManager (${address}). ETH must be sent to PresaleManager.`));
         return;
@@ -514,13 +483,10 @@ const PresalePage = ({ account }) => {
       }
 
       // CRITICAL: Check if auction has enough tokens to transfer
-      // Tokens must be transferred to auction BEFORE initialization
       try {
-        // First get AuctionRecord to get the saleToken address
         const record = await managerContract.getAuctionRecord(info.auction);
         const recordSaleToken = record.saleToken;
-        
-        // Get saleToken from auction contract
+
         const saleTokenAddress = await auctionContract.saleToken();
         
         console.log("=== Token Address Check ===");
@@ -528,21 +494,19 @@ const PresalePage = ({ account }) => {
         console.log("Sale Token Address (from record):", recordSaleToken);
         console.log("Addresses match:", saleTokenAddress.toLowerCase() === recordSaleToken.toLowerCase());
         console.log("===========================");
-        
-        // Check if addresses match
+
         if (saleTokenAddress.toLowerCase() !== recordSaleToken.toLowerCase()) {
-          const errorMsg = `❌ CRITICAL: Token address mismatch! ` +
+          const errorMsg = `Token address mismatch! ` +
             `Auction has: ${saleTokenAddress}, but AuctionRecord has: ${recordSaleToken}. ` +
             `This indicates a configuration error.`;
           console.error(errorMsg);
           handleTxError(new Error(errorMsg));
           return;
         }
-        
-        // Check if contract exists at this address
+
         const code = await provider.getCode(saleTokenAddress);
         if (code === "0x" || code === "0x0") {
-          const errorMsg = `❌ CRITICAL: Token contract does not exist at address ${saleTokenAddress}! ` +
+          const errorMsg = `Token contract does not exist at address ${saleTokenAddress}! ` +
             `\n\nThis means the token was never deployed or the address is wrong. ` +
             `\n\nFrom your deployment, TestToken is at: 0xa513E6E4b8f2a923D98304ec87F64353C4D5C853 ` +
             `\nBut your auction is using: ${saleTokenAddress} ` +
@@ -553,16 +517,14 @@ const PresalePage = ({ account }) => {
           handleTxError(new Error(errorMsg));
           return;
         }
-        
-        // Now try to read token balance
+
         const saleTokenAbi = [
           { "constant": true, "inputs": [{ "name": "_owner", "type": "address" }], "name": "balanceOf", "outputs": [{ "name": "balance", "type": "uint256" }], "type": "function" },
           { "constant": true, "inputs": [], "name": "decimals", "outputs": [{ "name": "", "type": "uint8" }], "type": "function" },
           { "constant": true, "inputs": [], "name": "symbol", "outputs": [{ "name": "", "type": "string" }], "type": "function" }
         ];
         const saleTokenContract = new ethers.Contract(saleTokenAddress, saleTokenAbi, provider);
-        
-        // Verify token contract exists and is valid
+
         let tokenSymbol = "UNKNOWN";
         try {
           tokenSymbol = await saleTokenContract.symbol();
@@ -582,11 +544,10 @@ const PresalePage = ({ account }) => {
         console.log("PresaleManager ETH Balance:", ethers.formatEther(managerEthBalance) + " ETH");
         console.log("Expected ETH from auction:", ethers.formatEther(actualStableForLBP) + " ETH");
         console.log("===========================");
-        
-        // CRITICAL: Auction must have enough tokens to transfer unsoldTokens
+
         if (auctionTokenBalance < unsoldTokens) {
           const missing = unsoldTokens - auctionTokenBalance;
-          const errorMsg = `❌ CRITICAL: Auction does not have enough tokens! ` +
+          const errorMsg = `Auction does not have enough tokens! ` +
             `Required: ${ethers.formatEther(unsoldTokens)} tokens, ` +
             `Available: ${ethers.formatEther(auctionTokenBalance)} tokens, ` +
             `Missing: ${ethers.formatEther(missing)} tokens. ` +
@@ -598,21 +559,19 @@ const PresalePage = ({ account }) => {
           return;
         }
         
-        console.log("✅ Token contract exists and is valid");
-        console.log("✅ Token addresses match");
-        console.log("✅ Auction has sufficient tokens to transfer unsold tokens");
-        console.log("✅ PresaleManager will receive tokens and ETH when auction.launchLbp() is called.");
+        console.log("Token contract exists and is valid");
+        console.log("Token addresses match");
+        console.log("Auction has sufficient tokens to transfer unsold tokens");
+        console.log("PresaleManager will receive tokens and ETH when auction.launchLbp() is called.");
       } catch (balanceErr) {
-        console.error("❌ Error checking token balances:", balanceErr);
-        // If we can't check balances, it might be because the token address is invalid
+        console.error("Error checking token balances:", balanceErr);
         if (balanceErr?.message?.includes("missing revert data") || balanceErr?.code === "CALL_EXCEPTION") {
-          // Try to get the token address from record first
           try {
             const record = await managerContract.getAuctionRecord(info.auction);
             const recordSaleToken = record.saleToken;
             const code = await provider.getCode(recordSaleToken);
             if (code === "0x" || code === "0x0") {
-              const errorMsg = `❌ CRITICAL: Token contract does not exist at address ${recordSaleToken}! ` +
+              const errorMsg = `Token contract does not exist at address ${recordSaleToken}! ` +
                 `\n\nThis means the token was never deployed or the address is wrong. ` +
                 `\n\nFrom your deployment, TestToken is at: 0xa513E6E4b8f2a923D98304ec87F64353C4D5C853 ` +
                 `\nBut your auction is using: ${recordSaleToken} ` +
@@ -627,7 +586,7 @@ const PresalePage = ({ account }) => {
             console.warn("Could not check record:", recordErr);
           }
           
-          const errorMsg = `❌ CRITICAL: Cannot read token balance. This might mean: ` +
+          const errorMsg = `Cannot read token balance. This might mean: ` +
             `1) Token address is invalid or doesn't exist, ` +
             `2) Token contract is not deployed, or ` +
             `3) Token address in AuctionRecord is wrong. ` +
@@ -637,10 +596,8 @@ const PresalePage = ({ account }) => {
           handleTxError(new Error(errorMsg));
           return;
         }
-        // Don't return for other errors - continue with other checks
       }
 
-      // Validate LBP config parameters before calling
       console.log("Validating LBP config parameters...");
       console.log("LBP Config:", {
         startTime: launchLbpConfig.startTime,
@@ -653,12 +610,9 @@ const PresalePage = ({ account }) => {
         vestingFinalDuration: launchLbpConfig.vestingFinalDuration,
         vestingCliffPercentBP: launchLbpConfig.vestingCliffPercentBP,
       });
-      
-      // Check if LBP needs to be deployed (if record.lbp == address(0))
-      // _deploySecureLBP() will be called, which requires valid parameters
+
       if (info.lbp === ethers.ZeroAddress || !info.lbp) {
         console.log("LBP will be deployed (record.lbp is zero)");
-        // Validate parameters for deployment
         if (launchLbpConfig.startTime >= launchLbpConfig.endTime) {
           handleTxError(new Error("LBP start time must be before end time"));
           return;
@@ -667,7 +621,6 @@ const PresalePage = ({ account }) => {
           handleTxError(new Error("Pool weights must be greater than 0"));
           return;
         }
-        // Validate vesting parameters for configureVesting()
         if (launchLbpConfig.vestingCliffPercentBP > 10000) {
           handleTxError(new Error("vestingCliffPercentBP must be <= 10000 (100%)"));
           return;
@@ -676,20 +629,17 @@ const PresalePage = ({ account }) => {
           handleTxError(new Error("vestingFinalDuration must be >= vestingCliffDuration"));
           return;
         }
-        console.log("✅ All LBP deployment parameters are valid");
+        console.log("All LBP deployment parameters are valid");
       } else {
         console.log("LBP already exists:", info.lbp);
       }
 
-      console.log("✅ All pre-checks passed. Ready to launch LBP.");
+      console.log("All pre-checks passed. Ready to launch LBP.");
 
     } catch (err) {
       console.warn("Could not check auction state:", err);
-      // Continue anyway - let the contract handle the error
     }
 
-    // Check if AuctionRecord has saleToken and treasury set
-    // These are required for _deploySecureLBP()
     try {
       const record = await managerContract.getAuctionRecord(info.auction);
       console.log("AuctionRecord:", {
@@ -711,54 +661,7 @@ const PresalePage = ({ account }) => {
       console.warn("Could not check AuctionRecord:", recordErr);
     }
 
-    // Try estimateGas and staticCall to get better error messages
-    // But if both fail with "missing revert data", we'll still try the transaction
-    // because sometimes the actual transaction works even when estimateGas fails
-    const preCheck = async () => {
-      try {
-        // First try estimateGas - it often gives better error messages
-        try {
-          const gasEstimate = await managerContract.launchLBP.estimateGas(info.auction, launchLbpConfig);
-          console.log("✅ Gas estimation succeeded:", gasEstimate.toString());
-        } catch (gasErr) {
-          console.error("❌ Gas estimation failed:", gasErr);
-          // If estimateGas fails, try staticCall
-          try {
-            await managerContract.launchLBP.staticCall(info.auction, launchLbpConfig);
-            console.log("✅ Static call succeeded");
-          } catch (staticErr) {
-            console.error("❌ Static call also failed:", staticErr);
-            // Try to extract error reason
-            if (gasErr?.reason) {
-              throw new Error(gasErr.reason);
-            } else if (staticErr?.reason) {
-              throw new Error(staticErr.reason);
-            } else if (gasErr?.data?.message) {
-              throw new Error(gasErr.data.message);
-            } else if (staticErr?.data?.message) {
-              throw new Error(staticErr.data.message);
-            }
-            // If we can't get a reason, but both failed, we'll still try the transaction
-            // because sometimes "missing revert data" is a false negative
-            console.warn("⚠️ Both estimateGas and staticCall failed with 'missing revert data'. This might be a false negative. Will attempt the transaction anyway.");
-            // Don't throw - let the transaction proceed
-          }
-        }
-      } catch (preCheckErr) {
-        // Only throw if we got a specific error reason
-        if (preCheckErr.message && !preCheckErr.message.includes("missing revert data")) {
-          console.error("Pre-check failed with specific error:", preCheckErr);
-          throw preCheckErr;
-        }
-        // Otherwise, log and continue
-        console.warn("Pre-check failed but continuing:", preCheckErr);
-      }
-    };
-
-    // Skip preCheck and try the transaction directly
-    // This will show the real error if the transaction fails
-    // Sometimes "missing revert data" from estimateGas/staticCall is a false negative
-    console.log("⚠️ Attempting transaction without preCheck to see real error...");
+    console.log("Attempting transaction without preCheck to see real error...");
     runAction("Launch LBP", () => managerContract.launchLBP(info.auction, launchLbpConfig), null);
   };
 

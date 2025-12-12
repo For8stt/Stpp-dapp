@@ -1,8 +1,8 @@
 import React from "react";
 import { NavLink } from "react-router-dom";
 
-import ConnectWalletButton from "../components/ConnectWalletButton";
-import NetworkInfo from "../components/NetworkInfo";
+import ConnectWalletButton from "../components/common/ConnectWalletButton";
+import NetworkInfo from "../components/common/NetworkInfo";
 
 const Home = ({ account }) => (
   <section className="page home">

@@ -43,14 +43,12 @@ const PresaleCard = ({ presale }) => {
 
   return (
     <div className={styles.card}>
-      {/* Status badge */}
       <div className={`${styles.statusBadge} ${currentStatus.text.toLowerCase()}`}>
         <span className={styles.statusIcon}>{currentStatus.icon}</span>
         <span>{currentStatus.text}</span>
       </div>
 
       <div className={styles.content}>
-        {/* Header with Manager info */}
         <div className={styles.header}>
           <div className={styles.headerContent}>
             <div className={styles.managerIcon}>
@@ -66,9 +64,7 @@ const PresaleCard = ({ presale }) => {
           </div>
         </div>
 
-        {/* Information cards grid */}
         <div className={styles.infoGrid}>
-          {/* Owner Card */}
           <div className={`${styles.infoCard} ${styles.owner}`}>
             <div className={styles.infoHeader}>
               <div className={`${styles.infoIcon} ${styles.owner}`}>
@@ -81,7 +77,6 @@ const PresaleCard = ({ presale }) => {
             </p>
           </div>
 
-          {/* Auction Card */}
           <div className={`${styles.infoCard} ${styles.auction} ${!presale.auction ? styles.inactive : ''}`}>
             <div className={styles.infoHeader}>
               <div className={`${styles.infoIcon} ${styles.auction} ${!presale.auction ? styles.inactive : ''}`}>
@@ -96,7 +91,6 @@ const PresaleCard = ({ presale }) => {
             </p>
           </div>
 
-          {/* LBP Card */}
           <div className={`${styles.infoCard} ${styles.liquidity} ${!presale.lbp ? styles.inactive : ''}`}>
             <div className={styles.infoHeader}>
               <div className={`${styles.infoIcon} ${styles.liquidity} ${!presale.lbp ? styles.inactive : ''}`}>
@@ -111,7 +105,6 @@ const PresaleCard = ({ presale }) => {
             </p>
           </div>
 
-          {/* Vesting Card */}
           <div className={`${styles.infoCard} ${styles.vesting} ${!presale.vesting ? styles.inactive : ''}`}>
             <div className={styles.infoHeader}>
               <div className={`${styles.infoIcon} ${styles.vesting} ${!presale.vesting ? styles.inactive : ''}`}>
@@ -127,7 +120,6 @@ const PresaleCard = ({ presale }) => {
           </div>
         </div>
 
-        {/* Action buttons */}
         <div className={styles.actions}>
           {presale.auction && (
             <Link
@@ -154,7 +146,6 @@ const PresaleCard = ({ presale }) => {
         </div>
       </div>
 
-      {/* Decorative elements */}
       <div className={styles.decorative1}></div>
       <div className={styles.decorative2}></div>
     </div>

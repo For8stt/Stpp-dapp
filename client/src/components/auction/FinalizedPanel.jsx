@@ -8,7 +8,6 @@ import styles from "./css/FinalizedPanel.module.css";
 const FinalizedPanel = ({ auctionData, isOwner, onLaunchLBP, managerAddress, auctionAddress }) => {
   const [lbpAddress, setLbpAddress] = useState(null);
 
-  // Fetch LBP address from PresaleManager
   useEffect(() => {
     const fetchLbpAddress = async () => {
       if (!managerAddress || !auctionData?.finalized || !auctionAddress) {
@@ -93,7 +92,7 @@ const FinalizedPanel = ({ auctionData, isOwner, onLaunchLBP, managerAddress, auc
       {auctionData.lbpLaunched && (lbpAddress || auctionData.lbpTokenRecipient !== ethers.ZeroAddress) && (
         <div style={{ marginTop: '1.5rem', padding: '1rem', backgroundColor: 'rgba(99, 102, 241, 0.1)', borderRadius: '0.75rem', border: '1px solid rgba(99, 102, 241, 0.3)' }}>
           <p style={{ fontSize: '0.875rem', color: 'rgba(255, 255, 255, 0.9)', marginBottom: '0.75rem', fontWeight: '500' }}>
-            ✅ LBP Successfully Launched
+             LBP Successfully Launched
           </p>
           {lbpAddress && (
             <>
@@ -117,7 +116,7 @@ const FinalizedPanel = ({ auctionData, isOwner, onLaunchLBP, managerAddress, auc
                 onMouseEnter={(e) => e.target.style.backgroundColor = 'rgb(79, 70, 229)'}
                 onMouseLeave={(e) => e.target.style.backgroundColor = 'rgb(99, 102, 241)'}
               >
-                View Presale Manager →
+                View Presale Manager ->
               </Link>
             </>
           )}

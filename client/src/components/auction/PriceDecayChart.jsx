@@ -43,7 +43,6 @@ const PriceDecayChart = ({
   currentTime,
   finalized,
   clearingPrice,
-  clearingTickIndex,
   totalDepositCommitted,
   softCap,
   phase
@@ -131,8 +130,7 @@ const PriceDecayChart = ({
     }
     return pts;
   }, [startPrice, endPrice, priceRange, timeRange, startTime]);
-  
-  // Find price tick positions for markers
+
   const tickMarkers = useMemo(() => {
     if (!priceTicks || priceTicks.length === 0 || !startPrice || !priceRange) return [];
     return priceTicks.map((tick, idx) => {

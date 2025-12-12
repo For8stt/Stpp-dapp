@@ -1,0 +1,676 @@
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.1);
+  }
+}
+
+.container {
+  max-width: 80rem;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  position: relative;
+  z-index: 1;
+}
+
+/* Loading and Error States */
+.loadingContainer,
+.errorContainer,
+.emptyContainer {
+  min-height: 100vh;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.loadingContent,
+.emptyContent {
+  text-align: center;
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+  border-radius: 9999px;
+  height: 3.5rem;
+  width: 3.5rem;
+  border: 3px solid transparent;
+  border-top-color: rgb(74, 222, 128);
+  border-right-color: rgba(74, 222, 128, 0.3);
+  margin: 0 auto 1.5rem;
+  box-shadow: 0 0 20px rgba(74, 222, 128, 0.3);
+}
+
+.loadingText,
+.emptyText {
+  color: white;
+  font-size: 1.125rem;
+  font-weight: 500;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.errorCard {
+  background: linear-gradient(to bottom right, rgb(15, 23, 42), rgb(30, 41, 59), rgb(15, 23, 42));
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(220, 38, 38, 0.1) 100%);
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  border-radius: 1rem;
+  padding: 2rem;
+  max-width: 32rem;
+  backdrop-filter: none;
+  box-shadow: none;
+  position: relative;
+  overflow: hidden;
+}
+
+.errorCard::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, 
+    rgba(239, 68, 68, 0.8) 0%,
+    rgba(248, 113, 113, 0.8) 50%,
+    rgba(239, 68, 68, 0.8) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 3s ease-in-out infinite;
+}
+
+.errorTitle {
+  color: white;
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+}
+
+.errorMessage {
+  color: rgba(255, 255, 255, 0.8);
+  margin-bottom: 1.5rem;
+}
+
+.retryButton {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(220, 38, 38, 0.1) 100%);
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.retryButton:hover {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.3) 0%, rgba(220, 38, 38, 0.2) 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 15px -3px rgba(239, 68, 68, 0.3);
+}
+
+.emptyState {
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.9) 100%);
+  backdrop-filter: blur(12px) saturate(180%);
+  border: 1px solid rgba(51, 65, 85, 0.6);
+  border-radius: 1rem;
+  padding: 3rem;
+  text-align: center;
+  box-shadow: 
+    0 20px 25px -5px rgba(0, 0, 0, 0.3),
+    0 10px 10px -5px rgba(0, 0, 0, 0.2);
+}
+
+.header {
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.9) 100%);
+  backdrop-filter: blur(12px) saturate(180%);
+  border: 1px solid rgba(51, 65, 85, 0.6);
+  border-radius: 1rem;
+  padding: 2rem;
+  box-shadow: 
+    0 20px 25px -5px rgba(0, 0, 0, 0.3),
+    0 10px 10px -5px rgba(0, 0, 0, 0.2);
+  position: relative;
+  overflow: hidden;
+}
+
+.header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, 
+    rgba(6, 182, 212, 0.8) 0%,
+    rgba(34, 197, 94, 0.8) 50%,
+    rgba(6, 182, 212, 0.8) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 3s ease-in-out infinite;
+}
+
+.headerTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.title {
+  font-size: 2rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: -0.02em;
+}
+
+.subtitle {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 1rem;
+}
+
+.backLink {
+  color: rgb(74, 222, 128);
+  text-decoration: none;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+}
+
+.backLink:hover {
+  background: rgba(74, 222, 128, 0.1);
+  color: rgb(147, 197, 253);
+}
+
+.refreshButton {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(37, 99, 235, 0.15) 100%);
+  border: 1px solid rgba(59, 130, 246, 0.5);
+  color: rgb(96, 165, 250);
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 0.875rem;
+}
+
+.refreshButton:hover {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.3) 0%, rgba(37, 99, 235, 0.2) 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px -3px rgba(59, 130, 246, 0.3);
+}
+
+.infoGrid {
+  display: grid;
+  grid-template-columns: repeat(1, 1fr);
+  gap: 1rem;
+}
+
+@media (min-width: 768px) {
+  .infoGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .infoGrid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.infoCard {
+  background: linear-gradient(135deg, rgba(51, 65, 85, 0.4) 0%, rgba(30, 41, 59, 0.5) 100%);
+  border: 1px solid rgba(71, 85, 105, 0.3);
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.infoCard::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.05) 0%, transparent 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.infoCard:hover {
+  transform: translateY(-2px);
+  border-color: rgba(71, 85, 105, 0.6);
+  box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.3);
+}
+
+.infoCard:hover::before {
+  opacity: 1;
+}
+
+.infoLabel {
+  color: rgb(148, 163, 184);
+  font-size: 0.8125rem;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  position: relative;
+  z-index: 1;
+}
+
+.infoValue {
+  color: white;
+  font-family: 'Courier New', monospace;
+  font-size: 0.875rem;
+  word-break: break-all;
+  position: relative;
+  z-index: 1;
+  font-weight: 500;
+}
+
+.infoValueBold {
+  color: white;
+  font-weight: 700;
+  font-size: 1rem;
+  position: relative;
+  z-index: 1;
+}
+
+.configCard {
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.9) 100%);
+  backdrop-filter: blur(12px) saturate(180%);
+  border: 1px solid rgba(51, 65, 85, 0.6);
+  border-radius: 1rem;
+  padding: 2rem;
+  box-shadow: 
+    0 20px 25px -5px rgba(0, 0, 0, 0.3),
+    0 10px 10px -5px rgba(0, 0, 0, 0.2);
+}
+
+.configGrid {
+  display: grid;
+  grid-template-columns: repeat(1, 1fr);
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+@media (min-width: 768px) {
+  .configGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.configItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  background: rgba(51, 65, 85, 0.3);
+  border-radius: 0.5rem;
+}
+
+.configLabel {
+  color: rgb(148, 163, 184);
+  font-weight: 600;
+}
+
+.configValue {
+  color: white;
+  font-weight: 700;
+}
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(1, 1fr);
+  gap: 1rem;
+}
+
+@media (min-width: 768px) {
+  .statsGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .statsGrid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.statCard {
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+  backdrop-filter: blur(8px);
+}
+
+.statCard::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  background: radial-gradient(circle at center, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
+}
+
+.statCard:hover {
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 10px 10px -5px rgba(0, 0, 0, 0.3);
+}
+
+.statCard:hover::before {
+  opacity: 1;
+}
+
+.statCardAllocation {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(37, 99, 235, 0.08) 100%);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  box-shadow: 0 4px 15px -3px rgba(59, 130, 246, 0.2);
+}
+
+.statCardVested {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(22, 163, 74, 0.08) 100%);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  box-shadow: 0 4px 15px -3px rgba(34, 197, 94, 0.2);
+}
+
+.statCardClaimed {
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.15) 0%, rgba(147, 51, 234, 0.08) 100%);
+  border: 1px solid rgba(168, 85, 247, 0.3);
+  box-shadow: 0 4px 15px -3px rgba(168, 85, 247, 0.2);
+}
+
+.statCardAvailable {
+  background: linear-gradient(135deg, rgba(6, 182, 212, 0.15) 0%, rgba(8, 145, 178, 0.08) 100%);
+  border: 1px solid rgba(6, 182, 212, 0.3);
+  box-shadow: 0 4px 15px -3px rgba(6, 182, 212, 0.2);
+}
+
+.statLabel {
+  color: rgb(148, 163, 184);
+  font-size: 0.8125rem;
+  margin-bottom: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  position: relative;
+  z-index: 1;
+}
+
+.statValue {
+  color: white;
+  font-size: 1.5rem;
+  font-weight: 800;
+  line-height: 1.2;
+  position: relative;
+  z-index: 1;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.statSubtext {
+  color: rgba(148, 163, 184, 0.8);
+  font-size: 0.75rem;
+  margin-top: 0.5rem;
+  position: relative;
+  z-index: 1;
+}
+
+.sectionTitle {
+  font-size: 1.75rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 1.5rem;
+  letter-spacing: -0.02em;
+}
+
+.progressSection {
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.9) 100%);
+  backdrop-filter: blur(12px) saturate(180%);
+  border: 1px solid rgba(51, 65, 85, 0.6);
+  border-radius: 1rem;
+  padding: 2rem;
+  box-shadow: 
+    0 20px 25px -5px rgba(0, 0, 0, 0.3),
+    0 10px 10px -5px rgba(0, 0, 0, 0.2);
+  position: relative;
+  overflow: hidden;
+}
+
+.progressSection::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, 
+    rgba(34, 197, 94, 0.8) 0%,
+    rgba(6, 182, 212, 0.8) 50%,
+    rgba(34, 197, 94, 0.8) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 3s ease-in-out infinite;
+}
+
+.progressCard {
+  margin-bottom: 2rem;
+}
+
+.progressCard:last-child {
+  margin-bottom: 0;
+}
+
+.progressHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.progressLabel {
+  color: rgb(203, 213, 225);
+  font-weight: 600;
+  font-size: 0.9375rem;
+}
+
+.progressPercent {
+  color: white;
+  font-weight: 700;
+  font-size: 0.9375rem;
+}
+
+.progressBarContainer {
+  width: 100%;
+  height: 1rem;
+  background: rgba(51, 65, 85, 0.5);
+  border-radius: 9999px;
+  overflow: hidden;
+  position: relative;
+}
+
+.progressBar {
+  height: 100%;
+  background: linear-gradient(90deg, 
+    rgba(34, 197, 94, 0.8) 0%,
+    rgba(6, 182, 212, 0.8) 100%);
+  border-radius: 9999px;
+  transition: width 0.5s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.progressBar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, 
+    transparent 0%,
+    rgba(255, 255, 255, 0.2) 50%,
+    transparent 100%);
+  animation: shimmer 2s ease-in-out infinite;
+}
+
+.progressBarCliff {
+  background: linear-gradient(90deg, 
+    rgba(168, 85, 247, 0.8) 0%,
+    rgba(147, 51, 234, 0.8) 100%);
+}
+
+.progressBarFinal {
+  background: linear-gradient(90deg, 
+    rgba(6, 182, 212, 0.8) 0%,
+    rgba(34, 197, 94, 0.8) 100%);
+}
+
+.progressInfo {
+  margin-top: 0.5rem;
+  color: rgba(148, 163, 184, 0.8);
+  font-size: 0.8125rem;
+}
+
+.chartPanel {
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.9) 100%);
+  backdrop-filter: blur(12px) saturate(180%);
+  border: 1px solid rgba(51, 65, 85, 0.6);
+  border-radius: 1rem;
+  padding: 2rem;
+  padding-top: 2.5rem;
+  box-shadow: 
+    0 20px 25px -5px rgba(0, 0, 0, 0.3),
+    0 10px 10px -5px rgba(0, 0, 0, 0.2);
+  position: relative;
+  overflow-x: hidden;
+  overflow-y: visible;
+}
+
+.chartPanel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, 
+    rgba(168, 85, 247, 0.8) 0%,
+    rgba(6, 182, 212, 0.8) 50%,
+    rgba(168, 85, 247, 0.8) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 3s ease-in-out infinite;
+}
+
+.claimSection {
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.9) 100%);
+  backdrop-filter: blur(12px) saturate(180%);
+  border: 1px solid rgba(51, 65, 85, 0.6);
+  border-radius: 1rem;
+  padding: 2rem;
+  box-shadow: 
+    0 20px 25px -5px rgba(0, 0, 0, 0.3),
+    0 10px 10px -5px rgba(0, 0, 0, 0.2);
+  position: relative;
+  overflow: hidden;
+}
+
+.claimSection::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, 
+    rgba(34, 197, 94, 0.8) 0%,
+    rgba(6, 182, 212, 0.8) 50%,
+    rgba(34, 197, 94, 0.8) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 3s ease-in-out infinite;
+}
+
+.claimCard {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 2rem;
+  flex-wrap: wrap;
+}
+
+.claimInfo {
+  flex: 1;
+  min-width: 200px;
+}
+
+.claimLabel {
+  color: rgb(148, 163, 184);
+  font-size: 0.875rem;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+}
+
+.claimAmount {
+  color: white;
+  font-size: 1.5rem;
+  font-weight: 800;
+}
+
+.claimButton {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.2) 0%, rgba(22, 163, 74, 0.15) 100%);
+  border: 1px solid rgba(34, 197, 94, 0.5);
+  color: white;
+  padding: 1rem 2rem;
+  border-radius: 0.75rem;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  min-width: 180px;
+}
+
+.claimButton:hover:not(.claimButtonDisabled) {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.3) 0%, rgba(22, 163, 74, 0.2) 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 15px -3px rgba(34, 197, 94, 0.3);
+}
+
+.claimButton:active:not(.claimButtonDisabled) {
+  transform: translateY(0);
+}
+
+.claimButtonDisabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+

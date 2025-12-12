@@ -1,9 +1,9 @@
 import React from "react";
 import { NavLink } from "react-router-dom";
 
-import ContractActions from "../components/ContractActions";
-import ContractInfo from "../components/ContractInfo";
-import NetworkInfo from "../components/NetworkInfo";
+import ContractActions from "../components/common/ContractActions";
+import ContractInfo from "../components/common/ContractInfo";
+import NetworkInfo from "../components/common/NetworkInfo";
 
 const Dashboard = ({ account, refreshKey, onActionComplete }) => {
   if (!account) {

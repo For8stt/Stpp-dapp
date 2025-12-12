@@ -236,7 +236,6 @@ const PresaleDeploy = () => {
         .filter(Boolean);
       setPresales(combined);
 
-      // Filter presales for current user
       const filtered = combined.filter(presale =>
         walletAddress && presale.owner.toLowerCase() === walletAddress.toLowerCase()
       );
@@ -252,7 +251,6 @@ const PresaleDeploy = () => {
     loadPresales();
   }, [loadPresales]);
 
-  // Update user presales filter when wallet address changes
   useEffect(() => {
     const filtered = presales.filter(presale =>
       walletAddress && presale.owner.toLowerCase() === walletAddress.toLowerCase()

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useChainId } from "wagmi";
-import { getNetworkName } from "../services/web3/wallet";
+import { getNetworkName } from "../../services/web3/wallet";
 
 const NetworkInfo = () => {
   const [network, setNetwork] = useState("");

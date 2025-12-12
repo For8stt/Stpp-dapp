@@ -5,7 +5,7 @@ import { useAccount } from "../hooks/useAccount";
 import { useRealtimeLbpData } from "../hooks/useRealtimeLbpData";
 import { useLbpData } from "../hooks/useLbpData";
 import { useLbpActions } from "../hooks/useLbpActions";
-import DeveloperTimeControls from "../components/presale/DeveloperTimeControls";
+import DeveloperTimeControls from "../components/common/DeveloperTimeControls";
 import LBPHeader from "../components/lbp/LBPHeader";
 import PoolStateOverview from "../components/lbp/PoolStateOverview";
 import PriceChart from "../components/lbp/PriceChart";

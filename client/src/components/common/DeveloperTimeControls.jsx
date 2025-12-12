@@ -16,7 +16,6 @@ const DeveloperTimeControls = ({ onTimeAdvanced, useDays = false }) => {
   const [days, setDays] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Only show on localhost/hardhat networks
   const isLocalNetwork = chainId === 31337 || chainId === 1337 || window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
 
   if (!isLocalNetwork) {
@@ -35,24 +34,16 @@ const DeveloperTimeControls = ({ onTimeAdvanced, useDays = false }) => {
     const provider = new JsonRpcProvider(hardhatRpcUrl);
     
     try {
-      // Get current block timestamp
       const currentBlock = await provider.getBlock("latest");
       const currentTimestamp = currentBlock?.timestamp || Math.floor(Date.now() / 1000);
-      
-      // Calculate target timestamp
-      const targetTimestamp = currentTimestamp + amountSec;
-      
-      // Use evm_increaseTime - more reliable than hardhat_setNextBlockTimestamp
-      // This increases the time offset for all future blocks
+
       await provider.send("evm_increaseTime", [amountSec]);
       
-      // Mine multiple blocks to ensure the timestamp is applied
-      // Mining 5 blocks ensures the timestamp propagates correctly
+
       for (let i = 0; i < 5; i++) {
         await provider.send("evm_mine", []);
       }
-      
-      // Verify the timestamp was applied
+
       const newBlock = await provider.getBlock("latest");
       const newTimestamp = newBlock?.timestamp || 0;
       const actualIncrease = newTimestamp - currentTimestamp;
@@ -63,7 +54,6 @@ const DeveloperTimeControls = ({ onTimeAdvanced, useDays = false }) => {
         console.warn(`Timestamp may not have advanced fully. Expected ~${amountSec} seconds, got ${actualIncrease} seconds`);
       }
     } catch (error) {
-      // If hardhat_setNextBlockTimestamp fails, fall back to evm_increaseTime
       if (error.message?.includes("hardhat_setNextBlockTimestamp") || error.code === -32601) {
         try {
           console.log("Falling back to evm_increaseTime method");

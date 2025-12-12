@@ -16,7 +16,7 @@ const PriceBucketPanel = ({ auctionData, priceBuckets }) => {
             : 1;
           const height = maxDemand > 0 ? (Number(bucket.total) / maxDemand) * 100 : 0;
           const isClearing = auctionData.finalized && idx === auctionData.clearingTickIndex;
-          const isUserBucket = false; // Would need to check user's revealed bids
+          const isUserBucket = false;
           
           return (
             <div key={idx} className={styles.bucketItem}>

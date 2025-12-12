@@ -4,8 +4,8 @@ import {
   getContractBalanceInETH,
   getUserDepositInETH,
   subscribeToContractEvents
-} from "../services/web3/contract";
-import { getUserBalanceInETH } from "../services/web3/wallet";
+} from "../../services/web3/contract";
+import { getUserBalanceInETH } from "../../services/web3/wallet";
 
 const ContractInfo = ({ account, refreshKey }) => {
   const [contractBalance, setContractBalance] = useState("0");
