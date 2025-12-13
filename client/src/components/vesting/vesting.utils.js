@@ -106,3 +106,4 @@ export const calculateVestingCurveData = (vestingData, currentTime, formatTokenF
   return dataPoints;
 };
 
+

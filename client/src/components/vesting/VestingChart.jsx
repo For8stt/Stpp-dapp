@@ -112,3 +112,4 @@ const VestingChart = ({
 
 export default VestingChart;
 
+

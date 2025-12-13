@@ -25,3 +25,4 @@ const VestingHeader = ({ lbpAddress, secureLBPAddress }) => {
 
 export default VestingHeader;
 
+

@@ -13,3 +13,4 @@ const VestingEmpty = ({ message = "No vesting data available" }) => {
 
 export default VestingEmpty;
 
+

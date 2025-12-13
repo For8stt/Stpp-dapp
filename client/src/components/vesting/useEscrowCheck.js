@@ -86,3 +86,4 @@ export const useEscrowCheck = (lbpAddressToCheck, escrowAddress) => {
   return { correctEscrowAddress, checkingEscrow, lbpFinalized };
 };
 
+

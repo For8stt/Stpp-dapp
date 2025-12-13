@@ -126,10 +126,27 @@ const AuctionView = () => {
 
   const countdown = useMemo(() => {
     if (!auctionData) return null;
-    if (phase === PHASES.NOT_STARTED) return getTimeUntil(auctionData.startTime, currentTime);
-    if (phase === PHASES.COMMIT) return getTimeUntil(auctionData.commitEndTime, currentTime);
-    if (phase === PHASES.REVEAL) return getTimeUntil(auctionData.revealEndTime, currentTime);
-    return null;
+    
+    let targetTime;
+    if (phase === PHASES.NOT_STARTED) {
+      targetTime = auctionData.startTime;
+    } else if (phase === PHASES.COMMIT) {
+      targetTime = auctionData.commitEndTime;
+    } else if (phase === PHASES.REVEAL) {
+      targetTime = auctionData.revealEndTime;
+    } else {
+      return null;
+    }
+    
+    // Calculate time remaining similar to LBP page
+    const remaining = Number(targetTime) - currentTime;
+    if (remaining <= 0) return null;
+    
+    const hours = Math.floor(remaining / 3600);
+    const minutes = Math.floor((remaining % 3600) / 60);
+    const seconds = remaining % 60;
+    
+    return `${hours}h ${minutes}m ${seconds}s`;
   }, [phase, auctionData, currentTime]);
 
   useEffect(() => {
