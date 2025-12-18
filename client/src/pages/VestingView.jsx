@@ -26,8 +26,6 @@ const VestingView = () => {
   const lbpAddressParam = searchParams.get("lbpAddress");
   const { account } = useAccount();
   const tx = useTransaction();
-  
-  // Unified time layer
   const { currentTime, refreshTime } = useTime();
   
   const lbpAddressToCheck = lbpAddressParam || expectedLBPAddress;
@@ -103,13 +101,9 @@ const VestingView = () => {
       isPending={tx.isPending}
       onClaim={handleClaim}
       onTimeAdvanced={async () => {
-        // Wait for blockchain to update after time advancement
         await new Promise(resolve => setTimeout(resolve, 1000));
-        // Refresh time from blockchain
         await refreshTime();
-        // Wait for time to propagate
         await new Promise(resolve => setTimeout(resolve, 500));
-        // Refresh vesting data
         await refetchVestingData();
       }}
     />

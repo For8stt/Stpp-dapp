@@ -6,7 +6,6 @@
   padding-bottom: 3rem;
 }
 
-/* Hero Section */
 .manager-hero {
   position: relative;
   border-radius: 2rem;
@@ -683,7 +682,6 @@
   opacity: 1;
 }
 
-/* Owner Message */
 .owner-message {
   border-radius: 1.5rem;
   padding: 1.5rem;

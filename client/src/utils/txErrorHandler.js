@@ -8,7 +8,6 @@ import { toast } from "react-toastify";
 export const handleTxError = (error, defaultMessage = "Transaction failed") => {
   console.error("Transaction error:", error);
 
-  // Перевірка на відхилення користувачем (MetaMask та інші гаманці)
   if (error?.code === 4001 || error?.code === "ACTION_REJECTED") {
     toast.error("Transaction rejected by user", {
       position: "bottom-right",
@@ -21,7 +20,6 @@ export const handleTxError = (error, defaultMessage = "Transaction failed") => {
     return;
   }
 
-  // Перевірка на недостатньо коштів
   if (error?.code === -32000 || error?.message?.includes("insufficient funds")) {
     toast.error("Insufficient funds for transaction", {
       position: "bottom-right",
@@ -34,7 +32,6 @@ export const handleTxError = (error, defaultMessage = "Transaction failed") => {
     return;
   }
 
-  // Перевірка на мережеві помилки
   if (error?.code === "NETWORK_ERROR" || error?.message?.includes("network")) {
     toast.error("Network error. Please check your connection.", {
       position: "bottom-right",
@@ -47,7 +44,6 @@ export const handleTxError = (error, defaultMessage = "Transaction failed") => {
     return;
   }
 
-  // Загальна помилка транзакції
   const message = error?.message || defaultMessage;
   toast.error(message, {
     position: "bottom-right",

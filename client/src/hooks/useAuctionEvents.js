@@ -51,7 +51,6 @@ export const useAuctionEvents = (auctionContract) => {
     }
   }, [auctionContract]);
 
-  // Automatically fetch events when auctionContract becomes available
   useEffect(() => {
     if (auctionContract) {
       fetchEvents();

@@ -19,7 +19,6 @@ export const useTime = () => {
   const serviceRef = useRef(null);
   const providerRef = useRef(null);
 
-  // Initialize service
   useEffect(() => {
     const service = getTimeService();
     serviceRef.current = service;
@@ -31,7 +30,6 @@ export const useTime = () => {
           try {
             provider = ensureProvider();
           } catch (err) {
-            // Provider not available
           }
         }
 
@@ -56,7 +54,6 @@ export const useTime = () => {
     };
   }, [chainId]);
 
-  // Update provider when chain changes
   useEffect(() => {
     const service = serviceRef.current;
     if (!service) return;
@@ -68,7 +65,6 @@ export const useTime = () => {
           try {
             provider = ensureProvider();
           } catch (err) {
-            // Provider not available
           }
         }
         await service.updateProvider(chainId, provider);
@@ -80,7 +76,6 @@ export const useTime = () => {
     updateProvider();
   }, [chainId]);
 
-  // Manual refresh
   const refreshTime = useCallback(async () => {
     const service = serviceRef.current;
     if (service) {
@@ -88,7 +83,6 @@ export const useTime = () => {
     }
   }, []);
 
-  // Set provider from external source
   const setProvider = useCallback((provider) => {
     providerRef.current = provider;
     const service = serviceRef.current;

@@ -82,7 +82,6 @@ export const useUserAuctionData = (auctionContract, account, isFinalized) => {
     }
   }, [auctionContract, account, isFinalized]);
 
-  // Automatically fetch data when auctionContract and account become available
   useEffect(() => {
     if (auctionContract && account) {
       fetchData();

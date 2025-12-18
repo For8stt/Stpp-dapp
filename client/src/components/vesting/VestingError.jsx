@@ -21,3 +21,4 @@ const VestingError = ({ error, onRetry }) => {
 export default VestingError;
 
 
+

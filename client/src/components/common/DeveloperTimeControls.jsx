@@ -28,7 +28,7 @@ const DeveloperTimeControls = ({ onTimeAdvanced, useDays = false }) => {
    * @param {number} amountSec - Number of seconds to advance
    */
   const fastForwardTime = async (amountSec) => {
-    // Connect directly to Hardhat node (not through MetaMask)
+    // Connect directly to Hardhat node
     // Hardhat RPC endpoint is typically http://127.0.0.1:8545
     const hardhatRpcUrl = "http://127.0.0.1:8545";
     const provider = new JsonRpcProvider(hardhatRpcUrl);
@@ -58,7 +58,6 @@ const DeveloperTimeControls = ({ onTimeAdvanced, useDays = false }) => {
         try {
           console.log("Falling back to evm_increaseTime method");
           await provider.send("evm_increaseTime", [amountSec]);
-          // Mine multiple blocks to ensure time change is applied
           for (let i = 0; i < 3; i++) {
             await provider.send("evm_mine", []);
           }
@@ -112,8 +111,7 @@ const DeveloperTimeControls = ({ onTimeAdvanced, useDays = false }) => {
       showTxSuccess(`Time advanced by ${displayText}`, { autoClose: 4000 });
       setMinutes("");
       setDays("");
-      
-      // Notify parent component to refetch auction data
+
       if (onTimeAdvanced) {
         await onTimeAdvanced();
       }

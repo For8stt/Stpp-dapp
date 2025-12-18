@@ -19,6 +19,10 @@ const config: HardhatUserConfig = {
         count: 20,
       },
       allowUnlimitedContractSize: true,
+      // mining: {
+      //   auto: true,
+      //   interval: 1000,
+      // },
     },
     localhost: {
       url: "http://127.0.0.1:8545",

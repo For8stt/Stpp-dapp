@@ -31,43 +31,6 @@ export const useVestingData = (escrowAddress, userAddress = null, overrideLBPAdd
   const providerRef = useRef(null);
   const isFetchingRef = useRef(false);
 
-  /**
-   * Calculate vested amount based on vesting schedule
-   * This mirrors SecureLBP's vestedAmount calculation
-   */
-  const calculateVestedAmount = useCallback((
-    allocation,
-    finalized,
-    vestingConfigured,
-    vestingStart,
-    vestingCliffDuration,
-    vestingFinalDuration,
-    vestingCliffPercentBP,
-    currentTime
-  ) => {
-    if (!finalized || !allocation || allocation === 0n) return 0n;
-    if (!vestingConfigured) return allocation;
-
-    const cliffTime = vestingStart + vestingCliffDuration;
-    const finalTime = vestingStart + vestingFinalDuration;
-
-    if (currentTime < cliffTime) {
-      return 0n;
-    }
-
-    if (vestingFinalDuration === 0n || currentTime >= finalTime) {
-      return allocation;
-    }
-
-    // During linear vesting period (between cliff and final)
-    // Currently returns cliff percent only (as per VestingMath.lbpVestedAmount)
-    // This matches the contract behavior
-    return (allocation * vestingCliffPercentBP) / BP_SCALE;
-  }, []);
-
-  /**
-   * Fetch all vesting data
-   */
   const fetchVestingData = useCallback(async () => {
     if (!escrowAddress || isFetchingRef.current) return;
 
@@ -80,7 +43,6 @@ export const useVestingData = (escrowAddress, userAddress = null, overrideLBPAdd
 
       providerRef.current = provider;
 
-      // Get escrow contract
       const escrowAbi = allAbis.TokenVestingEscrow || [];
       if (escrowAbi.length === 0) {
         throw new Error("TokenVestingEscrow ABI not found");
@@ -88,16 +50,13 @@ export const useVestingData = (escrowAddress, userAddress = null, overrideLBPAdd
 
       const escrowContract = new Contract(escrowAddress, escrowAbi, provider);
 
-      // Get escrow basic info
       const [tokenAddress, secureLBPAddressFromEscrow] = await Promise.all([
         escrowContract.token().catch(() => ethers.ZeroAddress),
         escrowContract.secureLBP().catch(() => ethers.ZeroAddress),
       ]);
 
-      // Use override LBP address if provided, otherwise use the one from escrow
       const secureLBPAddress = overrideLBPAddress || secureLBPAddressFromEscrow;
 
-        // Check what LBP address escrow is linked to
         const escrowLBPAddress = await escrowContract.secureLBP().catch(() => ethers.ZeroAddress);
         
         console.log("[Vesting] Escrow addresses:", {
@@ -118,14 +77,11 @@ export const useVestingData = (escrowAddress, userAddress = null, overrideLBPAdd
         throw new Error("Invalid escrow contract - SecureLBP address is zero");
       }
 
-      // Get SecureLBP contract
       const secureLBPAbi = allAbis.SecureLBP || [];
       const secureLBPContract = new Contract(secureLBPAddress, secureLBPAbi, provider);
-      
-      // Verify we can read from SecureLBP contract
+
       console.log("[Vesting] SecureLBP contract address:", secureLBPAddress);
-      
-      // Try to read finalized status directly
+
       try {
         const finalizedDirect = await secureLBPContract.finalized();
         console.log("[Vesting] Direct finalized() call result:", finalizedDirect);
@@ -133,7 +89,6 @@ export const useVestingData = (escrowAddress, userAddress = null, overrideLBPAdd
         console.error("[Vesting] Error calling finalized() directly:", err);
       }
 
-      // Get token info
       const tokenAbi = [
         {
           constant: true,
@@ -156,18 +111,15 @@ export const useVestingData = (escrowAddress, userAddress = null, overrideLBPAdd
         tokenContract.decimals().catch(() => 18),
       ]);
 
-      // Use provided currentTime from unified time layer, or fallback to block timestamp
       let timeToUse;
       if (currentTime !== null && currentTime !== undefined) {
         timeToUse = BigInt(currentTime);
       } else {
-        // Fallback: get from block (for backward compatibility)
         const currentBlock = await provider.getBlock("latest");
         timeToUse = BigInt(currentBlock.timestamp);
       }
       const currentTimeBigInt = timeToUse;
 
-      // Get vesting config from SecureLBP
       let finalized = false;
       let vestingConfigured = false;
       let vestingStart = 0n;
@@ -223,19 +175,15 @@ export const useVestingData = (escrowAddress, userAddress = null, overrideLBPAdd
         });
       } catch (err) {
         console.error("[Vesting] Error fetching vesting config:", err);
-        // Re-throw to be caught by outer try-catch
         throw err;
       }
 
-      // Get user-specific data if address provided
       let userAllocation = 0n;
       let userVested = 0n;
       let userClaimed = 0n;
       let userClaimable = 0n;
 
       if (userAddress && userAddress !== ethers.ZeroAddress) {
-        // Allocation is stored in SecureLBP contract, not in escrow
-        // Try allocations() first, then getUserAllocation() as fallback
         let allocationFromLBP = 0n;
         try {
           allocationFromLBP = await secureLBPContract.allocations(userAddress);
@@ -270,19 +218,15 @@ export const useVestingData = (escrowAddress, userAddress = null, overrideLBPAdd
           difference: (userVested - userClaimed).toString(),
         });
 
-        // If contract claimable is 0 but we have vested > claimed, use manual calculation
         if (userClaimable === 0n && manualClaimable > 0n) {
           console.warn("[Vesting] Contract claimable is 0, but manual calculation shows claimable:", manualClaimable.toString());
           userClaimable = manualClaimable;
         }
       }
-
-      // Calculate vesting progress
       const vestingPercent = userAllocation > 0n
         ? Number((userVested * 10000n) / userAllocation) / 100
         : 0;
 
-      // Calculate time remaining
       const cliffTime = vestingStart + vestingCliffDuration;
       const finalTime = vestingStart + vestingFinalDuration;
       const timeUntilCliff = cliffTime > currentTimeBigInt ? Number(cliffTime - currentTimeBigInt) : 0;
@@ -343,15 +287,11 @@ export const useVestingData = (escrowAddress, userAddress = null, overrideLBPAdd
   useEffect(() => {
     if (!escrowAddress) return;
 
-    // Initial fetch
     fetchVestingData();
-
-    // Set up interval polling
     intervalRef.current = setInterval(() => {
       fetchVestingData();
     }, REFRESH_RATE_MS);
 
-    // Set up block listener for real-time updates
     const setupBlockListener = async () => {
       try {
         const provider = await ensureProvider();
@@ -368,7 +308,6 @@ export const useVestingData = (escrowAddress, userAddress = null, overrideLBPAdd
 
     setupBlockListener();
 
-    // Cleanup
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);

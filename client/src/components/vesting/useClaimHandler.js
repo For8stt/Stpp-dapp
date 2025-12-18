@@ -15,7 +15,6 @@ export const useClaimHandler = (vestingData, account, escrowAddress, tx, refetch
       return;
     }
 
-    // Double-check claimable amount directly from contract before claiming
     try {
       const provider = await ensureProvider();
       if (provider) {
@@ -93,5 +92,6 @@ export const useClaimHandler = (vestingData, account, escrowAddress, tx, refetch
 
   return handleClaim;
 };
+
 
 

@@ -375,7 +375,6 @@ const PresalePage = ({ account }) => {
       ]);
 
       const unsoldTokens = tokensForSale - tokensSold;
-      // lbpStableShareBps is a public variable (typically 4000 = 40%)
       const lbpStableShareBps = await auctionContract.lbpStableShareBps();
       const BPS_DENOMINATOR = 10000n;
       let stableForLBP = (totalRaised * lbpStableShareBps) / BPS_DENOMINATOR;
@@ -446,19 +445,16 @@ const PresalePage = ({ account }) => {
         return;
       }
 
-      //lbpTokenRecipient and lbpStableRecipient must be set to PresaleManager address
       if (lbpTokenRecipient === ethers.ZeroAddress) {
         handleTxError(new Error("LBP token recipient is not set in auction. This must be set to PresaleManager address during auction initialization."));
         return;
       }
 
-      // Verify that lbpTokenRecipient is the PresaleManager
       if (lbpTokenRecipient.toLowerCase() !== address.toLowerCase()) {
         handleTxError(new Error(`LBP token recipient (${lbpTokenRecipient}) is not set to PresaleManager (${address}). Tokens must be sent to PresaleManager.`));
         return;
       }
 
-      // PresaleManager.launchLBP() requires BOTH tokens AND ETH to be received
       if (actualStableForLBP === 0n) {
         const errorMsg = `Cannot launch LBP: stableForLBP is 0, but PresaleManager.launchLBP() requires ETH to be received. ` +
           `This will cause 'NoEthReceived' error. ` +
@@ -482,7 +478,6 @@ const PresalePage = ({ account }) => {
         return;
       }
 
-      // CRITICAL: Check if auction has enough tokens to transfer
       try {
         const record = await managerContract.getAuctionRecord(info.auction);
         const recordSaleToken = record.saleToken;

@@ -26,7 +26,6 @@ const App = () => {
           return;
         }
 
-        // Не викликаємо resetConnection, оскільки RainbowKit сам керує підключенням
         triggerRefresh();
       } catch (error) {
         console.error("Wallet connection failed:", error);
@@ -49,8 +48,6 @@ const App = () => {
         return;
       }
 
-      // Просто оновлюємо стан, не викликаємо resetConnection
-      // RainbowKit сам керує підключенням
       if (isConnected && address) {
         triggerRefresh();
       }
@@ -61,10 +58,8 @@ const App = () => {
     initialize();
   }, [isConnected, isConnecting, address, triggerRefresh]);
 
-  // Оновлення при зміні акаунта або мережі
   useEffect(() => {
     if (isConnected && address) {
-      // Просто оновлюємо стан, не викликаємо resetConnection
       triggerRefresh();
     }
   }, [address, isConnected, triggerRefresh]);
@@ -75,8 +70,8 @@ const App = () => {
         account={address}
         onConnect={handleConnected}
         onDisconnect={handleDisconnect}
-        onWalletChange={() => {}} // RainbowKit сам керує вибором гаманця
-        selectedWalletId={null} // Не потрібно для RainbowKit
+        onWalletChange={() => {}}
+        selectedWalletId={null}
         refreshKey={refreshKey}
         onActionComplete={triggerRefresh}
         initializing={initializing}

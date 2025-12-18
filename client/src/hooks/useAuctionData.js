@@ -61,7 +61,6 @@ export const useAuctionData = (auctionContract) => {
     setError(null);
 
     try {
-      // Check if initialized
       const initialized = await safeContractCall(
         () => auctionContract.initialized(),
         false

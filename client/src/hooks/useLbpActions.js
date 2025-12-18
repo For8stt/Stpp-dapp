@@ -237,8 +237,22 @@ export const useLbpActions = (lbpAddress, lbpData, poolData, account, weights, r
           errorMessage: "Bid placement failed",
           onSuccess: async () => {
             setBidForm({ ethAmount: "", slippage: "1", minTokensOut: "" });
+            console.log("[LBP Actions] Purchase successful, starting refetch...");
+            // Wait for the transaction to be mined and events to be indexed
+            // Increase wait time to ensure events are available
+            await new Promise(resolve => setTimeout(resolve, 4000));
+            console.log("[LBP Actions] First refetch after 4 seconds...");
+            // Refetch LBP data (which includes swap events)
+            await refetchLbpData();
+            // Wait longer and refetch again to catch any delayed events
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            console.log("[LBP Actions] Second refetch after 3 more seconds...");
+            await refetchLbpData();
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            console.log("[LBP Actions] Final refetch...");
             await refetchLbpData();
             await refetchUserData();
+            console.log("[LBP Actions] Refetch complete");
           },
         }
       );

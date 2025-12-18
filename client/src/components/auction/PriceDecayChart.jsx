@@ -47,7 +47,6 @@ const PriceDecayChart = ({
   softCap,
   phase
 }) => {
-  // All hooks must be called before any early returns
   const startPrice = useMemo(() => {
     return priceTicks && priceTicks.length > 0 ? Number(priceTicks[0]) : 0;
   }, [priceTicks]);
@@ -63,8 +62,6 @@ const PriceDecayChart = ({
   const timeRange = useMemo(() => {
     return revealEndTime - startTime;
   }, [revealEndTime, startTime]);
-  
-  // Calculate current price
   const { currentPrice, currentProgress } = useMemo(() => {
     if (!startPrice || !endPrice || !timeRange) {
       return { currentPrice: 0, currentProgress: 0 };
@@ -80,13 +77,10 @@ const PriceDecayChart = ({
     }
     return { currentPrice: price, currentProgress: progress };
   }, [currentTime, startTime, revealEndTime, timeRange, startPrice, priceRange, endPrice]);
-  
-  // Calculate soft cap progress
   const softCapProgress = useMemo(() => {
     return softCap > 0n ? Math.min(Number(totalDepositCommitted) / Number(softCap), 1) : 0;
   }, [softCap, totalDepositCommitted]);
 
-  // Calculate time remaining
   const timeRemaining = useMemo(() => {
     if (currentTime >= revealEndTime) return null;
     const remaining = revealEndTime - currentTime;
@@ -96,13 +90,10 @@ const PriceDecayChart = ({
     return { hours, minutes, seconds };
   }, [currentTime, revealEndTime]);
 
-  // Calculate price change percentage
   const priceChangePercent = useMemo(() => {
     if (!startPrice || currentTime < startTime) return 0;
     return ((startPrice - currentPrice) / startPrice) * 100;
   }, [currentPrice, startPrice, currentTime, startTime]);
-  
-  // Create smooth curve points - Fixed coordinates for SVG viewBox
   const points = useMemo(() => {
     if (!startPrice || !priceRange || !timeRange) return [];
     const pts = [];
@@ -117,12 +108,7 @@ const PriceDecayChart = ({
       const t = i / numPoints;
       const time = startTime + (t * timeRange);
       const price = startPrice - (priceRange * t);
-      
-      // X coordinate: from left to right (0 to svgWidth)
       const x = (t * (svgWidth - 100)) + 50; // 50px padding on left, 50px on right
-      
-      // Y coordinate: from top (high price = startPrice) to bottom (low price = endPrice)
-      // SVG Y=0 is at top, so high price should have small Y value
       const yPercent = priceRange > 0 ? ((price - endPrice) / priceRange) : 0;
       const y = paddingTop + (chartHeight * (1 - yPercent)); // High price at top (small Y)
       
@@ -140,7 +126,6 @@ const PriceDecayChart = ({
     });
   }, [priceTicks, startPrice, priceRange]);
 
-  // Calculate phase progress
   const phaseProgress = useMemo(() => {
     if (!startTime || !commitEndTime || !revealEndTime) return 0;
     if (phase === "Commit") {
@@ -151,14 +136,12 @@ const PriceDecayChart = ({
     return 0;
   }, [phase, currentTime, startTime, commitEndTime, revealEndTime]);
 
-  // Calculate commit end price
   const commitEndPrice = useMemo(() => {
     if (!startPrice || !priceRange || !timeRange) return 0;
     const commitEndProgress = (commitEndTime - startTime) / timeRange;
     return startPrice - (priceRange * commitEndProgress);
   }, [commitEndTime, startTime, timeRange, startPrice, priceRange]);
 
-  // Calculate reveal end price
   const revealEndPrice = useMemo(() => {
     if (!startPrice || !priceRange || !timeRange) return 0;
     const revealEndProgress = (revealEndTime - startTime) / timeRange;
@@ -167,12 +150,11 @@ const PriceDecayChart = ({
 
   const phaseClass = phase?.toLowerCase() || "notstarted";
 
-  // Early return after all hooks
   if (!priceTicks || priceTicks.length === 0) return null;
 
   return (
     <div className={`${styles.container} ${styles.fadeIn}`}>
-      {/* Header */}
+
       <div className={styles.header}>
         <div className={styles.titleSection}>
           <h2>Price Decay & Market Status</h2>
@@ -204,7 +186,7 @@ const PriceDecayChart = ({
         </div>
       </div>
 
-      {/* Chart Container */}
+
       <div className={styles.chartContainer}>
         <svg className={styles.chartSvg} viewBox="0 0 1200 400" preserveAspectRatio="none">
           <defs>
@@ -226,7 +208,7 @@ const PriceDecayChart = ({
             </filter>
           </defs>
 
-          {/* Grid lines */}
+
           {[0, 20, 40, 60, 80, 100].map((percent) => (
             <line
               key={`grid-y-${percent}`}
@@ -250,10 +232,10 @@ const PriceDecayChart = ({
             />
           ))}
 
-          {/* Phase dividers with enhanced labels */}
+
           {currentTime >= startTime && (
             <>
-              {/* Commit phase divider */}
+
               {(() => {
                 const svgWidth = 1200;
                 const svgHeight = 400;
@@ -346,8 +328,7 @@ const PriceDecayChart = ({
                   </g>
                 );
               })()}
-              
-              {/* Reveal phase divider */}
+
               {(() => {
                 const svgWidth = 1200;
                 const svgHeight = 400;
@@ -442,8 +423,6 @@ const PriceDecayChart = ({
               })()}
             </>
           )}
-
-          {/* Filled area under curve */}
           {points.length > 0 && (() => {
             const svgHeight = 400;
             const paddingTop = 40;
@@ -463,10 +442,8 @@ const PriceDecayChart = ({
             );
           })()}
 
-          {/* Price decay curve with animation */}
           {points.length > 0 && (
             <>
-              {/* Secondary curve for depth/glow */}
               <polyline
                 points={points.join(" ")}
                 fill="none"
@@ -475,8 +452,6 @@ const PriceDecayChart = ({
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
-              
-              {/* Main price curve with draw animation */}
               <polyline
                 points={points.join(" ")}
                 fill="none"
@@ -503,8 +478,6 @@ const PriceDecayChart = ({
             const paddingLeft = 50;
             
             const price = startPrice - (priceRange * (percent / 100));
-            // For Y-axis: 0% = top (high price), 100% = bottom (low price)
-            // So we need to invert: 0% on axis = 100% of chart height from top
             const yPercent = (100 - percent) / 100; // Invert: 0% -> 100%, 100% -> 0%
             const y = paddingTop + (chartHeight * yPercent);
             
@@ -544,7 +517,7 @@ const PriceDecayChart = ({
             );
           })}
 
-          {/* Current price indicator with animation */}
+
           {currentTime >= startTime && currentTime <= revealEndTime && (() => {
             const svgWidth = 1200;
             const svgHeight = 400;
@@ -560,7 +533,6 @@ const PriceDecayChart = ({
             
             return (
               <>
-                {/* Animated vertical line */}
                 <line
                   x1={currentX}
                   y1={paddingTop}
@@ -574,7 +546,7 @@ const PriceDecayChart = ({
                     animation: 'fadeIn 0.5s ease-out'
                   }}
                 />
-                {/* Current price marker with pulse animation */}
+
                 <circle
                   cx={currentX}
                   cy={currentY}
@@ -587,7 +559,6 @@ const PriceDecayChart = ({
                     animation: 'pricePulse 2s ease-in-out infinite'
                   }}
                 />
-                {/* Pulse rings */}
                 <circle
                   cx={currentX}
                   cy={currentY}
@@ -596,7 +567,6 @@ const PriceDecayChart = ({
                   opacity="0.4"
                   className="animate-ping"
                 />
-                {/* Price label */}
                 <g>
                   <rect
                     x={currentX - 60}
@@ -629,7 +599,7 @@ const PriceDecayChart = ({
                     Current Price
                   </text>
                 </g>
-                {/* Time label */}
+
                 <g>
                   <rect
                     x={currentX - 45}
@@ -656,7 +626,6 @@ const PriceDecayChart = ({
             );
           })()}
 
-          {/* Clearing price line */}
           {finalized && clearingPrice > 0n && (() => {
             const svgWidth = 1200;
             const svgHeight = 400;
@@ -706,7 +675,7 @@ const PriceDecayChart = ({
             );
           })()}
           
-          {/* X-axis time labels */}
+
           {[0, 25, 50, 75, 100].map((percent) => {
             const svgWidth = 1200;
             const svgHeight = 400;
@@ -758,7 +727,7 @@ const PriceDecayChart = ({
           })}
         </svg>
 
-        {/* Axis titles */}
+
         <div className={`${styles.axisLabel} ${styles.axisLabelY}`}>
           Price (ETH)
         </div>
@@ -767,9 +736,8 @@ const PriceDecayChart = ({
         </div>
       </div>
 
-      {/* Market Status Indicators */}
       <div className={styles.statusGrid}>
-        {/* Soft Cap Progress */}
+
         <div className={styles.statusCard}>
           <div className={styles.statusCardHeader}>
             <p className={styles.statusCardTitle}>Soft Cap Progress</p>
@@ -814,7 +782,7 @@ const PriceDecayChart = ({
           </div>
         </div>
 
-        {/* Price Range */}
+
         <div className={styles.statusCard}>
           <p className={styles.statusCardTitle}>Price Range</p>
           <div className={styles.priceRangeContent}>
@@ -845,7 +813,6 @@ const PriceDecayChart = ({
           </div>
         </div>
 
-        {/* Time Status */}
         <div className={styles.statusCard}>
           <p className={styles.statusCardTitle}>Time Status</p>
           <div className={styles.timeStatusContent}>

@@ -68,10 +68,8 @@ const AuctionView = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
 
-  // Unified time layer
   const { currentTime, refreshTime, setProvider: setTimeProvider } = useTime();
 
-  // Set provider for time service when auction contract is available
   useEffect(() => {
     const bindProvider = async () => {
       const contractProvider = auctionContract?.provider || auctionContract?.runner?.provider;
@@ -81,7 +79,6 @@ const AuctionView = () => {
         try {
           providerToUse = ensureProvider();
         } catch (err) {
-          // Provider not available
           console.warn("Could not get provider for time service:", err);
         }
       }
@@ -137,8 +134,6 @@ const AuctionView = () => {
     } else {
       return null;
     }
-    
-    // Calculate time remaining similar to LBP page
     const remaining = Number(targetTime) - currentTime;
     if (remaining <= 0) return null;
     

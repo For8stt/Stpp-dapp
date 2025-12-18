@@ -28,13 +28,55 @@ const PriceChart = ({ chartData, lbpData, poolData, spotPrice, currentTime }) =>
     );
   }
 
+  const sortedChartData = [...chartData].sort((a, b) => a.timestamp - b.timestamp);
+  let currentPrice = null;
+  
+  if (currentTime >= lbpData.startTime && currentTime <= lbpData.endTime && sortedChartData.length > 0) {
+
+    let beforePoint = null;
+    let afterPoint = null;
+    
+    for (let i = 0; i < sortedChartData.length; i++) {
+      const point = sortedChartData[i];
+      if (point.timestamp <= currentTime) {
+        beforePoint = point;
+      }
+      if (point.timestamp >= currentTime && !afterPoint) {
+        afterPoint = point;
+        break;
+      }
+    }
+    if (beforePoint && beforePoint.timestamp === currentTime) {
+      currentPrice = beforePoint.price;
+    } else if (afterPoint && afterPoint.timestamp === currentTime) {
+      currentPrice = afterPoint.price;
+    } else if (beforePoint && afterPoint) {
+
+      const timeDiff = afterPoint.timestamp - beforePoint.timestamp;
+      const timeRatio = (currentTime - beforePoint.timestamp) / timeDiff;
+      currentPrice = beforePoint.price + (afterPoint.price - beforePoint.price) * timeRatio;
+    } else if (beforePoint) {
+      currentPrice = beforePoint.price;
+    } else if (afterPoint) {
+
+      currentPrice = afterPoint.price;
+    } else {
+
+      currentPrice = (spotPrice !== null && spotPrice !== undefined && spotPrice > 0) 
+        ? spotPrice 
+        : (poolData?.price && poolData.price > 0) 
+          ? poolData.price 
+          : null;
+    }
+  }
+
   return (
     <div className={styles.chartPanel}>
       <h2 className={styles.chartTitle}>Price Chart (Live)</h2>
       <ResponsiveContainer width="100%" height={300}>
         <LineChart 
-          data={[...chartData].sort((a, b) => a.timestamp - b.timestamp)}
-          margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+          data={sortedChartData}
+          margin={{ top: 10, right: 40, left: 20, bottom: 40 }}
         >
           <CartesianGrid
             strokeDasharray="3 3"
@@ -100,31 +142,34 @@ const PriceChart = ({ chartData, lbpData, poolData, spotPrice, currentTime }) =>
             stroke="#10b981"
             strokeWidth={2}
             dot={false}
-            activeDot={{ r: 4 }}
+            activeDot={{ r: 6 }}
             name="Price (ETH/token)"
             connectNulls={true}
             isAnimationActive={false}
           />
           {currentTime >= lbpData.startTime &&
             currentTime <= lbpData.endTime && (
-              <ReferenceLine
-                x={currentTime}
-                stroke="rgba(255, 255, 255, 0.6)"
-                strokeDasharray="5 5"
-                label={{ value: "Now", position: "top" }}
-              />
+              <>
+                <ReferenceLine
+                  x={currentTime}
+                  stroke="rgba(255, 255, 255, 0.6)"
+                  strokeDasharray="5 5"
+                  label={{ value: "Cur", position: "top", style: { fill: "rgba(255, 255, 255, 0.6)", fontSize: "0.75rem" } }}
+                />
+                {currentPrice !== null && currentPrice > 0 && (
+                  <ReferenceLine
+                    y={currentPrice}
+                    stroke="rgba(255, 255, 255, 0.6)"
+                    strokeDasharray="5 5"
+                    label={{
+                      value: "Cur",
+                      position: "right",
+                      style: { fill: "rgba(255, 255, 255, 0.6)", fontSize: "0.75rem" }
+                    }}
+                  />
+                )}
+              </>
             )}
-          {((spotPrice !== null && spotPrice !== undefined && spotPrice > 0) || (poolData?.price && poolData.price > 0)) && (
-            <ReferenceLine
-              y={spotPrice !== null && spotPrice !== undefined && spotPrice > 0 ? spotPrice : poolData.price}
-              stroke="rgba(16, 185, 129, 0.6)"
-              strokeDasharray="5 5"
-              label={{
-                value: `Current: ${(spotPrice !== null && spotPrice !== undefined && spotPrice > 0 ? spotPrice : poolData.price).toFixed(6)} ETH/token`,
-                position: "right",
-              }}
-            />
-          )}
         </LineChart>
       </ResponsiveContainer>
     </div>

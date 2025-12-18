@@ -19,8 +19,6 @@ const REFRESH_RATE_MS = 2000;
 const LbpView = () => {
   const { lbpAddress } = useParams();
   const { account } = useAccount();
-  
-  // Unified time layer
   const { currentTime, refreshTime } = useTime();
   
   const [error, setError] = useState("");
@@ -183,13 +181,9 @@ const LbpView = () => {
 
         <DeveloperTimeControls 
           onTimeAdvanced={async () => {
-            // Wait for blockchain to update after time advancement
             await new Promise(resolve => setTimeout(resolve, 1000));
-            // Refresh time from blockchain
             await refreshTime();
-            // Wait for time to propagate
             await new Promise(resolve => setTimeout(resolve, 500));
-            // Refresh LBP data
             await refetchLbpData();
           }} 
         />

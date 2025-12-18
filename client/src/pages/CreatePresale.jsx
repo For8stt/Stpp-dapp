@@ -12,7 +12,6 @@ const now = () => Math.floor(Date.now() / 1000);
 const toDateInput = (secondsFromNow) =>
   new Date((now() + secondsFromNow) * 1000).toISOString().slice(0, 16);
 
-// Try to load TestToken address from deployment file
 const getTestTokenAddress = () => {
   try {
     const deployments = require("../abi/data/stppDeployments.json");
@@ -22,7 +21,6 @@ const getTestTokenAddress = () => {
   } catch (e) {
     console.warn("Could not load TestToken from deployment file:", e);
   }
-  // Fallback to the correct address from deployment output
   return "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853";
 };
 
@@ -204,8 +202,6 @@ const CreatePresale = ({ account, onConnect }) => {
       console.log("Bonus Reserve:", ethers.formatEther(bonusReserveBigInt) + " tokens (" + bonusReserveBigInt.toString() + " wei)");
       console.log("Total Funding Amount:", ethers.formatEther(fundingAmount) + " tokens (" + fundingAmount.toString() + " wei)");
       console.log("==========================");
-      
-      // Check if user has enough tokens
       const tokenAbi = [
         { "constant": true, "inputs": [{ "name": "_owner", "type": "address" }], "name": "balanceOf", "outputs": [{ "name": "balance", "type": "uint256" }], "type": "function" },
         { "constant": false, "inputs": [{ "name": "_to", "type": "address" }, { "name": "_value", "type": "uint256" }], "name": "transfer", "outputs": [{ "name": "", "type": "bool" }], "type": "function" }

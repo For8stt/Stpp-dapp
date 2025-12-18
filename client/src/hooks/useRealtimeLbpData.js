@@ -1,8 +1,10 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { ethers } from "ethers";
 import { Contract, JsonRpcProvider } from "ethers";
 import { ensureProvider } from "../services/web3/provider";
 import allAbis from "../abi/allAbis.json";
+import { reconstructChartData } from "../utils/lbpChartReconstruction";
+import { safeQueryEvents } from "../utils/contractUtils";
 
 const MAX_CHART_POINTS = 1000;
 const POLL_INTERVAL_MS = 1000; // Poll every 1 second for smooth updates
@@ -48,6 +50,7 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
   const isAdvancingTimeRef = useRef(false);
   const lastTimeAdvanceRef = useRef(0);
   const intervalRef = useRef(null);
+  const swapEventsIntervalRef = useRef(null);
   const blockListenerRef = useRef(null);
   const providerRef = useRef(null);
   const lbpContractRef = useRef(null);
@@ -60,6 +63,10 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
   const lbpAddressRef = useRef(null);
   const lbpEndTimeRef = useRef(null); // Store endTime to check if LBP has ended
   const lbpFinalizedRef = useRef(false); // Store finalized status to stop all requests
+  
+  // Store swap events for chart reconstruction
+  const [swapEvents, setSwapEvents] = useState([]);
+  const initialReservesRef = useRef({ eth: null, token: null });
 
   /**
    * Advance blockchain time for local hardhat (CRITICAL for time-dependent values)
@@ -455,70 +462,8 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
       };
       setPoolData(poolDataObj);
 
-      // Only add new chart points if LBP hasn't ended
-      // This prevents chart from updating after LBP ends
-      if (lbpEndTimeRef.current === null || now < lbpEndTimeRef.current) {
-        // ALWAYS add a new point to chart, even if price doesn't change
-        // This creates progressive drawing effect
-        setChartData((prev) => {
-        // Use last price if current price is 0 or invalid
-        const lastPrice = prev.length > 0 ? prev[prev.length - 1].price : (price > 0 ? price : 0);
-        const chartPrice = price > 0 ? price : lastPrice;
-
-        // Ensure unique timestamp - if same timestamp exists, add small increment
-        let uniqueTimestamp = now;
-        if (prev.length > 0) {
-          const lastTimestamp = prev[prev.length - 1].timestamp;
-          if (lastTimestamp >= now) {
-            // If timestamp hasn't advanced (can happen with rapid updates),
-            // add 1 second to ensure uniqueness
-            uniqueTimestamp = lastTimestamp + 1;
-          }
-        }
-
-        const newPoint = {
-          timestamp: uniqueTimestamp,
-          time: new Date(uniqueTimestamp * 1000).toLocaleTimeString(),
-          timeFormatted: new Date(uniqueTimestamp * 1000).toLocaleTimeString('en-US', { 
-            hour12: false, 
-            hour: '2-digit', 
-            minute: '2-digit', 
-            second: '2-digit' 
-          }),
-          price: chartPrice,
-          timeElapsed: chartDomainRef.current.startTime ? uniqueTimestamp - chartDomainRef.current.startTime : 0,
-        };
-
-        // Check if a point with this timestamp already exists
-        const existingIndex = prev.findIndex(p => p.timestamp === uniqueTimestamp);
-        
-        let updated;
-        if (existingIndex >= 0) {
-          // Update existing point instead of adding duplicate
-          updated = [...prev];
-          updated[existingIndex] = newPoint;
-        } else {
-          // Add new point
-          updated = [...prev, newPoint];
-        }
-
-        // Keep only latest N points to prevent memory leaks
-        // Also ensure no duplicate timestamps and sort by timestamp
-        const deduplicated = updated.reduce((acc, point, index) => {
-          const isDuplicate = acc.some(p => p.timestamp === point.timestamp);
-          if (!isDuplicate) {
-            acc.push(point);
-          }
-          return acc;
-        }, []);
-
-        // Sort by timestamp to ensure correct order
-        const sorted = deduplicated.sort((a, b) => a.timestamp - b.timestamp);
-        
-        return sorted.slice(-MAX_CHART_POINTS);
-        });
-      }
-      // If LBP has ended, chartData won't be updated (already frozen)
+      // Chart data is now reconstructed deterministically using useMemo
+      // No need to update chartData here - it will be recalculated automatically
     } catch (err) {
       console.error("Error fetching pool data:", err);
     } finally {
@@ -526,6 +471,103 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
       isFetchingRef.current = false;
     }
   }, [advanceBlockchainTime]);
+
+  /**
+   * Fetch swap events from the pool contract for chart reconstruction
+   */
+  const fetchSwapEvents = useCallback(async () => {
+    if (!poolAddressRef.current) {
+      setSwapEvents([]);
+      return;
+    }
+
+    try {
+      const provider = ensureProvider();
+      if (!provider) return;
+
+      const ammAbi = Array.isArray(allAbis.LBPWeightedAMM)
+        ? allAbis.LBPWeightedAMM
+        : allAbis.LBPWeightedAMM?.abi || allAbis.LBPWeightedAMM;
+
+      const ammContract = new Contract(poolAddressRef.current, ammAbi, provider);
+
+      // Fetch both swap event types
+      const [swapETHForTokenEvents, swapTokenForETHEvents] = await Promise.all([
+        safeQueryEvents(ammContract, ammContract.filters.SwapETHForToken?.(), -1000),
+        safeQueryEvents(ammContract, ammContract.filters.SwapTokenForETH?.(), -1000),
+      ]);
+
+      // Get unique block numbers to fetch timestamps efficiently
+      const blockNumbers = new Set();
+      [...swapETHForTokenEvents, ...swapTokenForETHEvents].forEach((event) => {
+        if (event.blockNumber) {
+          blockNumbers.add(event.blockNumber);
+        }
+      });
+
+      // Fetch block timestamps in batch
+      const blockTimestamps = new Map();
+      await Promise.all(
+        Array.from(blockNumbers).map(async (blockNumber) => {
+          try {
+            const block = await provider.getBlock(blockNumber);
+            if (block?.timestamp) {
+              blockTimestamps.set(blockNumber, Number(block.timestamp));
+            }
+          } catch (err) {
+            console.warn(`Could not fetch block ${blockNumber}:`, err);
+          }
+        })
+      );
+
+      // Process events and extract relevant data
+      const processedEvents = [
+        ...swapETHForTokenEvents.map((event) => ({
+          eventName: "SwapETHForToken",
+          timestamp: event.blockNumber ? blockTimestamps.get(event.blockNumber) || 0 : 0,
+          blockTimestamp: event.blockNumber ? blockTimestamps.get(event.blockNumber) || 0 : 0,
+          args: event.args,
+          ethIn: event.args?.[1] || 0n,
+          tokenOut: event.args?.[2] || 0n,
+        })),
+        ...swapTokenForETHEvents.map((event) => ({
+          eventName: "SwapTokenForETH",
+          timestamp: event.blockNumber ? blockTimestamps.get(event.blockNumber) || 0 : 0,
+          blockTimestamp: event.blockNumber ? blockTimestamps.get(event.blockNumber) || 0 : 0,
+          args: event.args,
+          tokenIn: event.args?.[1] || 0n,
+          ethOut: event.args?.[2] || 0n,
+        })),
+      ].filter((event) => event.timestamp > 0); // Filter out events without valid timestamps
+
+      console.log(`[LBP] Fetched ${processedEvents.length} swap events (${swapETHForTokenEvents.length} SwapETHForToken, ${swapTokenForETHEvents.length} SwapTokenForETH)`);
+      // Always set a new array reference to trigger React re-renders
+      // Sort events by timestamp to ensure consistent ordering
+      const sortedProcessedEvents = [...processedEvents].sort((a, b) => {
+        const timeA = a.timestamp || a.blockTimestamp || 0;
+        const timeB = b.timestamp || b.blockTimestamp || 0;
+        return timeA - timeB;
+      });
+      
+      // Log event timestamps for debugging
+      if (sortedProcessedEvents.length > 0) {
+        const eventTimes = sortedProcessedEvents.map(e => new Date((e.timestamp || e.blockTimestamp || 0) * 1000).toLocaleTimeString());
+        console.log(`[LBP] Swap event timestamps: ${eventTimes.join(', ')}`);
+        console.log(`[LBP] Total swap events: ${sortedProcessedEvents.length}`);
+        // Log the latest event
+        const latestEvent = sortedProcessedEvents[sortedProcessedEvents.length - 1];
+        if (latestEvent) {
+          console.log(`[LBP] Latest swap event at: ${new Date((latestEvent.timestamp || latestEvent.blockTimestamp || 0) * 1000).toLocaleTimeString()}`);
+        }
+      }
+      
+      // Force a new array reference to ensure React detects the change
+      setSwapEvents([...sortedProcessedEvents]);
+    } catch (err) {
+      console.warn("Error fetching swap events:", err);
+      setSwapEvents([]);
+    }
+  }, []);
 
   /**
    * Fetch all LBP contract data (called less frequently)
@@ -698,15 +740,49 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
       // CRITICAL: If finalized, keep poolData/reserves/weights to show final metrics
       if (poolInitialized && poolAddress !== ethers.ZeroAddress && tokenInfo) {
         poolAddressRef.current = poolAddress;
+        
+        // Fetch initial reserves when pool is first initialized
+        // This should be the reserves right after pool initialization, before any swaps
+        // If we don't have initial reserves yet, fetch current reserves as a baseline
+        // They will be adjusted backwards through swap events if needed
+        if (!initialReservesRef.current.eth || !initialReservesRef.current.token) {
+          try {
+            const ammAbi = Array.isArray(allAbis.LBPWeightedAMM)
+              ? allAbis.LBPWeightedAMM
+              : allAbis.LBPWeightedAMM?.abi || allAbis.LBPWeightedAMM;
+            const ammContract = new Contract(poolAddress, ammAbi, provider);
+            const [initialReserveToken, initialReserveETH] = await Promise.all([
+              ammContract.reserveToken().catch(() => 0n),
+              ammContract.reserveETH().catch(() => 0n),
+            ]);
+            
+            // Only set if we got valid reserves
+            if (initialReserveETH > 0n && initialReserveToken > 0n) {
+              initialReservesRef.current = {
+                token: initialReserveToken,
+                eth: initialReserveETH,
+              };
+              console.log(`[LBP] Set initial reserves: ETH=${ethers.formatEther(initialReserveETH)}, Token=${ethers.formatUnits(initialReserveToken, tokenInfo?.decimals || 18)}`);
+            }
+          } catch (err) {
+            console.warn("Could not fetch initial reserves:", err);
+          }
+        }
+        
+        // Fetch swap events for chart reconstruction
+        await fetchSwapEvents();
+        
         // Don't clear existing poolData/reserves/weights if finalized - we need them for display
       } else if (!poolInitialized) {
         // Only clear if pool is truly not initialized (not just finalized)
         poolAddressRef.current = null;
+        initialReservesRef.current = { eth: null, token: null };
         setReserves({ token: null, eth: null });
         setWeights({ token: null, eth: null });
         setSpotPrice(null);
         setPoolData(null);
         setChartData([]);
+        setSwapEvents([]);
       }
 
       // Fetch pool data if initialized
@@ -731,15 +807,29 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
       setLoading(false);
       isFetchingRef.current = false;
     }
-  }, [lbpAddress, fetchPoolDataOnly]);
+  }, [lbpAddress, fetchPoolDataOnly, fetchSwapEvents]);
 
   /**
    * Manual refetch function
+   * This is exported as refetchLbpData and should be called after purchases
    */
   const refetch = useCallback(async () => {
     if (!lbpAddress) return;
+    console.log("[LBP] Manual refetch triggered");
+    // Fetch LBP data first (includes pool data)
     await fetchLBPData();
-  }, [lbpAddress, fetchLBPData]);
+    // Always refetch swap events to capture new swaps immediately
+    if (poolAddressRef.current) {
+      console.log("[LBP] Refetching swap events after purchase");
+      // Refetch multiple times with delays to catch events that might be indexed with delay
+      await fetchSwapEvents();
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      await fetchSwapEvents();
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      await fetchSwapEvents();
+      console.log("[LBP] Swap events refetch complete");
+    }
+  }, [lbpAddress, fetchLBPData, fetchSwapEvents]);
 
   // Set up real-time polling - CRITICAL SECTION
   useEffect(() => {
@@ -805,6 +895,10 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
             fetchPoolDataOnlyWithoutTimeAdvance().catch((err) => {
               console.error("Error in block listener:", err);
             });
+            // Also refetch swap events to capture new swaps immediately
+            fetchSwapEvents().catch((err) => {
+              console.warn("Error fetching swap events in block listener:", err);
+            });
           }, 100);
         }
       };
@@ -812,6 +906,16 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
       provider.on("block", handleBlock);
       blockListenerRef.current = { provider, handler: handleBlock };
     }
+
+    // Set up periodic swap events refetch (every 30 seconds)
+    // This ensures we capture new swaps for chart reconstruction
+    swapEventsIntervalRef.current = setInterval(() => {
+      if (poolAddressRef.current && !lbpFinalizedRef.current) {
+        fetchSwapEvents().catch((err) => {
+          console.warn("Error refetching swap events:", err);
+        });
+      }
+    }, 30000); // Every 30 seconds
 
     // CRITICAL: Set up aggressive interval polling (every 1 second)
     // This ensures weights and prices update continuously even without blocks
@@ -869,6 +973,10 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
           fetchPoolDataOnly().catch((err) => {
             console.error("Error in pool polling interval:", err);
           });
+          // Also refetch swap events periodically to capture new swaps
+          fetchSwapEvents().catch((err) => {
+            console.warn("Error refetching swap events in interval:", err);
+          });
         } else {
           // Pool not initialized - fetch LBP data less frequently
           // But only if not finalized
@@ -897,16 +1005,138 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
         blockListenerRef.current = null;
       }
 
-      // Clear interval
+      // Clear intervals
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
+      }
+      if (swapEventsIntervalRef.current) {
+        clearInterval(swapEventsIntervalRef.current);
+        swapEventsIntervalRef.current = null;
       }
 
       // Reset guards
       isFetchingRef.current = false;
     };
-  }, [lbpAddress, fetchLBPData, fetchPoolDataOnly]);
+  }, [lbpAddress, fetchLBPData, fetchPoolDataOnly, fetchSwapEvents]);
+
+  // Reconstruct chart data deterministically
+  const reconstructedChartData = useMemo(() => {
+    if (!lbpData || !lbpData.startTime || !lbpData.endTime) {
+      console.log("[LBP Chart] Missing lbpData or time range");
+      return [];
+    }
+
+    // Get current time from poolData or use system time
+    // Ensure we use a time that's at least startTime and at most endTime
+    let currentTime = poolData?.blockchainTime || Math.floor(Date.now() / 1000);
+    // Clamp currentTime to be within [startTime, endTime]
+    currentTime = Math.max(lbpData.startTime, Math.min(currentTime, lbpData.endTime));
+    console.log(`[LBP Chart] Reconstructing chart: startTime=${lbpData.startTime}, endTime=${lbpData.endTime}, currentTime=${currentTime}, swapEvents=${swapEvents.length}`);
+
+    // Use initial reserves if available, otherwise use current reserves
+    // If we have swap events, we can work backwards to estimate initial reserves
+    let initialReserveETH = initialReservesRef.current.eth;
+    let initialReserveToken = initialReservesRef.current.token;
+
+    // If we don't have initial reserves but have current reserves and swap events,
+    // we can estimate initial reserves by working backwards through swap events
+    if ((!initialReserveETH || !initialReserveToken || initialReserveETH === 0n || initialReserveToken === 0n) 
+        && reserves.eth && reserves.token && swapEvents.length > 0) {
+      // Work backwards from current reserves through swap events
+      let estimatedETH = reserves.eth;
+      let estimatedToken = reserves.token;
+      
+      // Process events in reverse chronological order (newest first)
+      const sortedEvents = [...swapEvents].sort((a, b) => {
+        const timeA = a.timestamp || a.blockTimestamp || 0;
+        const timeB = b.timestamp || b.blockTimestamp || 0;
+        return timeB - timeA; // Reverse order
+      });
+      
+      for (const event of sortedEvents) {
+        if (event.eventName === "SwapETHForToken" || event.name === "SwapETHForToken") {
+          // Reverse: subtract ETH that was added, add tokens that were removed
+          estimatedETH -= event.ethIn || event.args?.[1] || 0n;
+          estimatedToken += event.tokenOut || event.args?.[2] || 0n;
+        } else if (event.eventName === "SwapTokenForETH" || event.name === "SwapTokenForETH") {
+          // Reverse: subtract tokens that were added, add ETH that was removed
+          estimatedToken -= event.tokenIn || event.args?.[1] || 0n;
+          estimatedETH += event.ethOut || event.args?.[2] || 0n;
+        }
+      }
+      
+      // Only use estimated values if they're positive
+      if (estimatedETH > 0n && estimatedToken > 0n) {
+        initialReserveETH = estimatedETH;
+        initialReserveToken = estimatedToken;
+        console.log(`[LBP] Estimated initial reserves from swap events: ETH=${ethers.formatEther(estimatedETH)}, Token=${ethers.formatUnits(estimatedToken, lbpData.tokenInfo?.decimals || 18)}`);
+      } else {
+        // Fallback to current reserves if estimation failed
+        initialReserveETH = reserves.eth || 0n;
+        initialReserveToken = reserves.token || 0n;
+        console.warn(`[LBP] Could not estimate initial reserves, using current reserves`);
+      }
+    } else if (!initialReserveETH || !initialReserveToken || initialReserveETH === 0n || initialReserveToken === 0n) {
+      // Fallback to current reserves if we can't estimate
+      initialReserveETH = reserves.eth || 0n;
+      initialReserveToken = reserves.token || 0n;
+      if (initialReserveETH > 0n && initialReserveToken > 0n) {
+        console.log(`[LBP] Using current reserves as initial: ETH=${ethers.formatEther(initialReserveETH)}, Token=${ethers.formatUnits(initialReserveToken, lbpData.tokenInfo?.decimals || 18)}`);
+      }
+    }
+
+    // If we still don't have reserves, we can't reconstruct properly
+    if (!initialReserveETH || !initialReserveToken || initialReserveETH === 0n || initialReserveToken === 0n) {
+      console.warn("[LBP Chart] Cannot reconstruct: missing initial reserves");
+      return [];
+    }
+
+    console.log(`[LBP Chart] Reconstructing with: initialReserveETH=${ethers.formatEther(initialReserveETH)}, initialReserveToken=${ethers.formatUnits(initialReserveToken, lbpData.tokenInfo?.decimals || 18)}, swapEvents=${swapEvents.length}`);
+    
+    const reconstructed = reconstructChartData({
+      startTime: lbpData.startTime,
+      endTime: lbpData.endTime,
+      startWeightToken: lbpData.initialTokenWeight || 0n,
+      endWeightToken: lbpData.finalTokenWeight || 0n,
+      initialReserveETH,
+      initialReserveToken,
+      currentTime,
+      swapEvents,
+      tokenDecimals: lbpData.tokenInfo?.decimals || 18,
+      points: 200,
+    });
+    
+    console.log(`[LBP Chart] Reconstructed ${reconstructed.length} chart points from ${swapEvents.length} swap events`);
+    if (reconstructed.length > 0) {
+      const firstPoint = reconstructed[0];
+      const lastPoint = reconstructed[reconstructed.length - 1];
+      console.log(`[LBP Chart] Chart range: ${new Date(firstPoint.timestamp * 1000).toLocaleTimeString()} to ${new Date(lastPoint.timestamp * 1000).toLocaleTimeString()}`);
+      console.log(`[LBP Chart] First price: ${firstPoint.price}, Last price: ${lastPoint.price}`);
+    }
+    return reconstructed;
+  }, [
+    lbpData?.startTime,
+    lbpData?.endTime,
+    lbpData?.initialTokenWeight,
+    lbpData?.finalTokenWeight,
+    lbpData?.tokenInfo?.decimals,
+    poolData?.blockchainTime,
+    reserves.eth,
+    reserves.token,
+    swapEvents.length, // Use length to ensure recalculation when events change
+    // Also include a hash of event timestamps to detect new events
+    // Use JSON.stringify to create a stable hash that changes when events change
+    JSON.stringify(swapEvents.map(e => ({
+      timestamp: e.timestamp || e.blockTimestamp || 0,
+      eventName: e.eventName,
+      ethIn: e.ethIn?.toString() || '0',
+      tokenOut: e.tokenOut?.toString() || '0',
+    }))),
+  ]);
+
+  // Use reconstructed chart data if available, otherwise fall back to empty array
+  const finalChartData = reconstructedChartData.length > 0 ? reconstructedChartData : chartData;
 
   // Return structured data
   return {
@@ -917,11 +1147,11 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
     adaptiveFee,
     totalTokensAllocated,
     totalEthRaised,
-    chartData,
+    chartData: finalChartData,
     // Legacy API for compatibility
     lbpData,
     poolData,
-    priceChartData: chartData,
+    priceChartData: finalChartData,
     // Status
     loading,
     error,

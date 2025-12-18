@@ -27,7 +27,6 @@ const ContractInfo = ({ account, refreshKey }) => {
         getUserDepositInETH(account)
       ]);
 
-      // Детальна перевірка та очищення значень
       const cleanValue = (value) => {
         if (!value || value === null || value === undefined) return "0";
         const str = String(value).trim();
@@ -58,7 +57,6 @@ const ContractInfo = ({ account, refreshKey }) => {
   }, [fetchBalances]);
 
   const formatEth = (value) => {
-    // Детальна перевірка значення
     if (!value || value === null || value === undefined) {
       return "0.0000 ETH";
     }
