@@ -2,7 +2,7 @@ import React from "react";
 import { toDate } from "../../utils/auctionUtils";
 import styles from "./css/AuctionTimeline.module.css";
 
-const AuctionTimeline = ({ auctionData, phase }) => {
+const AuctionTimeline = React.memo(({ auctionData, phase }) => {
   if (!auctionData) return null;
 
   return (
@@ -38,7 +38,9 @@ const AuctionTimeline = ({ auctionData, phase }) => {
       </div>
     </div>
   );
-};
+});
+
+AuctionTimeline.displayName = 'AuctionTimeline';
 
 export default AuctionTimeline;
 

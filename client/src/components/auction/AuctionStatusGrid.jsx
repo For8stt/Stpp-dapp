@@ -2,7 +2,7 @@ import React from "react";
 import { formatEth, formatToken } from "../../utils/auctionUtils";
 import styles from "./css/AuctionStatusGrid.module.css";
 
-const AuctionStatusGrid = ({ auctionData }) => {
+const AuctionStatusGrid = React.memo(({ auctionData }) => {
   if (!auctionData) return null;
 
   return (
@@ -54,7 +54,9 @@ const AuctionStatusGrid = ({ auctionData }) => {
       )}
     </div>
   );
-};
+});
+
+AuctionStatusGrid.displayName = 'AuctionStatusGrid';
 
 export default AuctionStatusGrid;
 

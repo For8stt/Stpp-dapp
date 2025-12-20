@@ -57,7 +57,12 @@ export const useAuctionData = (auctionContract) => {
       return;
     }
 
-    setLoading(true);
+    // Only show loading state on initial load (when data is null)
+    // During refetches, keep the existing data visible to prevent flicker
+    const isInitialLoad = data === null;
+    if (isInitialLoad) {
+      setLoading(true);
+    }
     setError(null);
 
     try {
@@ -70,7 +75,9 @@ export const useAuctionData = (auctionContract) => {
         console.log("Auction contract is not initialized yet");
         setData(null);
         setError("Auction contract is not initialized yet. Please wait for initialization.");
-        setLoading(false);
+        if (isInitialLoad) {
+          setLoading(false);
+        }
         return;
       }
 
@@ -188,9 +195,11 @@ export const useAuctionData = (auctionContract) => {
       console.error("Failed to fetch auction data:", err);
       setError(err.message || "Failed to load auction data");
     } finally {
-      setLoading(false);
+      if (isInitialLoad) {
+        setLoading(false);
+      }
     }
-  }, [auctionContract, fetchPriceTicks, fetchPriceBuckets, fetchTokenSymbol]);
+  }, [auctionContract, data, fetchPriceTicks, fetchPriceBuckets, fetchTokenSymbol]);
 
   // Automatically fetch data when auctionContract becomes available
   useEffect(() => {

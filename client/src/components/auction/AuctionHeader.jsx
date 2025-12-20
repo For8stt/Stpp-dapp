@@ -2,7 +2,7 @@ import React from "react";
 import PhaseBadge from "./PhaseBadge";
 import styles from "./css/AuctionHeader.module.css";
 
-const AuctionHeader = ({ address, auctionAddress, auctionData, phase, countdown, onRefresh, refreshing }) => {
+const AuctionHeader = React.memo(({ address, auctionAddress, auctionData, phase, countdown, onRefresh, refreshing }) => {
   return (
     <div className={styles.headerPanel}>
       <div className={styles.headerContent}>
@@ -41,7 +41,9 @@ const AuctionHeader = ({ address, auctionAddress, auctionData, phase, countdown,
       </div>
     </div>
   );
-};
+});
+
+AuctionHeader.displayName = 'AuctionHeader';
 
 export default AuctionHeader;
 

@@ -1,7 +1,7 @@
 import React from "react";
 import styles from "./css/EventsPanel.module.css";
 
-const EventsPanel = ({ events }) => {
+const EventsPanel = React.memo(({ events }) => {
   if (!events || events.length === 0) return null;
 
   return (
@@ -28,7 +28,9 @@ const EventsPanel = ({ events }) => {
       </div>
     </div>
   );
-};
+});
+
+EventsPanel.displayName = 'EventsPanel';
 
 export default EventsPanel;
 

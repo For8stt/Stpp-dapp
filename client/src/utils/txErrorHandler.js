@@ -44,6 +44,19 @@ export const handleTxError = (error, defaultMessage = "Transaction failed") => {
     return;
   }
 
+  // Handle CALL_EXCEPTION (estimateGas failures, contract reverts without reason)
+  if (error?.code === "CALL_EXCEPTION" || error?.message?.includes("missing revert data")) {
+    toast.error(defaultMessage, {
+      position: "bottom-right",
+      autoClose: 7000,
+      hideProgressBar: false,
+      closeOnClick: true,
+      pauseOnHover: true,
+      draggable: true,
+    });
+    return;
+  }
+
   const message = error?.message || defaultMessage;
   toast.error(message, {
     position: "bottom-right",

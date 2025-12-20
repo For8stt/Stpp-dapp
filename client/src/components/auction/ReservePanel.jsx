@@ -2,7 +2,7 @@ import React from "react";
 import { formatEth } from "../../utils/auctionUtils";
 import styles from "./css/ReservePanel.module.css";
 
-const ReservePanel = ({ auctionData, onDemandCheck }) => {
+const ReservePanel = React.memo(({ auctionData, onDemandCheck }) => {
   if (!auctionData || auctionData.thresholdLow <= 0n) return null;
 
   return (
@@ -38,7 +38,9 @@ const ReservePanel = ({ auctionData, onDemandCheck }) => {
       </div>
     </div>
   );
-};
+});
+
+ReservePanel.displayName = 'ReservePanel';
 
 export default ReservePanel;
 

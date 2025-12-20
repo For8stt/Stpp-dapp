@@ -5,7 +5,7 @@ import { formatEth, formatToken } from "../../utils/auctionUtils";
 import loadContract from "../../services/web3/loadContract";
 import styles from "./css/FinalizedPanel.module.css";
 
-const FinalizedPanel = ({ auctionData, isOwner, onLaunchLBP, managerAddress, auctionAddress }) => {
+const FinalizedPanel = React.memo(({ auctionData, isOwner, onLaunchLBP, managerAddress, auctionAddress }) => {
   const [lbpAddress, setLbpAddress] = useState(null);
 
   useEffect(() => {
@@ -124,7 +124,9 @@ const FinalizedPanel = ({ auctionData, isOwner, onLaunchLBP, managerAddress, auc
       )}
     </div>
   );
-};
+});
+
+FinalizedPanel.displayName = 'FinalizedPanel';
 
 export default FinalizedPanel;
 

@@ -45,3 +45,5 @@ const VestingStats = ({
 };
 
 export default VestingStats;
+
+

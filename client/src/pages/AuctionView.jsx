@@ -1,5 +1,5 @@
 /* eslint-env es2020 */
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import { ethers } from "ethers";
 
@@ -32,6 +32,7 @@ import { ensureSigner } from "../services/web3/signer";
 import { ensureProvider } from "../services/web3/provider";
 import { generateCommitHash, parseMerkleProof, calculateDeposit } from "../utils/commitUtils";
 import { REFRESH_INTERVAL_MS, PHASES, DEFAULT_LBP_CONFIG } from "../constants/auction";
+import { deepEqual } from "../utils/objectUtils";
 import styles from "./css/AuctionView.module.css";
 
 
@@ -49,21 +50,67 @@ const AuctionView = () => {
   } = useAuctionContracts(address);
 
   const {
-    data: auctionData,
+    data: auctionDataRaw,
     loading: auctionDataLoading,
     error: auctionDataError,
     refetch: refetchAuctionData,
   } = useAuctionData(auctionContract);
 
+  const prevAuctionDataRef = useRef(null);
+  const auctionData = useMemo(() => {
+    if (!auctionDataRaw) {
+      prevAuctionDataRef.current = null;
+      return null;
+    }
+    if (prevAuctionDataRef.current && deepEqual(auctionDataRaw, prevAuctionDataRef.current)) {
+      return prevAuctionDataRef.current;
+    }
+    prevAuctionDataRef.current = auctionDataRaw;
+    return auctionDataRaw;
+  }, [auctionDataRaw]);
+
   const {
-    data: userData,
+    data: userDataRaw,
     refetch: refetchUserData,
   } = useUserAuctionData(auctionContract, account, auctionData?.finalized);
 
+  const prevUserDataRef = useRef(null);
+  const userData = useMemo(() => {
+    if (!userDataRaw) {
+      prevUserDataRef.current = null;
+      return null;
+    }
+    
+    if (prevUserDataRef.current && deepEqual(userDataRaw, prevUserDataRef.current)) {
+      return prevUserDataRef.current;
+    }
+    
+    prevUserDataRef.current = userDataRaw;
+    return userDataRaw;
+  }, [userDataRaw]);
+
   const {
-    events,
+    events: eventsRaw,
     refetch: refetchEvents,
   } = useAuctionEvents(auctionContract);
+
+  const prevEventsRef = useRef(null);
+  const events = useMemo(() => {
+    if (!eventsRaw || eventsRaw.length === 0) {
+      if (!prevEventsRef.current || prevEventsRef.current.length > 0) {
+        prevEventsRef.current = eventsRaw || [];
+      }
+      return prevEventsRef.current;
+    }
+    if (prevEventsRef.current &&
+        prevEventsRef.current.length === eventsRaw.length &&
+        prevEventsRef.current.every((evt, idx) => evt === eventsRaw[idx] || deepEqual(evt, eventsRaw[idx]))) {
+      return prevEventsRef.current;
+    }
+    
+    prevEventsRef.current = eventsRaw;
+    return eventsRaw;
+  }, [eventsRaw]);
 
   const [refreshing, setRefreshing] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
@@ -91,8 +138,10 @@ const AuctionView = () => {
       }
     };
 
-    bindProvider();
-  }, [auctionContract, refreshTime, setTimeProvider]);
+    if (auctionContract) {
+      bindProvider();
+    }
+  }, [auctionContract]);
 
   const [commitForm, setCommitForm] = useState({
     quantity: "",
@@ -161,7 +210,9 @@ const AuctionView = () => {
     fetchOwner();
   }, [managerContract, account]);
 
-  const loading = contractsLoading || auctionDataLoading;
+  // Only show loading state during initial load, not during refetches
+  // This prevents the page from unmounting/remounting during background updates
+  const isInitialLoading = contractsLoading || (auctionDataLoading && !auctionData);
   const error = contractsError || auctionDataError;
 
   const handleRefresh = useCallback(async () => {
@@ -245,21 +296,56 @@ const AuctionView = () => {
       : ethers.ZeroHash;
     const commitIndex = Number(revealForm.commitIndex || 0);
 
-    await tx.execute(
-      async () => {
-        const signer = await ensureSigner();
-        const auctionWithSigner = auctionContract.connect(signer);
-        return await auctionWithSigner.reveal(priceTickIndex, qty, nonce, commitIndex);
-      },
-      {
-        pendingMessage: "Submitting reveal…",
-        successMessage: "Reveal confirmed successfully!",
-        errorMessage: "Reveal failed",
-        onSuccess: async () => {
-          await handleRefresh();
+    try {
+      await tx.execute(
+        async () => {
+          const signer = await ensureSigner();
+          const auctionWithSigner = auctionContract.connect(signer);
+          return await auctionWithSigner.reveal(priceTickIndex, qty, nonce, commitIndex);
         },
+        {
+          pendingMessage: "Submitting reveal…",
+          successMessage: "Reveal confirmed successfully!",
+          errorMessage: "Reveal failed. Please check your commit index, quantity, price tick, and nonce match your original commit.",
+          onSuccess: async () => {
+            await handleRefresh();
+          },
+        }
+      );
+    } catch (err) {
+      // Additional error handling for reveal-specific errors
+      let errorMessage = err?.message || "Reveal failed";
+      
+      // Extract more detailed error information
+      if (err?.reason) {
+        errorMessage = err.reason;
+      } else if (err?.data?.message) {
+        errorMessage = err.data.message;
+      } else if (err?.error?.message) {
+        errorMessage = err.error.message;
       }
-    );
+      
+      // Provide specific messages for common reveal errors
+      if (err?.code === "CALL_EXCEPTION" || errorMessage.includes("missing revert data")) {
+        errorMessage = "Reveal transaction failed. Possible reasons: " +
+          "1) Commit index is incorrect, " +
+          "2) Quantity, price tick, or nonce doesn't match the original commit, " +
+          "3) Reveal phase has ended, " +
+          "4) This commit has already been revealed. " +
+          "Please verify all values match your original commit exactly.";
+      } else if (errorMessage.includes("InvalidCommitIndex") || errorMessage.includes("commit index")) {
+        errorMessage = "Invalid commit index. Please check the commit index matches your commit.";
+      } else if (errorMessage.includes("CommitAlreadyRevealed") || errorMessage.includes("already revealed")) {
+        errorMessage = "This commit has already been revealed.";
+      } else if (errorMessage.includes("RevealPhaseClosed") || errorMessage.includes("reveal phase")) {
+        errorMessage = "Reveal phase has ended. You can no longer reveal commits.";
+      } else if (errorMessage.includes("InvalidReveal") || errorMessage.includes("commit hash")) {
+        errorMessage = "Reveal parameters don't match the original commit. Verify quantity, price tick, and nonce.";
+      }
+      
+      // Error is already handled by tx.execute, but we can log additional info
+      console.error("Reveal error details:", err);
+    }
   }, [auctionContract, revealForm, tx, handleRefresh]);
 
   const handleFinalize = useCallback(async () => {
@@ -336,15 +422,13 @@ const AuctionView = () => {
     );
   }, [managerContract, auctionAddress, tx, refetchAuctionData, refetchEvents]);
 
+  const auctionDataRef = useRef(auctionData);
   useEffect(() => {
-    if (auctionData) {
-      const timeStr = new Date(currentTime * 1000).toLocaleTimeString();
-      console.log("currentTime:", currentTime, timeStr, "countdown:", countdown);
-    }
-  }, [currentTime, countdown, auctionData]);
+    auctionDataRef.current = auctionData;
+  }, [auctionData]);
 
   useEffect(() => {
-    if (!auctionContract || loading || error || !auctionData) return;
+    if (!auctionContract || isInitialLoading || error || !auctionDataRef.current) return;
 
     const interval = setInterval(() => {
       refetchAuctionData().catch(() => {
@@ -356,22 +440,9 @@ const AuctionView = () => {
     }, REFRESH_INTERVAL_MS);
 
     return () => clearInterval(interval);
-  }, [auctionContract, loading, error, auctionData, account, refetchAuctionData, refetchUserData]);
+  }, [auctionContract, isInitialLoading, error, account, refetchAuctionData, refetchUserData]);
 
-  useEffect(() => {
-    console.log("AuctionView state:", {
-      address,
-      contractsLoading,
-      auctionDataLoading,
-      contractsError,
-      auctionDataError,
-      auctionContract: !!auctionContract,
-      auctionAddress,
-      auctionData: !!auctionData,
-    });
-  }, [address, contractsLoading, auctionDataLoading, contractsError, auctionDataError, auctionContract, auctionAddress, auctionData]);
-
-  if (loading) {
+  if (isInitialLoading) {
     return (
       <section className={styles.page}>
         <div className={styles.loadingContainer}>Loading auction data…</div>

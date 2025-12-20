@@ -11,20 +11,38 @@ export const TIME_SOURCE = {
 
 const STORAGE_KEY = "timeService:lastTime";
 const STORAGE_TIMESTAMP_KEY = "timeService:lastTimeTimestamp";
-const MAX_STORED_TIME_AGE = 60; // 1 minute - don't use stored time if it's older than this (only for page refresh, not new session)
+const STORAGE_OFFSET_KEY = "timeService:blockchainOffset";
+const STORAGE_SYNC_TIME_KEY = "timeService:lastSyncTime";
+const MAX_STORED_TIME_AGE = 300; // 5 minutes - don't use stored time if it's older than this (only for page refresh, not new session)
 
 class TimeService {
   constructor() {
-    const storedTime = this.getStoredTime();
+    const storedData = this.getStoredTime();
     const systemTime = Math.floor(Date.now() / 1000);
-    const timeDiff = Math.abs(systemTime - storedTime);
-    if (storedTime && timeDiff < MAX_STORED_TIME_AGE) {
-      this.currentTime = storedTime;
+    
+    if (storedData && storedData.time && storedData.timestamp) {
+      const timeSinceStored = systemTime - storedData.timestamp;
+      // If stored time is recent (within MAX_STORED_TIME_AGE), use it and continue from there
+      if (timeSinceStored >= 0 && timeSinceStored < MAX_STORED_TIME_AGE) {
+        // Continue time from stored time + elapsed time
+        this.currentTime = storedData.time + timeSinceStored;
+        this.blockchainTimeOffset = storedData.offset || 0;
+        this.lastSyncTime = storedData.syncTime || null;
+        this.lastBlockchainTime = storedData.blockchainTime || null;
+      } else {
+        this.currentTime = systemTime;
+        this.blockchainTimeOffset = 0;
+        this.lastSyncTime = null;
+        this.lastBlockchainTime = null;
+        if (timeSinceStored >= MAX_STORED_TIME_AGE) {
+          this.clearStoredTime();
+        }
+      }
     } else {
       this.currentTime = systemTime;
-      if (storedTime && timeDiff >= MAX_STORED_TIME_AGE) {
-        this.clearStoredTime();
-      }
+      this.blockchainTimeOffset = 0;
+      this.lastSyncTime = null;
+      this.lastBlockchainTime = null;
     }
     
     this.timeSource = TIME_SOURCE.LOCAL;
@@ -38,10 +56,7 @@ class TimeService {
     this.isLocalNetwork = false;
     this.subscribers = new Set();
     this.isInitialized = false;
-    this.blockchainTimeOffset = 0; // Offset between blockchain and system time
-    this.lastSyncTime = null; // Last time we synced with blockchain
     this.syncInProgress = false; // Guard to prevent concurrent sync calls
-    this.lastBlockchainTime = null; // Last known blockchain time (to prevent time from advancing beyond blockchain)
   }
 
   /**
@@ -51,28 +66,42 @@ class TimeService {
     if (typeof window === "undefined") return null;
     try {
       const storedTimestamp = window.sessionStorage.getItem(STORAGE_TIMESTAMP_KEY);
-      if (storedTimestamp) {
-        const timestamp = parseInt(storedTimestamp, 10);
-        const now = Date.now();
-        if (now - timestamp > 5 * 60 * 1000) {
-          this.clearStoredTime();
-          return null;
-        }
+      const storedTime = window.sessionStorage.getItem(STORAGE_KEY);
+      const storedOffset = window.sessionStorage.getItem(STORAGE_OFFSET_KEY);
+      const storedSyncTime = window.sessionStorage.getItem(STORAGE_SYNC_TIME_KEY);
+      const storedBlockchainTime = window.sessionStorage.getItem("timeService:lastBlockchainTime");
+      
+      if (!storedTimestamp || !storedTime) {
+        return null;
       }
       
-      const stored = window.sessionStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const time = parseInt(stored, 10);
-        if (!isNaN(time) && time > 0) {
-          const systemTime = Math.floor(Date.now() / 1000);
-          const timeDiff = Math.abs(systemTime - time);
-          if (timeDiff > 86400) { // More than 1 day difference - invalid
-            this.clearStoredTime();
-            return null;
-          }
-          return time;
-        }
+      const timestamp = parseInt(storedTimestamp, 10);
+      const time = parseInt(storedTime, 10);
+      
+      if (isNaN(timestamp) || isNaN(time) || time <= 0) {
+        return null;
       }
+      
+      const now = Date.now();
+      if (now - timestamp > MAX_STORED_TIME_AGE * 1000) {
+        this.clearStoredTime();
+        return null;
+      }
+      
+      const systemTime = Math.floor(Date.now() / 1000);
+      const timeDiff = Math.abs(systemTime - time);
+      if (timeDiff > 86400) { // More than 1 day difference - invalid
+        this.clearStoredTime();
+        return null;
+      }
+      
+      return {
+        time,
+        timestamp: Math.floor(timestamp / 1000), // Convert to seconds
+        offset: storedOffset ? parseInt(storedOffset, 10) : 0,
+        syncTime: storedSyncTime ? parseInt(storedSyncTime, 10) : null,
+        blockchainTime: storedBlockchainTime ? parseInt(storedBlockchainTime, 10) : null,
+      };
     } catch (err) {
     }
     return null;
@@ -86,6 +115,9 @@ class TimeService {
     try {
       window.sessionStorage.removeItem(STORAGE_KEY);
       window.sessionStorage.removeItem(STORAGE_TIMESTAMP_KEY);
+      window.sessionStorage.removeItem(STORAGE_OFFSET_KEY);
+      window.sessionStorage.removeItem(STORAGE_SYNC_TIME_KEY);
+      window.sessionStorage.removeItem("timeService:lastBlockchainTime");
     } catch (err) {
     }
   }
@@ -98,6 +130,13 @@ class TimeService {
     try {
       window.sessionStorage.setItem(STORAGE_KEY, String(this.currentTime));
       window.sessionStorage.setItem(STORAGE_TIMESTAMP_KEY, String(Date.now()));
+      window.sessionStorage.setItem(STORAGE_OFFSET_KEY, String(this.blockchainTimeOffset));
+      if (this.lastSyncTime !== null) {
+        window.sessionStorage.setItem(STORAGE_SYNC_TIME_KEY, String(this.lastSyncTime));
+      }
+      if (this.lastBlockchainTime !== null) {
+        window.sessionStorage.setItem("timeService:lastBlockchainTime", String(this.lastBlockchainTime));
+      }
     } catch (err) {
     }
   }
@@ -141,13 +180,17 @@ class TimeService {
         const block = await activeProvider.getBlock("latest");
         if (block?.timestamp) {
           const blockchainTime = Number(block.timestamp);
-          if (blockchainTime >= previousTime) {
+          // Only update if blockchain time is ahead of current time
+          // This preserves the stored time continuation if it's more recent
+          if (blockchainTime > previousTime) {
             this.currentTime = blockchainTime;
           }
+          // Always update offset and sync info for accurate future calculations
           this.blockchainTimeOffset = blockchainTime - systemTime;
           this.lastSyncTime = systemTime;
           this.lastBlockchainTime = blockchainTime;
           this.timeSource = TIME_SOURCE.CHAIN;
+          this.storeTime();
           this.notifySubscribers();
           return;
         }
@@ -161,13 +204,16 @@ class TimeService {
         const block = await fallbackProvider.getBlock("latest");
         if (block?.timestamp) {
           const blockchainTime = Number(block.timestamp);
-          if (blockchainTime >= previousTime) {
+          // Only update if blockchain time is ahead of current time
+          if (blockchainTime > previousTime) {
             this.currentTime = blockchainTime;
           }
+          // Always update offset and sync info for accurate future calculations
           this.blockchainTimeOffset = blockchainTime - systemTime;
           this.lastSyncTime = systemTime;
           this.lastBlockchainTime = blockchainTime;
           this.timeSource = TIME_SOURCE.CHAIN;
+          this.storeTime();
           this.notifySubscribers();
           return;
         }
@@ -175,11 +221,13 @@ class TimeService {
       }
     }
 
-    if (systemTime >= previousTime) {
+    // Fallback to system time only if it's ahead of current time
+    if (systemTime > previousTime) {
       this.currentTime = systemTime;
     }
     this.blockchainTimeOffset = 0;
     this.timeSource = TIME_SOURCE.LOCAL;
+    this.storeTime();
     this.notifySubscribers();
   }
 
@@ -207,11 +255,12 @@ class TimeService {
             this.timeSource = TIME_SOURCE.CHAIN;
             this.authoritativeTimeSource = TIME_SOURCE.CHAIN;
             this.lastBlockchainTime = blockchainTime; // Track last known blockchain time
-            if (blockchainTime >= previousTime) {
+            // Only update time forward, never backward
+            if (blockchainTime > previousTime) {
               this.currentTime = blockchainTime;
-              this.storeTime();
-              this.notifySubscribers();
             }
+            this.storeTime();
+            this.notifySubscribers();
 
             return;
           }
@@ -230,11 +279,12 @@ class TimeService {
             this.timeSource = TIME_SOURCE.CHAIN;
             this.authoritativeTimeSource = TIME_SOURCE.CHAIN;
             this.lastBlockchainTime = blockchainTime; // Track last known blockchain time
-            if (blockchainTime >= previousTime) {
+            // Only update time forward, never backward
+            if (blockchainTime > previousTime) {
               this.currentTime = blockchainTime;
-              this.storeTime();
-              this.notifySubscribers();
             }
+            this.storeTime();
+            this.notifySubscribers();
             
             return;
           }

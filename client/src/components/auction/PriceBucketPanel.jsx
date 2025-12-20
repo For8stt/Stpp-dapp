@@ -2,7 +2,7 @@ import React from "react";
 import { formatEth, formatToken } from "../../utils/auctionUtils";
 import styles from "./css/PriceBucketPanel.module.css";
 
-const PriceBucketPanel = ({ auctionData, priceBuckets }) => {
+const PriceBucketPanel = React.memo(({ auctionData, priceBuckets }) => {
   if (!auctionData?.priceTicks || auctionData.priceTicks.length === 0) return null;
 
   return (
@@ -64,7 +64,9 @@ const PriceBucketPanel = ({ auctionData, priceBuckets }) => {
       )}
     </div>
   );
-};
+});
+
+PriceBucketPanel.displayName = 'PriceBucketPanel';
 
 export default PriceBucketPanel;
 

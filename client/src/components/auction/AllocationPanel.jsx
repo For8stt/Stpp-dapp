@@ -2,7 +2,7 @@ import React from "react";
 import { formatEth, formatToken } from "../../utils/auctionUtils";
 import styles from "./css/AllocationPanel.module.css";
 
-const AllocationPanel = ({ userData }) => {
+const AllocationPanel = React.memo(({ userData }) => {
   if (!userData || userData.revealedQty <= 0n) return null;
 
   return (
@@ -23,7 +23,9 @@ const AllocationPanel = ({ userData }) => {
       </p>
     </div>
   );
-};
+});
+
+AllocationPanel.displayName = 'AllocationPanel';
 
 export default AllocationPanel;
 
