@@ -21,7 +21,7 @@ import { useAuctionContracts } from "../hooks/useAuctionContracts";
 import { useAuctionData } from "../hooks/useAuctionData";
 import { useUserAuctionData } from "../hooks/useUserAuctionData";
 import { useAuctionEvents } from "../hooks/useAuctionEvents";
-import { useAccount } from "../hooks/useAccount";
+import { useAccount as useWagmiAccount } from "wagmi";
 import { useTransaction } from "../hooks/useTransaction";
 import { useChainId } from "wagmi";
 import { useTime } from "../time";
@@ -29,7 +29,7 @@ import { useTime } from "../time";
 
 import { getPhase, getTimeUntil } from "../utils/auctionUtils";
 import { ensureSigner } from "../services/web3/signer";
-import { ensureProvider } from "../services/web3/provider";
+import { ensureProvider, setTargetChainIdHex } from "../services/web3/provider";
 import { generateCommitHash, parseMerkleProof, calculateDeposit } from "../utils/commitUtils";
 import { REFRESH_INTERVAL_MS, PHASES, DEFAULT_LBP_CONFIG } from "../constants/auction";
 import { deepEqual } from "../utils/objectUtils";
@@ -40,7 +40,7 @@ const AuctionView = () => {
   const { address } = useParams();
   const chainId = useChainId();
 
-  const { account } = useAccount();
+  const { address: account } = useWagmiAccount();
   const {
     managerContract,
     auctionContract,
@@ -118,13 +118,20 @@ const AuctionView = () => {
   const { currentTime, refreshTime, setProvider: setTimeProvider } = useTime();
 
   useEffect(() => {
+    if (chainId) {
+      const chainIdHex = `0x${chainId.toString(16)}`;
+      setTargetChainIdHex(chainIdHex);
+    }
+  }, [chainId]);
+
+  useEffect(() => {
     const bindProvider = async () => {
       const contractProvider = auctionContract?.provider || auctionContract?.runner?.provider;
       let providerToUse = contractProvider;
       
       if (!providerToUse) {
         try {
-          providerToUse = ensureProvider();
+          providerToUse = ensureProvider(chainId || null);
         } catch (err) {
           console.warn("Could not get provider for time service:", err);
         }
@@ -141,7 +148,7 @@ const AuctionView = () => {
     if (auctionContract) {
       bindProvider();
     }
-  }, [auctionContract]);
+  }, [auctionContract, chainId, setTimeProvider, refreshTime]);
 
   const [commitForm, setCommitForm] = useState({
     quantity: "",
@@ -210,8 +217,6 @@ const AuctionView = () => {
     fetchOwner();
   }, [managerContract, account]);
 
-  // Only show loading state during initial load, not during refetches
-  // This prevents the page from unmounting/remounting during background updates
   const isInitialLoading = contractsLoading || (auctionDataLoading && !auctionData);
   const error = contractsError || auctionDataError;
 
@@ -313,10 +318,7 @@ const AuctionView = () => {
         }
       );
     } catch (err) {
-      // Additional error handling for reveal-specific errors
       let errorMessage = err?.message || "Reveal failed";
-      
-      // Extract more detailed error information
       if (err?.reason) {
         errorMessage = err.reason;
       } else if (err?.data?.message) {
@@ -324,8 +326,6 @@ const AuctionView = () => {
       } else if (err?.error?.message) {
         errorMessage = err.error.message;
       }
-      
-      // Provide specific messages for common reveal errors
       if (err?.code === "CALL_EXCEPTION" || errorMessage.includes("missing revert data")) {
         errorMessage = "Reveal transaction failed. Possible reasons: " +
           "1) Commit index is incorrect, " +
@@ -342,8 +342,6 @@ const AuctionView = () => {
       } else if (errorMessage.includes("InvalidReveal") || errorMessage.includes("commit hash")) {
         errorMessage = "Reveal parameters don't match the original commit. Verify quantity, price tick, and nonce.";
       }
-      
-      // Error is already handled by tx.execute, but we can log additional info
       console.error("Reveal error details:", err);
     }
   }, [auctionContract, revealForm, tx, handleRefresh]);

@@ -69,9 +69,3 @@ const VestingInfoCards = ({
 };
 
 export default VestingInfoCards;
-
-
-
-
-
-

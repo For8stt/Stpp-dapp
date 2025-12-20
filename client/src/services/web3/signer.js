@@ -1,4 +1,5 @@
-import { DEFAULT_CHAIN_ID_HEX, ensureProvider, rpcGuard, setTargetChainIdHex } from "./provider";
+import { BrowserProvider } from "ethers";
+import { DEFAULT_CHAIN_ID_HEX, rpcGuard, setTargetChainIdHex, getActiveEip1193Provider } from "./provider";
 
 let signer;
 let signerAddress;
@@ -18,12 +19,22 @@ export const getChainIdHex = () => chainIdHex;
 
 export const ensureSigner = async () =>
   rpcGuard(async () => {
-    const provider = ensureProvider();
-    await provider.send("eth_requestAccounts", []);
+    const eipProvider = getActiveEip1193Provider();
+    if (!eipProvider) {
+      throw new Error("Wallet not connected. Please connect your wallet to perform this action.");
+    }
 
-    const nextSigner = await provider.getSigner();
+    const browserProvider = new BrowserProvider(eipProvider);
+    
+    try {
+      await browserProvider.send("eth_requestAccounts", []);
+    } catch (error) {
+      throw new Error("Wallet not connected. Please connect your wallet to perform this action.");
+    }
+
+    const nextSigner = await browserProvider.getSigner();
     const nextAddress = (await nextSigner.getAddress()).toLowerCase();
-    const network = await provider.getNetwork();
+    const network = await browserProvider.getNetwork();
     const networkChainIdBigInt = network.chainId;
     const networkChainId = Number(networkChainIdBigInt);
     const networkChainIdHex = `0x${networkChainIdBigInt.toString(16)}`;

@@ -51,15 +51,6 @@ const LBPHeader = ({ lbpAddress, lbpData, status, timeUntilEnd }) => {
             ← Back to Auction
           </Link>
         )}
-        {lbpData.presaleManager &&
-          lbpData.presaleManager !== ethers.ZeroAddress && (
-            <Link
-              to={`/manager/${lbpData.presaleManager}`}
-              className={styles.navLink}
-            >
-              Presale Manager →
-            </Link>
-          )}
       </div>
 
       <div className={styles.headerGrid}>

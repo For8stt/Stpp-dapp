@@ -39,33 +39,15 @@ export const useAuctionContracts = (managerAddress) => {
       throw new Error("Invalid manager address");
     }
 
-    try {
-      let manager = await loadContract("PresaleManager", address);
-      
-      // Verify address matches
-      const managerAddr = manager.target || manager.address;
-      if (managerAddr?.toLowerCase() !== address.toLowerCase()) {
-        const provider = await ensureProvider();
-        const abi = allAbis.PresaleManager || [];
-        if (abi.length === 0) {
-          throw new Error("PresaleManager ABI not found");
-        }
-        manager = new Contract(address, abi, provider);
-      }
-
-      return manager;
-    } catch (error) {
-      const provider = await ensureProvider();
-      const abi = allAbis.PresaleManager || [];
-      if (abi.length === 0) {
-        throw new Error(`Failed to load PresaleManager: ${error.message}`);
-      }
-      return new Contract(address, abi, provider);
+    const provider = ensureProvider();
+    const abi = allAbis.PresaleManager || [];
+    if (abi.length === 0) {
+      throw new Error("PresaleManager ABI not found");
     }
+    return new Contract(address, abi, provider);
   }, []);
 
   const getAuctionAddress = useCallback(async (manager) => {
-    // Try to get auctions list first
     let auctionsList = await safeContractCall(
       () => manager.getAllAuctions(),
       []
@@ -107,9 +89,7 @@ export const useAuctionContracts = (managerAddress) => {
       throw new Error("DutchAuction ABI not found");
     }
 
-    const provider = await ensureProvider();
-    
-    // Verify contract exists
+    const provider = ensureProvider();
     const code = await provider.getCode(auctionAddress);
     if (!code || code === "0x") {
       throw new Error("Auction contract not deployed at this address");
@@ -124,12 +104,10 @@ export const useAuctionContracts = (managerAddress) => {
       return;
     }
 
-    // Prevent concurrent initializations
     if (initializingRef.current) {
       return;
     }
 
-    // Skip if already initialized with same address
     if (currentAddressRef.current?.toLowerCase() === managerAddress.toLowerCase()) {
       return;
     }

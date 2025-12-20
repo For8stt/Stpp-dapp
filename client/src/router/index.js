@@ -44,7 +44,7 @@ const AppRouter = ({
         {initializing ? (
           <section className="page">
             <div className="card">
-              <p>Checking wallet connection…</p>
+              <p>Loading…</p>
             </div>
           </section>
         ) : (

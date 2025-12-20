@@ -24,7 +24,7 @@ export const useEscrowCheck = (lbpAddressToCheck, escrowAddress) => {
       try {
         setCheckingEscrow(true);
         
-        const provider = await ensureProvider();
+        const provider = ensureProvider();
         if (!provider) {
           return;
         }
@@ -85,6 +85,7 @@ export const useEscrowCheck = (lbpAddressToCheck, escrowAddress) => {
 
   return { correctEscrowAddress, checkingEscrow, lbpFinalized };
 };
+
 
 
 

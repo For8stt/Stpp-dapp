@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { ethers } from "ethers";
+import { Contract } from "ethers";
 import { formatEth, formatToken } from "../../utils/auctionUtils";
-import loadContract from "../../services/web3/loadContract";
+import { ensureProvider } from "../../services/web3/provider";
+import allAbis from "../../abi/allAbis.json";
 import styles from "./css/FinalizedPanel.module.css";
 
 const FinalizedPanel = React.memo(({ auctionData, isOwner, onLaunchLBP, managerAddress, auctionAddress }) => {
@@ -15,7 +17,14 @@ const FinalizedPanel = React.memo(({ auctionData, isOwner, onLaunchLBP, managerA
         return;
       }
       try {
-        const managerContract = await loadContract("PresaleManager", managerAddress);
+        // Use read-only provider to avoid wallet connection popup
+        const provider = ensureProvider();
+        const abi = allAbis.PresaleManager || [];
+        if (abi.length === 0) {
+          console.warn("PresaleManager ABI not found");
+          return;
+        }
+        const managerContract = new Contract(managerAddress, abi, provider);
         const info = await managerContract.getPresaleInfo(auctionAddress);
         if (info && info.length > 2 && info[2] !== ethers.ZeroAddress) {
           setLbpAddress(info[2]);
@@ -66,27 +75,8 @@ const FinalizedPanel = React.memo(({ auctionData, isOwner, onLaunchLBP, managerA
             Ready to Launch LBP
           </p>
           <p style={{ fontSize: '0.75rem', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '0.5rem' }}>
-            Launch LBP from the Presale Manager page to continue.
+            LBP will be available here once launched.
           </p>
-              <Link
-                to={`/manager/${managerAddress}`}
-                style={{
-                  display: 'inline-block',
-                  padding: '0.5rem 1rem',
-                  backgroundColor: 'rgb(99, 102, 241)',
-                  color: 'white',
-                  borderRadius: '0.5rem',
-                  fontSize: '0.875rem',
-                  fontWeight: '500',
-                  textDecoration: 'none',
-                  transition: 'background-color 0.2s',
-                  marginTop: '0.5rem'
-                }}
-                onMouseEnter={(e) => e.target.style.backgroundColor = 'rgb(79, 70, 229)'}
-                onMouseLeave={(e) => e.target.style.backgroundColor = 'rgb(99, 102, 241)'}
-              >
-                Go to Presale Manager →
-              </Link>
         </div>
       )}
       {auctionData.lbpLaunched && (lbpAddress || auctionData.lbpTokenRecipient !== ethers.ZeroAddress) && (
@@ -100,7 +90,7 @@ const FinalizedPanel = React.memo(({ auctionData, isOwner, onLaunchLBP, managerA
                 LBP Contract: {lbpAddress}
               </p>
               <Link
-                to={`/manager/${managerAddress}`}
+                to={`/lbp/${lbpAddress}`}
                 style={{
                   display: 'inline-block',
                   padding: '0.5rem 1rem',
@@ -116,7 +106,7 @@ const FinalizedPanel = React.memo(({ auctionData, isOwner, onLaunchLBP, managerA
                 onMouseEnter={(e) => e.target.style.backgroundColor = 'rgb(79, 70, 229)'}
                 onMouseLeave={(e) => e.target.style.backgroundColor = 'rgb(99, 102, 241)'}
               >
-                View Presale Manager ->
+                View LBP →
               </Link>
             </>
           )}

@@ -1,4 +1,6 @@
 import React from "react";
+import { useAccount } from "wagmi";
+import { ConnectButton } from "@rainbow-me/rainbowkit";
 import styles from "../../pages/css/LBPView.module.css";
 
 const BidForm = ({
@@ -9,6 +11,8 @@ const BidForm = ({
   isPending,
   account,
 }) => {
+  const { isConnected } = useAccount();
+
   return (
     <div className={styles.bidPanel}>
       <h2 className={styles.bidTitle}>Place Bid</h2>
@@ -25,6 +29,7 @@ const BidForm = ({
             onChange={(e) => handleBidFormChange("ethAmount", e.target.value)}
             placeholder="0.0"
             className={styles.formInput}
+            disabled={!isConnected}
           />
         </div>
         <div className={styles.formGroup}>
@@ -40,6 +45,7 @@ const BidForm = ({
             onChange={(e) => handleBidFormChange("slippage", e.target.value)}
             placeholder="1"
             className={styles.formInput}
+            disabled={!isConnected}
           />
         </div>
         {bidForm.minTokensOut && (
@@ -52,27 +58,35 @@ const BidForm = ({
             </p>
           </div>
         )}
-        <button
-          onClick={handlePlaceBid}
-          disabled={
-            !bidForm.ethAmount ||
-            !bidForm.minTokensOut ||
-            isPending
-          }
-          className={`${styles.bidButton} ${
-            isPending ||
-            !bidForm.ethAmount ||
-            !bidForm.minTokensOut
-              ? styles.bidButtonDisabled
-              : styles.bidButtonEnabled
-          }`}
-        >
-          {isPending ? "Placing Bid..." : "Place Bid"}
-        </button>
-        {!account && (
-          <p className={styles.walletMessage}>
-            Please connect your wallet to place a bid
-          </p>
+        {!isConnected ? (
+          <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: 'rgba(255, 193, 7, 0.1)', border: '1px solid rgba(255, 193, 7, 0.3)', borderRadius: '8px' }}>
+            <p style={{ marginBottom: '0.75rem', color: 'rgba(255, 255, 255, 0.9)', textAlign: 'center' }}>
+              Connect wallet to place a bid
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+              <ConnectButton />
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={handlePlaceBid}
+            disabled={
+              !bidForm.ethAmount ||
+              !bidForm.minTokensOut ||
+              isPending ||
+              !account
+            }
+            className={`${styles.bidButton} ${
+              isPending ||
+              !bidForm.ethAmount ||
+              !bidForm.minTokensOut ||
+              !account
+                ? styles.bidButtonDisabled
+                : styles.bidButtonEnabled
+            }`}
+          >
+            {isPending ? "Placing Bid..." : "Place Bid"}
+          </button>
         )}
       </div>
     </div>

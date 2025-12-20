@@ -2,6 +2,8 @@
 import React, { useMemo } from "react";
 import { ethers } from "ethers";
 import { formatEth, formatToken } from "../../utils/auctionUtils";
+import { useAccount } from "wagmi";
+import { ConnectButton } from "@rainbow-me/rainbowkit";
 import styles from "./css/CommitForm.module.css";
 
 const CommitForm = ({ 
@@ -12,6 +14,7 @@ const CommitForm = ({
   onSubmit, 
   txState 
 }) => {
+  const { isConnected } = useAccount();
   const generateCommitHash = () => {
     try {
       const qty = BigInt(form.quantity || "0");
@@ -117,13 +120,24 @@ const CommitForm = ({
             <p className={styles.infoText}>Committed Deposit: {formatEth(userData.committedQty * (auctionData.priceTicks[0] || 0n))} ETH</p>
           </div>
         )}
-        <button
-          onClick={onSubmit}
-          disabled={!form.quantity || !form.nonce || txState?.status === "pending"}
-          className={`${styles.submitButton} ${styles.commit}`}
-        >
-          {txState?.status === "pending" ? "Submitting..." : "Submit Commit"}
-        </button>
+        {!isConnected ? (
+          <div className={styles.infoBox} style={{ marginTop: '1rem', padding: '1rem', backgroundColor: 'rgba(255, 193, 7, 0.1)', border: '1px solid rgba(255, 193, 7, 0.3)' }}>
+            <p style={{ marginBottom: '0.75rem', color: 'rgba(255, 255, 255, 0.9)' }}>
+              Connect wallet to participate in the auction
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+              <ConnectButton />
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={onSubmit}
+            disabled={!form.quantity || !form.nonce || txState?.status === "pending"}
+            className={`${styles.submitButton} ${styles.commit}`}
+          >
+            {txState?.status === "pending" ? "Submitting..." : "Submit Commit"}
+          </button>
+        )}
       </div>
     </div>
   );

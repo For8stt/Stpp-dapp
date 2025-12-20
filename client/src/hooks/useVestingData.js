@@ -36,7 +36,7 @@ export const useVestingData = (escrowAddress, userAddress = null, overrideLBPAdd
 
     try {
       isFetchingRef.current = true;
-      const provider = await ensureProvider();
+      const provider = ensureProvider();
       if (!provider) {
         throw new Error("Provider not available");
       }
@@ -294,7 +294,7 @@ export const useVestingData = (escrowAddress, userAddress = null, overrideLBPAdd
 
     const setupBlockListener = async () => {
       try {
-        const provider = await ensureProvider();
+        const provider = ensureProvider();
         if (provider && provider.on) {
           blockListenerRef.current = (blockNumber) => {
             fetchVestingData();

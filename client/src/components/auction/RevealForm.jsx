@@ -1,5 +1,7 @@
 import React from "react";
 import { formatEth, formatToken } from "../../utils/auctionUtils";
+import { useAccount } from "wagmi";
+import { ConnectButton } from "@rainbow-me/rainbowkit";
 import styles from "./css/RevealForm.module.css";
 
 const RevealForm = ({ 
@@ -10,6 +12,7 @@ const RevealForm = ({
   onSubmit, 
   txState 
 }) => {
+  const { isConnected } = useAccount();
   if (!auctionData) return null;
 
   return (
@@ -67,13 +70,24 @@ const RevealForm = ({
             <p className={styles.infoText}>Revealed Deposit: {formatEth(userData.revealedDeposit)} ETH</p>
           </div>
         )}
-        <button
-          onClick={onSubmit}
-          disabled={!form.quantity || !form.nonce || txState?.status === "pending"}
-          className={`${styles.submitButton} ${styles.reveal}`}
-        >
-          {txState?.status === "pending" ? "Submitting..." : "Reveal Bid"}
-        </button>
+        {!isConnected ? (
+          <div className={styles.infoBox} style={{ marginTop: '1rem', padding: '1rem', backgroundColor: 'rgba(255, 193, 7, 0.1)', border: '1px solid rgba(255, 193, 7, 0.3)' }}>
+            <p style={{ marginBottom: '0.75rem', color: 'rgba(255, 255, 255, 0.9)' }}>
+              Connect wallet to reveal your bid
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+              <ConnectButton />
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={onSubmit}
+            disabled={!form.quantity || !form.nonce || txState?.status === "pending"}
+            className={`${styles.submitButton} ${styles.reveal}`}
+          >
+            {txState?.status === "pending" ? "Submitting..." : "Reveal Bid"}
+          </button>
+        )}
       </div>
     </div>
   );

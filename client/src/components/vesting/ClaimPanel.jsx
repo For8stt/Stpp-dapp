@@ -33,9 +33,3 @@ const ClaimPanel = ({
 };
 
 export default ClaimPanel;
-
-
-
-
-
-

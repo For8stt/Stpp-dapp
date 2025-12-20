@@ -37,9 +37,3 @@ export const useVestingProgress = (vestingData) => {
 
   return { progressPercent, cliffProgress, finalProgress };
 };
-
-
-
-
-
-

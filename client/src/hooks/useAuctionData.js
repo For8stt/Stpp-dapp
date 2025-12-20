@@ -24,7 +24,7 @@ export const useAuctionData = (auctionContract) => {
       const tokenAbi = allAbis.TestToken || [];
       if (tokenAbi.length === 0) return DEFAULT_TOKEN_SYMBOL;
 
-      const provider = await ensureProvider();
+      const provider = ensureProvider();
       const tokenContract = new Contract(tokenAddress, tokenAbi, provider);
       return await tokenContract.symbol().catch(() => DEFAULT_TOKEN_SYMBOL);
     } catch {
@@ -57,8 +57,6 @@ export const useAuctionData = (auctionContract) => {
       return;
     }
 
-    // Only show loading state on initial load (when data is null)
-    // During refetches, keep the existing data visible to prevent flicker
     const isInitialLoad = data === null;
     if (isInitialLoad) {
       setLoading(true);
@@ -81,7 +79,6 @@ export const useAuctionData = (auctionContract) => {
         return;
       }
 
-      // Fetch all contract data in parallel
       const [
         startTime,
         commitEndTime,
@@ -150,12 +147,10 @@ export const useAuctionData = (auctionContract) => {
         safeContractCall(() => auctionContract.merkleRoot(), ethers.ZeroHash),
       ]);
 
-      // Fetch price ticks and buckets
       const tickLength = Number(priceTicksLength);
       const ticks = tickLength > 0 ? await fetchPriceTicks(auctionContract, tickLength) : [];
       const buckets = ticks.length > 0 ? await fetchPriceBuckets(auctionContract, ticks) : [];
 
-      // Fetch token symbol
       const tokenSymbol = await fetchTokenSymbol(saleTokenAddr);
 
       setData({
@@ -201,7 +196,6 @@ export const useAuctionData = (auctionContract) => {
     }
   }, [auctionContract, data, fetchPriceTicks, fetchPriceBuckets, fetchTokenSymbol]);
 
-  // Automatically fetch data when auctionContract becomes available
   useEffect(() => {
     if (auctionContract) {
       fetchData();

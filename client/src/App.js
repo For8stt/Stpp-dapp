@@ -45,6 +45,9 @@ const App = () => {
   useEffect(() => {
     const initialize = async () => {
       if (isConnecting) {
+        setTimeout(() => {
+          setInitializing(false);
+        }, 500);
         return;
       }
 

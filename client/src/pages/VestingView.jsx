@@ -6,7 +6,7 @@
  */
 import React, { useEffect, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
-import { useAccount } from "../hooks/useAccount";
+import { useAccount as useWagmiAccount } from "wagmi";
 import { useTransaction } from "../hooks/useTransaction";
 import { useVestingData } from "../hooks/useVestingData";
 import { useTime } from "../time";
@@ -24,7 +24,7 @@ const VestingView = () => {
   const [searchParams] = useSearchParams();
   const expectedLBPAddress = searchParams.get("lbp");
   const lbpAddressParam = searchParams.get("lbpAddress");
-  const { account } = useAccount();
+  const { address: account } = useWagmiAccount();
   const tx = useTransaction();
   const { currentTime, refreshTime } = useTime();
   

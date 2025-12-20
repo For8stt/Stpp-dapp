@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useParams } from "react-router-dom";
-import { useAccount } from "../hooks/useAccount";
+import { useAccount as useWagmiAccount } from "wagmi";
 import { useRealtimeLbpData } from "../hooks/useRealtimeLbpData";
 import { useLbpData } from "../hooks/useLbpData";
 import { useLbpActions } from "../hooks/useLbpActions";
@@ -18,7 +18,7 @@ const REFRESH_RATE_MS = 2000;
 
 const LbpView = () => {
   const { lbpAddress } = useParams();
-  const { account } = useAccount();
+  const { address: account } = useWagmiAccount();
   const { currentTime, refreshTime } = useTime();
   
   const [error, setError] = useState("");
@@ -91,7 +91,7 @@ const LbpView = () => {
   }, [lbpData, currentTime]);
 
   const isActive = status === "Active";
-  const canBid = isActive && !lbpData?.paused && !lbpData?.oraclePaused && account;
+  const canBid = isActive && !lbpData?.paused && !lbpData?.oraclePaused;
 
   if (loading) {
     return (

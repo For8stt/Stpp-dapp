@@ -16,7 +16,7 @@ export const useClaimHandler = (vestingData, account, escrowAddress, tx, refetch
     }
 
     try {
-      const provider = await ensureProvider();
+      const provider = ensureProvider();
       if (provider) {
         const escrowAbi = allAbis.TokenVestingEscrow || [];
         const escrowContract = new Contract(escrowAddress, escrowAbi, provider);
@@ -92,9 +92,3 @@ export const useClaimHandler = (vestingData, account, escrowAddress, tx, refetch
 
   return handleClaim;
 };
-
-
-
-
-
-

@@ -1,4 +1,4 @@
-import { BrowserProvider } from "ethers";
+import { BrowserProvider, JsonRpcProvider } from "ethers";
 
 export const DEFAULT_CHAIN_ID_HEX = "0x7a69";
 const INVALID_BLOCK_TAG_TEXT = "invalid block tag";
@@ -7,6 +7,7 @@ export const NETWORK_RESET_MESSAGE =
 const WALLET_STORAGE_KEY = "lockdapp:selectedWalletProvider";
 
 let provider;
+let publicProvider;
 let targetChainIdHex = DEFAULT_CHAIN_ID_HEX;
 let injectedProvider;
 let injectedWalletMeta;
@@ -35,7 +36,6 @@ const attemptChainResync = async () => {
       params: [{ chainId: desiredChainId }]
     });
   } catch {
-    // Ignore; the original error will bubble up for the UI.
   }
 };
 
@@ -209,21 +209,51 @@ export const rpcGuard = async (operation, attempt = 0) => {
   }
 };
 
-export const ensureProvider = () => {
-  const eipProvider = getActiveEip1193Provider();
-  if (!eipProvider) {
-    throw new Error("No injected wallet detected. Please install MetaMask, Rabby, or another wallet.");
+/**
+ * Gets a public read-only provider
+ * Falls back to default RPC URLs based on chain ID
+ */
+const getPublicReadOnlyProvider = (chainIdOverride = null) => {
+  if (publicProvider && !chainIdOverride) {
+    return publicProvider;
   }
 
-  if (!provider) {
-    provider = new BrowserProvider(eipProvider);
+  const chainId = chainIdOverride || parseInt(targetChainIdHex, 16);
+  let rpcUrl;
+  if (chainId === 31337) {
+    rpcUrl = "http://127.0.0.1:8545"; // Hardhat local
+  } else if (chainId === 11155111) {
+    rpcUrl = "https://sepolia.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161"; // Sepolia
+  } else if (chainId === 1) {
+    rpcUrl = "https://eth.llamarpc.com"; // Mainnet public RPC
+  } else if (chainId === 8453) {
+    rpcUrl = "https://mainnet.base.org"; // Base mainnet
+  } else if (chainId === 84532) {
+    rpcUrl = "https://sepolia.base.org"; // Base Sepolia
+  } else {
+    rpcUrl = `https://rpc.ankr.com/eth`;
   }
 
-  return provider;
+  if (!publicProvider || (chainIdOverride && publicProvider.network?.chainId !== BigInt(chainId))) {
+    publicProvider = new JsonRpcProvider(rpcUrl, chainId);
+  }
+  
+  return publicProvider;
+};
+
+/**
+ * Gets a provider for read-only operations
+ * ALWAYS uses public RPC to avoid triggering wallet connection popups
+ * For write operations, use ensureSigner() which will require explicit connection
+ * @param {number|null} chainIdOverride - Optional chain ID to use for public provider
+ */
+export const ensureProvider = (chainIdOverride = null) => {
+  return getPublicReadOnlyProvider(chainIdOverride);
 };
 
 export const clearProviderCache = () => {
   provider = null;
+  publicProvider = null;
 };
 
 export const getTargetChainIdHex = () => targetChainIdHex;
