@@ -3,7 +3,7 @@ import { ConnectButton } from "@rainbow-me/rainbowkit";
 
 const ConnectWalletButton = ({ className = "" }) => {
   return (
-    <div className={`wallet-connect ${className}`}>
+    <div className={`flex flex-col items-start gap-3 ${className}`.trim()}>
       <ConnectButton 
         showBalance={false}
         chainStatus="icon"

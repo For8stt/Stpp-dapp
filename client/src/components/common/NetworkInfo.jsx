@@ -20,7 +20,7 @@ const NetworkInfo = () => {
     fetchNetwork();
   }, [chainId]);
 
-  return <p className="network-indicator">Connected Network: {network || "Unknown"}</p>;
+  return <p className="m-0 text-text">Connected Network: {network || "Unknown"}</p>;
 };
 
 export default NetworkInfo;

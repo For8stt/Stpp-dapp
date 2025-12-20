@@ -1,41 +1,40 @@
 import React from "react";
-import styles from "./css/CreatePresaleForm.module.css";
 
 const Section = ({ title, description, children }) => (
-  <div className="section-card">
-    <div className="section-header">
-      <p className="section-title">{title}</p>
-      {description && <p className="section-description">{description}</p>}
+  <div className="relative mb-6 overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-[#334155] to-[#1e293b] p-6 shadow-lg transition-all duration-300 hover:border-[rgba(255,255,255,0.25)] hover:shadow-xl">
+    <div className="mb-6">
+      <p className="mb-2 text-xl font-bold text-text">{title}</p>
+      {description && <p className="max-w-[600px] text-sm leading-relaxed text-text-muted">{description}</p>}
     </div>
-    <div className="section-content">{children}</div>
+    <div className="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-4 md:grid-cols-1">{children}</div>
   </div>
 );
 
 const Input = ({ label, name, value, onChange, type = "text", placeholder, helper }) => (
-  <label className="input-wrapper">
-    <span className="input-label">{label}</span>
-    {helper && <span className="input-helper">{helper}</span>}
+  <label className="flex flex-col gap-2">
+    <span className="mb-1 text-sm font-semibold text-text">{label}</span>
+    {helper && <span className="text-xs italic text-text-muted">{helper}</span>}
     <input
       type={type}
       name={name}
       value={value}
       onChange={(event) => onChange(name, event.target.value)}
       placeholder={placeholder}
-      className="input-field"
+      className="rounded-xl border border-border bg-gradient-to-br from-[#1e293b] to-[#334155] px-4 py-3.5 text-sm text-text shadow-sm outline-none transition-all duration-300 focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-offset-0"
     />
   </label>
 );
 
 const TextArea = ({ label, name, value, onChange, placeholder, helper }) => (
-  <label className="textarea-wrapper">
-    <span className="input-label">{label}</span>
-    {helper && <span className="input-helper">{helper}</span>}
+  <label className="col-span-full flex flex-col gap-2">
+    <span className="mb-1 text-sm font-semibold text-text">{label}</span>
+    {helper && <span className="text-xs italic text-text-muted">{helper}</span>}
     <textarea
       name={name}
       value={value}
       onChange={(event) => onChange(name, event.target.value)}
       placeholder={placeholder}
-      className="textarea-field"
+      className="min-h-[120px] resize-y rounded-xl border border-border bg-gradient-to-br from-[#1e293b] to-[#334155] px-4 py-3.5 text-sm text-text shadow-sm outline-none transition-all duration-300 focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-offset-0"
     />
   </label>
 );
@@ -46,7 +45,7 @@ const CreatePresaleForm = ({ values, onChange, onSubmit, submitting, disabled })
       event.preventDefault();
       onSubmit();
     }}
-    className={styles.form}
+    className="flex flex-col gap-6"
   >
     <Section title="Token & Treasury" description="Addresses controlling token supply and treasury withdrawals.">
       <Input
@@ -263,12 +262,12 @@ const CreatePresaleForm = ({ values, onChange, onSubmit, submitting, disabled })
       />
     </Section>
 
-    <div className={styles.submitCard}>
-      <p className={styles.submitText}>All values are validated before sending the transaction. Gas estimation may take a few seconds.</p>
+    <div className="relative flex flex-col items-center justify-between gap-6 overflow-hidden rounded-2xl border border-[rgba(34,197,94,0.2)] bg-gradient-to-br from-[rgba(34,197,94,0.05)] to-[rgba(22,163,74,0.03)] p-6 shadow-lg backdrop-blur-sm before:absolute before:left-0 before:right-0 before:top-0 before:h-0.5 before:rounded-t-2xl before:bg-gradient-to-r before:from-[#22c55e] before:to-[rgba(34,197,94,0.6)] md:flex-row md:text-left">
+      <p className="m-0 text-center text-sm leading-relaxed text-text-muted md:text-left">All values are validated before sending the transaction. Gas estimation may take a few seconds.</p>
       <button
         type="submit"
         disabled={submitting || disabled}
-        className={styles.submitButton}
+        className="min-w-[160px] rounded-xl border border-[rgba(255,255,255,0.1)] bg-gradient-to-r from-[#22c55e] via-[#16a34a] to-[#15803d] px-8 py-3.5 text-base font-semibold text-white shadow-lg transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60 hover:-translate-y-0.5 hover:shadow-xl active:translate-y-0 active:shadow-lg disabled:hover:translate-y-0 disabled:hover:shadow-lg md:w-auto"
         title={disabled ? "Insufficient token balance. Please ensure you have enough tokens before creating the auction." : ""}
       >
         {submitting ? "Creating..." : disabled ? "Insufficient Balance" : "Create Presale"}

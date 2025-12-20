@@ -676,7 +676,7 @@ const PresalePage = ({ account }) => {
     : [];
 
   return (
-    <section className="page presale-page space-y-6">
+    <section className="presale-page flex flex-col gap-6 space-y-6">
       <div className="manager-hero">
         <div className="hero-top">
           <div>

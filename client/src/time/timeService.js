@@ -158,6 +158,16 @@ class TimeService {
     this.provider = provider;
     this.isLocalNetwork = chainId === 31337 || chainId === 1337;
 
+    if (this.isLocalNetwork) {
+      this.clearStoredTime();
+      const systemTime = Math.floor(Date.now() / 1000);
+      this.currentTime = systemTime;
+      this.blockchainTimeOffset = 0;
+      this.lastSyncTime = null;
+      this.lastBlockchainTime = null;
+      this.timeSource = TIME_SOURCE.LOCAL;
+    }
+
     if (this.isLocalNetwork && !this.hardhatProvider) {
       try {
         this.hardhatProvider = new JsonRpcProvider("http://127.0.0.1:8545");
