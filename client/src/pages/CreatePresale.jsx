@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { ethers } from "ethers";
 
 import CreatePresaleForm from "../components/presale/CreatePresaleForm";
 import loadContract from "../services/web3/loadContract";
 import { handleTxError, showTxSuccess, showTxInfo } from "../utils/txErrorHandler";
+import { ensureProvider } from "../services/web3/provider";
 import styles from "./css/CreatePresale.module.css";
 
 const STORAGE_KEY = "sttp:recent-presales";
@@ -77,6 +78,9 @@ const CreatePresale = ({ account, onConnect }) => {
   const navigate = useNavigate();
   const [formValues, setFormValues] = useState(getInitialValues);
   const [submitting, setSubmitting] = useState(false);
+  const [tokenBalance, setTokenBalance] = useState(null);
+  const [balanceLoading, setBalanceLoading] = useState(false);
+  const [balanceError, setBalanceError] = useState(null);
 
   const connectedAccount = account;
 
@@ -92,6 +96,52 @@ const CreatePresale = ({ account, onConnect }) => {
         .filter(Boolean),
     [formValues.priceTicks]
   );
+
+  const requiredAmount = useMemo(() => {
+    try {
+      const tokensForSale = parseEtherValue(formValues.tokensForSale);
+      const bonusReserve = parseEtherValue(formValues.bonusReserve);
+      return ethers.getBigInt(tokensForSale) + ethers.getBigInt(bonusReserve);
+    } catch {
+      return null;
+    }
+  }, [formValues.tokensForSale, formValues.bonusReserve]);
+
+  useEffect(() => {
+    const checkBalance = async () => {
+      if (!connectedAccount || !formValues.saleToken || !requiredAmount) {
+        setTokenBalance(null);
+        setBalanceError(null);
+        return;
+      }
+
+      setBalanceLoading(true);
+      setBalanceError(null);
+
+      try {
+        const provider = await ensureProvider();
+        const tokenAbi = [
+          { "constant": true, "inputs": [{ "name": "_owner", "type": "address" }], "name": "balanceOf", "outputs": [{ "name": "balance", "type": "uint256" }], "type": "function" }
+        ];
+        const tokenContract = new ethers.Contract(formValues.saleToken, tokenAbi, provider);
+        const balance = await tokenContract.balanceOf(connectedAccount);
+        setTokenBalance(ethers.getBigInt(balance));
+      } catch (err) {
+        console.warn("Failed to check token balance:", err);
+        setBalanceError("Failed to check token balance");
+        setTokenBalance(null);
+      } finally {
+        setBalanceLoading(false);
+      }
+    };
+
+    checkBalance();
+  }, [connectedAccount, formValues.saleToken, requiredAmount]);
+
+  const hasSufficientBalance = useMemo(() => {
+    if (!tokenBalance || !requiredAmount) return null;
+    return tokenBalance >= requiredAmount;
+  }, [tokenBalance, requiredAmount]);
 
   const buildAuctionInput = () => {
     const startTime = parseTimestamp(formValues.startTime);
@@ -142,16 +192,133 @@ const CreatePresale = ({ account, onConnect }) => {
       }
 
       setSubmitting(true);
-      showTxInfo("Please confirm the transaction in your wallet", { autoClose: false });
       await window.ethereum.request({ method: "eth_requestAccounts" });
 
-      const factory = await loadContract("PublicPresaleFactory");
+      const { BrowserProvider } = await import("ethers");
+      if (!window.ethereum) {
+        throw new Error("No wallet provider");
+      }
+      const provider = new BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      
       const auctionInput = buildAuctionInput();
+      const saleTokenAddress = auctionInput.saleToken;
+      const tokensForSaleBigInt = ethers.getBigInt(auctionInput.tokensForSale);
+      const bonusReserveBigInt = ethers.getBigInt(auctionInput.bonusReserve);
+      const fundingAmount = tokensForSaleBigInt + bonusReserveBigInt;
+      const tokenAbi = [
+        { "constant": true, "inputs": [{ "name": "_owner", "type": "address" }], "name": "balanceOf", "outputs": [{ "name": "balance", "type": "uint256" }], "type": "function" },
+        { "constant": false, "inputs": [{ "name": "_spender", "type": "address" }, { "name": "_value", "type": "uint256" }], "name": "approve", "outputs": [{ "name": "", "type": "bool" }], "type": "function" },
+        { "constant": true, "inputs": [{ "name": "_owner", "type": "address" }, { "name": "_spender", "type": "address" }], "name": "allowance", "outputs": [{ "name": "", "type": "uint256" }], "type": "function" }
+      ];
+      const tokenContract = new ethers.Contract(saleTokenAddress, tokenAbi, signer);
+      console.log("=== Pre-Creation Balance Check ===");
+      const userAddress = await signer.getAddress();
+      const userBalance = await tokenContract.balanceOf(userAddress);
+      const userBalanceBigInt = ethers.getBigInt(userBalance);
+      
+      console.log("Sale Token Address:", saleTokenAddress);
+      console.log("User Address:", userAddress);
+      console.log("Tokens for Sale:", ethers.formatEther(tokensForSaleBigInt) + " tokens");
+      console.log("Bonus Reserve:", ethers.formatEther(bonusReserveBigInt) + " tokens");
+      console.log("Total Required:", ethers.formatEther(fundingAmount) + " tokens");
+      console.log("User Token Balance:", ethers.formatEther(userBalanceBigInt) + " tokens");
+      console.log("================================");
+
+      if (userBalanceBigInt < fundingAmount) {
+        const missing = fundingAmount - userBalanceBigInt;
+        const errorMsg = `Insufficient token balance to create auction! ` +
+          `Required: ${ethers.formatEther(fundingAmount)} tokens, ` +
+          `Available: ${ethers.formatEther(userBalanceBigInt)} tokens, ` +
+          `Missing: ${ethers.formatEther(missing)} tokens. ` +
+          `Please ensure you have enough tokens before creating the auction.`;
+        console.error(errorMsg);
+        throw new Error(errorMsg);
+      }
+
+      const factory = await loadContract("PublicPresaleFactory");
+      const factoryAddress = await factory.getAddress();
+      
+      const currentAllowance = await tokenContract.allowance(userAddress, factoryAddress);
+      const currentAllowanceBigInt = ethers.getBigInt(currentAllowance);
+      if (currentAllowanceBigInt < fundingAmount) {
+        console.log("=== Using Multicall for Atomic Operation ===");
+        console.log("Factory Address:", factoryAddress);
+        console.log("Amount to approve:", ethers.formatEther(fundingAmount) + " tokens");
+        console.log("This will combine approve + createPresale in one transaction");
+        const lbpConfig = buildLbpConfig();
+        
+        try {
+          const multicallAbi = [
+            {
+              "inputs": [
+                {
+                  "components": [
+                    {"internalType": "address", "name": "target", "type": "address"},
+                    {"internalType": "bytes", "name": "callData", "type": "bytes"}
+                  ],
+                  "internalType": "struct Multicall.Call[]",
+                  "name": "calls",
+                  "type": "tuple[]"
+                }
+              ],
+              "name": "aggregate",
+              "outputs": [
+                {"internalType": "uint256", "name": "blockNumber", "type": "uint256"},
+                {"internalType": "bytes[]", "name": "returnData", "type": "bytes[]"}
+              ],
+              "stateMutability": "nonpayable",
+              "type": "function"
+            }
+          ];
+          showTxInfo(`Approving ${ethers.formatEther(fundingAmount)} tokens... Please confirm in your wallet.`, { autoClose: false });
+          const approveTx = await tokenContract.approve(factoryAddress, fundingAmount);
+          showTxInfo("Approval transaction submitted. Please wait...", { autoClose: false });
+          const approveReceipt = await approveTx.wait();
+          
+          if (approveReceipt.status !== 1) {
+            throw new Error("Token approval transaction failed!");
+          }
+          
+          console.log("Token approval successful!");
+          console.log("================================");
+        } catch (error) {
+          try {
+            await tokenContract.approve(factoryAddress,0).catch((err) => {});
+          }catch {}
+          throw error;
+        }
+      } else {
+        console.log("Token allowance already sufficient");
+      }
+
+      console.log("=== Creating Presale (Atomic Operation) ===");
+      console.log("Factory will atomically transfer tokens during presale creation");
+      console.log("If transfer fails, presale creation will be reverted");
+      
+      showTxInfo("Creating presale and transferring tokens atomically... Please confirm the transaction in your wallet", { autoClose: false });
       const lbpConfig = buildLbpConfig();
-      const tx = await factory.createPresale(auctionInput, lbpConfig);
-      showTxInfo("Transaction submitted to the network", { autoClose: 3000 });
+      
+
+      let tx;
+      try {
+        tx=await factory.createPresale(auctionInput, lbpConfig);
+      }catch (error){
+        console.warn("createPresale failed,attempting to revoke allownece...");
+        try {
+          await tokenContract.approve(factoryAddress, 0).catch(() => {});
+        }catch (revokeError){
+          console.warn("Failed to revoke allownece:", revokeError);
+        }
+        throw error;
+      }
+      showTxInfo("Presale creation transaction submitted to the network", { autoClose: 3000 });
 
       const receipt = await tx.wait();
+      if (receipt.status !== 1) {
+        throw new Error("Presale creation transaction failed! Auction was not created.");
+      }
+      
       let createdEvent = receipt.events?.find((event) => event.event === "PresaleCreated");
       if (!createdEvent) {
         const eventsFromFilter = await factory.queryFilter(
@@ -175,88 +342,32 @@ const CreatePresale = ({ account, onConnect }) => {
       }
 
       if (!createdEvent) {
-        throw new Error("Failed to read PresaleCreated event");
+        throw new Error("Failed to read PresaleCreated event. Transaction may have been reverted.");
       }
 
       const managerAddress = createdEvent.args?.manager;
       const auctionAddress = createdEvent.args?.auction;
-      
-
-      const { BrowserProvider } = await import("ethers");
-      if (!window.ethereum) {
-        throw new Error("No wallet provider");
-      }
-      const provider = new BrowserProvider(window.ethereum);
-      const signer = await provider.getSigner();
-      
-      const saleTokenAddress = auctionInput.saleToken;
-
-      const tokensForSaleBigInt = ethers.getBigInt(auctionInput.tokensForSale);
-      const bonusReserveBigInt = ethers.getBigInt(auctionInput.bonusReserve);
-      const fundingAmount = tokensForSaleBigInt + bonusReserveBigInt;
-      
-      console.log("=== Token Transfer Info ===");
-      console.log("Sale Token Address:", saleTokenAddress);
-      console.log("Auction Address:", auctionAddress);
-      console.log("Tokens for Sale:", ethers.formatEther(tokensForSaleBigInt) + " tokens (" + tokensForSaleBigInt.toString() + " wei)");
-      console.log("Bonus Reserve:", ethers.formatEther(bonusReserveBigInt) + " tokens (" + bonusReserveBigInt.toString() + " wei)");
-      console.log("Total Funding Amount:", ethers.formatEther(fundingAmount) + " tokens (" + fundingAmount.toString() + " wei)");
-      console.log("==========================");
-      const tokenAbi = [
-        { "constant": true, "inputs": [{ "name": "_owner", "type": "address" }], "name": "balanceOf", "outputs": [{ "name": "balance", "type": "uint256" }], "type": "function" },
-        { "constant": false, "inputs": [{ "name": "_to", "type": "address" }, { "name": "_value", "type": "uint256" }], "name": "transfer", "outputs": [{ "name": "", "type": "bool" }], "type": "function" }
-      ];
-      const tokenContract = new ethers.Contract(saleTokenAddress, tokenAbi, signer);
-      
-      const userAddress = await signer.getAddress();
-      const userBalance = await tokenContract.balanceOf(userAddress);
-      const userBalanceBigInt = ethers.getBigInt(userBalance);
-      
-      console.log("User Token Balance:", ethers.formatEther(userBalanceBigInt) + " tokens (" + userBalanceBigInt.toString() + " wei)");
-
-      if (userBalanceBigInt < fundingAmount) {
-        const missing = fundingAmount - userBalanceBigInt;
-        const errorMsg = `Insufficient token balance to fund auction! ` +
-          `Required: ${ethers.formatEther(fundingAmount)} tokens, ` +
-          `Available: ${ethers.formatEther(userBalanceBigInt)} tokens, ` +
-          `Missing: ${ethers.formatEther(missing)} tokens. ` +
-          `Please ensure you have enough tokens before creating the auction.`;
-        console.error("", errorMsg);
-        throw new Error(errorMsg);
-      }
-
-      showTxInfo(`Transferring ${ethers.formatEther(fundingAmount)} tokens to auction... Please confirm in your wallet.`, { autoClose: false });
-      const transferTx = await tokenContract.transfer(auctionAddress, fundingAmount);
-      showTxInfo("Token transfer submitted to the network", { autoClose: 3000 });
-      const transferReceipt = await transferTx.wait();
-      
-      console.log("Token Transfer Transaction:", {
-        hash: transferTx.hash,
-        blockNumber: transferReceipt.blockNumber,
-        status: transferReceipt.status === 1 ? "success" : "failed"
-      });
 
       const auctionBalance = await tokenContract.balanceOf(auctionAddress);
       const auctionBalanceBigInt = ethers.getBigInt(auctionBalance);
-      console.log("Auction Token Balance (after transfer):", ethers.formatEther(auctionBalanceBigInt) + " tokens (" + auctionBalanceBigInt.toString() + " wei)");
+      
+      console.log("=== Verification ===");
+      console.log("Auction Address:", auctionAddress);
+      console.log("Expected tokens:", ethers.formatEther(fundingAmount) + " tokens");
+      console.log("Auction Token Balance:", ethers.formatEther(auctionBalanceBigInt) + " tokens");
       
       if (auctionBalanceBigInt < fundingAmount) {
-        const missing = fundingAmount - auctionBalanceBigInt;
-        const errorMsg = `Token transfer verification failed! ` +
-          `Expected: ${ethers.formatEther(fundingAmount)} tokens in auction, ` +
-          `Found: ${ethers.formatEther(auctionBalanceBigInt)} tokens, ` +
-          `Missing: ${ethers.formatEther(missing)} tokens. ` +
-          `Please check the transaction and try again.`;
-        console.error("", errorMsg);
+        const errorMsg = `CRITICAL: Auction created but tokens not transferred! ` +
+          `Expected: ${ethers.formatEther(fundingAmount)} tokens, ` +
+          `Found: ${ethers.formatEther(auctionBalanceBigInt)} tokens. ` +
+          `The contract should have reverted. Please check the contract and contact support.`;
+        console.error(errorMsg);
         throw new Error(errorMsg);
       }
       
-      console.log("Token transfer successful!");
-      console.log("Amount transferred:", ethers.formatEther(fundingAmount) + " tokens (" + fundingAmount.toString() + " wei)");
-      console.log("Auction now has:", ethers.formatEther(auctionBalanceBigInt) + " tokens");
-      console.log("==========================");
-      
-      showTxSuccess(`Successfully transferred ${ethers.formatEther(fundingAmount)} tokens to auction!`, { autoClose: 3000 });
+      console.log("✓ Presale created atomically with token transfer!");
+      console.log("================================");
+      showTxSuccess(`Presale created successfully! ${ethers.formatEther(fundingAmount)} tokens transferred atomically.`, { autoClose: 3000 });
 
       persistPresale({
         manager: managerAddress,
@@ -318,7 +429,50 @@ const CreatePresale = ({ account, onConnect }) => {
 
       {/* Form Section */}
       <div className={styles.formCard}>
-        <CreatePresaleForm values={formValues} onChange={handleChange} onSubmit={handleSubmit} submitting={submitting} />
+        {/* Balance Check Display */}
+        {connectedAccount && formValues.saleToken && requiredAmount && (
+          <div style={{
+            padding: "1rem",
+            marginBottom: "1rem",
+            borderRadius: "8px",
+            backgroundColor: hasSufficientBalance === false ? "rgba(239, 68, 68, 0.1)" : "rgba(34, 197, 94, 0.1)",
+            border: `1px solid ${hasSufficientBalance === false ? "rgba(239, 68, 68, 0.3)" : "rgba(34, 197, 94, 0.3)"}`
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+              <span style={{ fontSize: "0.875rem", color: "rgba(255, 255, 255, 0.7)" }}>Token Balance Check</span>
+              {balanceLoading && <span style={{ fontSize: "0.875rem", color: "rgba(255, 255, 255, 0.5)" }}>Loading...</span>}
+            </div>
+            {balanceError ? (
+              <div style={{ fontSize: "0.875rem", color: "rgba(239, 68, 68, 0.9)" }}>{balanceError}</div>
+            ) : tokenBalance !== null ? (
+              <>
+                <div style={{ fontSize: "0.875rem", color: "rgba(255, 255, 255, 0.9)", marginBottom: "0.25rem" }}>
+                  <strong>Required:</strong> {ethers.formatEther(requiredAmount)} tokens
+                </div>
+                <div style={{ fontSize: "0.875rem", color: "rgba(255, 255, 255, 0.9)", marginBottom: "0.25rem" }}>
+                  <strong>Available:</strong> {ethers.formatEther(tokenBalance)} tokens
+                </div>
+                {hasSufficientBalance === false && (
+                  <div style={{ fontSize: "0.875rem", color: "rgba(239, 68, 68, 0.9)", marginTop: "0.5rem", fontWeight: "500" }}>
+                    ⚠️ Insufficient balance! You need {ethers.formatEther(requiredAmount - tokenBalance)} more tokens to create this auction.
+                  </div>
+                )}
+                {hasSufficientBalance === true && (
+                  <div style={{ fontSize: "0.875rem", color: "rgba(34, 197, 94, 0.9)", marginTop: "0.5rem", fontWeight: "500" }}>
+                    ✓ Sufficient balance
+                  </div>
+                )}
+              </>
+            ) : null}
+          </div>
+        )}
+        <CreatePresaleForm 
+          values={formValues} 
+          onChange={handleChange} 
+          onSubmit={handleSubmit} 
+          submitting={submitting}
+          disabled={hasSufficientBalance === false}
+        />
       </div>
     </section>
   );

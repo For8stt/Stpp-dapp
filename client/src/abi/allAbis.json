@@ -1515,6 +1515,21 @@
       "type": "error"
     },
     {
+      "inputs": [],
+      "name": "InsufficientTokenAllowance",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "InsufficientTokenBalance",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TokenTransferFailed",
+      "type": "error"
+    },
+    {
       "anonymous": false,
       "inputs": [
         {

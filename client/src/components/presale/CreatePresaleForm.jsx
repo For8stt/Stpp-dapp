@@ -40,7 +40,7 @@ const TextArea = ({ label, name, value, onChange, placeholder, helper }) => (
   </label>
 );
 
-const CreatePresaleForm = ({ values, onChange, onSubmit, submitting }) => (
+const CreatePresaleForm = ({ values, onChange, onSubmit, submitting, disabled }) => (
   <form
     onSubmit={(event) => {
       event.preventDefault();
@@ -267,10 +267,11 @@ const CreatePresaleForm = ({ values, onChange, onSubmit, submitting }) => (
       <p className={styles.submitText}>All values are validated before sending the transaction. Gas estimation may take a few seconds.</p>
       <button
         type="submit"
-        disabled={submitting}
+        disabled={submitting || disabled}
         className={styles.submitButton}
+        title={disabled ? "Insufficient token balance. Please ensure you have enough tokens before creating the auction." : ""}
       >
-        {submitting ? "Creating..." : "Create Presale"}
+        {submitting ? "Creating..." : disabled ? "Insufficient Balance" : "Create Presale"}
       </button>
     </div>
   </form>
