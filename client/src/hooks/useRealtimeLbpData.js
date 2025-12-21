@@ -470,7 +470,7 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
       // Always release the fetching guard
       isFetchingRef.current = false;
     }
-  }, [advanceBlockchainTime]);
+  }, [advanceBlockchainTime, weights.token]);
 
   /**
    * Fetch swap events from the pool contract for chart reconstruction
@@ -1018,7 +1018,7 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
       // Reset guards
       isFetchingRef.current = false;
     };
-  }, [lbpAddress, fetchLBPData, fetchPoolDataOnly, fetchSwapEvents]);
+  }, [lbpAddress, fetchLBPData, fetchPoolDataOnly, fetchSwapEvents, fetchPoolDataOnlyWithoutTimeAdvance]);
 
   // Reconstruct chart data deterministically
   const reconstructedChartData = useMemo(() => {
@@ -1116,23 +1116,11 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
     }
     return reconstructed;
   }, [
-    lbpData?.startTime,
-    lbpData?.endTime,
-    lbpData?.initialTokenWeight,
-    lbpData?.finalTokenWeight,
-    lbpData?.tokenInfo?.decimals,
+    lbpData,
     poolData?.blockchainTime,
     reserves.eth,
     reserves.token,
-    swapEvents.length, // Use length to ensure recalculation when events change
-    // Also include a hash of event timestamps to detect new events
-    // Use JSON.stringify to create a stable hash that changes when events change
-    JSON.stringify(swapEvents.map(e => ({
-      timestamp: e.timestamp || e.blockTimestamp || 0,
-      eventName: e.eventName,
-      ethIn: e.ethIn?.toString() || '0',
-      tokenOut: e.tokenOut?.toString() || '0',
-    }))),
+    swapEvents,
   ]);
 
   // Use reconstructed chart data if available, otherwise fall back to empty array

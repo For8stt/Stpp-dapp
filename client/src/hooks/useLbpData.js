@@ -117,7 +117,7 @@ export const useLbpData = (lbpAddress, lbpData, account) => {
     if (lbpData && account) {
       fetchUserData();
     }
-  }, [lbpAddress, account, lbpData?.finalized, fetchUserData]);
+  }, [lbpAddress, account, lbpData, fetchUserData]);
 
   useEffect(() => {
     if (lbpData?.amm && lbpData.amm !== ethers.ZeroAddress) {

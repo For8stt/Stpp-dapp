@@ -6,7 +6,7 @@ const Section = ({ title, description, children }) => (
       <p className="mb-2 text-xl font-bold text-text">{title}</p>
       {description && <p className="max-w-[600px] text-sm leading-relaxed text-text-muted">{description}</p>}
     </div>
-    <div className="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-4 md:grid-cols-1">{children}</div>
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">{children}</div>
   </div>
 );
 

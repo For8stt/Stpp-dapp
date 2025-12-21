@@ -1,5 +1,4 @@
-/* global BigInt */
-import React, { useMemo } from "react";
+import React, { useMemo, useCallback } from "react";
 import { ethers } from "ethers";
 import { formatEth, formatToken } from "../../utils/auctionUtils";
 import { useAccount } from "wagmi";
@@ -14,7 +13,7 @@ const CommitForm = ({
   txState 
 }) => {
   const { isConnected } = useAccount();
-  const generateCommitHash = () => {
+  const generateCommitHash = useCallback(() => {
     try {
       const qty = BigInt(form.quantity || "0");
       const priceTickIndex = BigInt(form.priceTickIndex || "0");
@@ -33,9 +32,9 @@ const CommitForm = ({
     } catch (err) {
       return null;
     }
-  };
+  }, [form.quantity, form.priceTickIndex, form.nonce]);
 
-  const commitHashPreview = useMemo(() => generateCommitHash(), [form]);
+  const commitHashPreview = useMemo(() => generateCommitHash(), [generateCommitHash]);
   
   const ethRequired = useMemo(() => {
     if (!form.quantity || !auctionData?.priceTicks?.[0]) return "0";

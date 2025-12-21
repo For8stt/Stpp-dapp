@@ -72,10 +72,10 @@ const PriceChart = ({ chartData, lbpData, poolData, spotPrice, currentTime }) =>
   return (
     <div className="relative overflow-hidden rounded-2xl border border-[rgba(51,65,85,0.6)] bg-gradient-to-br from-[rgba(30,41,59,0.8)] to-[rgba(15,23,42,0.9)] p-8 pt-10 backdrop-blur-[12px] backdrop-saturate-[180%] shadow-[0_20px_25px_-5px_rgba(0,0,0,0.3),0_10px_10px_-5px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.1)] transition-all duration-300 before:absolute before:left-0 before:right-0 before:top-0 before:h-0.5 before:bg-gradient-to-r before:from-[rgba(168,85,247,0.8)] before:via-[rgba(6,182,212,0.8)] before:to-[rgba(168,85,247,0.8)] before:bg-[length:200%_100%] before:animate-shimmer">
       <h2 className="relative z-10 mb-8 bg-gradient-to-br from-white to-[#cbd5e1] bg-clip-text text-[1.75rem] font-extrabold leading-tight tracking-[-0.02em] text-transparent">Price Chart (Live)</h2>
-      <ResponsiveContainer width="100%" height={300}>
+      <ResponsiveContainer width="100%" height={500}>
         <LineChart 
           data={sortedChartData}
-          margin={{ top: 10, right: 40, left: 20, bottom: 40 }}
+          margin={{ top: 30, right: 50, left: 20, bottom: 40 }}
         >
           <CartesianGrid
             strokeDasharray="3 3"

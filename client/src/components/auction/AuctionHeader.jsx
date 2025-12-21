@@ -1,7 +1,7 @@
 import React from "react";
 import PhaseBadge from "./PhaseBadge";
 
-const AuctionHeader = React.memo(({ address, auctionAddress, auctionData, phase, countdown, onRefresh, refreshing }) => {
+const AuctionHeader = React.memo(({ address, auctionAddress, auctionData, phase, countdown }) => {
   return (
     <div className="relative mb-8 overflow-hidden rounded-[2rem] border border-[rgba(255,255,255,0.12)] bg-gradient-to-br from-[rgba(15,23,42,0.95)] to-[rgba(30,41,59,0.95)] p-8 shadow-[0_20px_40px_rgba(0,0,0,0.4),0_0_0_1px_rgba(99,102,241,0.1),inset_0_1px_0_rgba(255,255,255,0.05)] transition-all duration-[400ms] ease-[cubic-bezier(0.4,0,0.2,1)] before:absolute before:left-0 before:right-0 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-[rgba(99,102,241,0.3)] before:to-transparent hover:border-[rgba(255,255,255,0.2)] hover:shadow-[0_25px_60px_rgba(0,0,0,0.5),0_0_0_1px_rgba(99,102,241,0.15),inset_0_1px_0_rgba(255,255,255,0.08)]">
       <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
@@ -29,13 +29,6 @@ const AuctionHeader = React.memo(({ address, auctionAddress, auctionData, phase,
         </div>
         <div className="flex flex-col gap-4 sm:items-end sm:gap-4">
           <PhaseBadge phase={phase} countdown={countdown} />
-          <button
-            onClick={onRefresh}
-            disabled={refreshing}
-            className="rounded-xl border border-[rgba(99,102,241,0.4)] bg-[rgba(99,102,241,0.2)] px-6 py-3 text-sm font-semibold text-[rgb(165,180,252)] transition-all duration-300 hover:-translate-y-0.5 hover:border-[rgba(99,102,241,0.6)] hover:bg-[rgba(99,102,241,0.3)] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {refreshing ? "Refreshing..." : "Refresh"}
-          </button>
         </div>
       </div>
     </div>

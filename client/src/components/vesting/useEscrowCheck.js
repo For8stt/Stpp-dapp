@@ -81,7 +81,7 @@ export const useEscrowCheck = (lbpAddressToCheck, escrowAddress) => {
         clearTimeout(timeoutId);
       }
     };
-  }, [lbpAddressToCheck, escrowAddress]);
+  }, [lbpAddressToCheck, escrowAddress, checkingEscrow]);
 
   return { correctEscrowAddress, checkingEscrow, lbpFinalized };
 };

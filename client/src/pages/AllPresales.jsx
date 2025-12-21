@@ -20,7 +20,7 @@ const AllPresales = () => {
     return null;
   };
 
-  const fetchManagerDetails = async (managerAddress) => {
+  const fetchManagerDetails = useCallback(async (managerAddress) => {
     const provider = getReadProvider();
     if (!provider) {
       return null;
@@ -48,7 +48,7 @@ const AllPresales = () => {
       console.warn("Failed to load manager info", error);
       return null;
     }
-  };
+  }, []);
 
   const loadPresales = useCallback(async () => {
     const latestEntry =
@@ -98,7 +98,7 @@ const AllPresales = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [fetchManagerDetails]);
 
   useEffect(() => {
     loadPresales();

@@ -107,7 +107,7 @@ const PresaleDeploy = () => {
     deployments?.entries && deployments.entries.length > 0
       ? deployments.entries[deployments.entries.length - 1]
       : null;
-  const legacyAddresses = latestEntry?.deployments ?? latestEntry ?? {};
+  const legacyAddresses = useMemo(() => latestEntry?.deployments ?? latestEntry ?? {}, [latestEntry]);
   const addressBook = useAddressBook();
 
   const [walletAddress, setWalletAddress] = useState("");
@@ -131,7 +131,7 @@ const PresaleDeploy = () => {
       records.push(legacyAddresses);
     }
     return records;
-  }, [resolvedRegistry, legacyAddresses]);
+  }, [resolvedRegistry, legacyAddresses, addressBook?.default]);
   const resolveAddressValue = useCallback(
     (keys) => {
       for (const record of resolvedRecords) {
