@@ -43,6 +43,14 @@ module.exports = {
         spin: {
           'to': { transform: 'rotate(360deg)' },
         },
+        gradientShift: {
+          '0%, 100%': { backgroundPosition: '0% 50%' },
+          '50%': { backgroundPosition: '100% 50%' },
+        },
+        slideIn: {
+          'from': { opacity: '0', transform: 'translateY(-10px)' },
+          'to': { opacity: '1', transform: 'translateY(0)' },
+        },
       },
       animation: {
         fadeIn: 'fadeIn 0.5s ease-out',
@@ -50,6 +58,8 @@ module.exports = {
         pulse: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
         shimmer: 'shimmer 3s ease-in-out infinite',
         spin: 'spin 1s linear infinite',
+        gradientShift: 'gradientShift 4s ease infinite',
+        slideIn: 'slideIn 0.3s ease-out',
       },
     },
   },

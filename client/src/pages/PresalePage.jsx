@@ -5,7 +5,6 @@ import { ethers } from "ethers";
 import AuctionControls from "../components/presale/AuctionControls";
 import loadContract from "../services/web3/loadContract";
 import { handleTxError, showTxSuccess, showTxInfo } from "../utils/txErrorHandler";
-import "./css/presalePage.css";
 
 const toDateInput = (secondsFromNow = 0) =>
   new Date((Math.floor(Date.now() / 1000) + secondsFromNow) * 1000).toISOString().slice(0, 16);
@@ -676,25 +675,31 @@ const PresalePage = ({ account }) => {
     : [];
 
   return (
-    <section className="presale-page flex flex-col gap-6 space-y-6">
-      <div className="manager-hero">
-        <div className="hero-top">
+    <section className="mx-auto flex w-full max-w-[1200px] flex-col gap-6 px-4 pb-12 pt-8">
+      <div className="relative overflow-hidden rounded-3xl border border-white/12 bg-[radial-gradient(circle_at_15%_-5%,rgba(99,102,241,0.3),transparent_45%),radial-gradient(circle_at_85%_15%,rgba(16,185,129,0.25),transparent_50%),radial-gradient(circle_at_50%_100%,rgba(14,165,233,0.2),transparent_60%),linear-gradient(135deg,rgba(2,6,23,0.95),rgba(15,23,42,0.9))] p-10 shadow-[0_20px_60px_rgba(0,0,0,0.4),0_0_0_1px_rgba(255,255,255,0.05)_inset,0_1px_0_rgba(255,255,255,0.1)_inset] backdrop-blur-[20px] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_25px_70px_rgba(0,0,0,0.5),0_0_0_1px_rgba(255,255,255,0.08)_inset,0_1px_0_rgba(255,255,255,0.15)_inset] before:absolute before:inset-0 before:pointer-events-none before:bg-[linear-gradient(135deg,rgba(99,102,241,0.1),transparent_60%),linear-gradient(225deg,rgba(16,185,129,0.08),transparent_70%)] before:opacity-60 after:absolute after:inset-0 after:pointer-events-none after:bg-[radial-gradient(circle_at_30%_30%,rgba(255,255,255,0.03),transparent_50%)] md:p-8 sm:p-6">
+        <div className="relative z-10 mb-2 flex flex-col gap-6">
           <div>
-            <p className="hero-subtitle">Presale manager</p>
-            <h1 className="hero-title">{address}</h1>
+            <p className="mb-2 flex items-center gap-2 text-sm font-medium uppercase tracking-widest text-white/65 before:content-['⚡'] before:text-base before:opacity-80">Presale manager</p>
+            <h1 className="m-0 bg-gradient-to-br from-white to-white/85 bg-clip-text text-4xl font-bold leading-tight tracking-[-0.02em] text-transparent break-all sm:text-3xl sm:text-2xl">{address}</h1>
           </div>
           {info?.auction && (
-            <Link to={`/presale/${address}/auction`} className="open-auction-link">
+            <Link 
+              to={`/presale/${address}/auction`} 
+              className="inline-flex w-1/5 items-center gap-2 whitespace-nowrap rounded-2xl border-0 bg-gradient-to-r from-indigo-500 via-cyan-400 to-green-400 px-7 py-3 text-sm font-semibold text-white no-underline shadow-[0_8px_20px_rgba(99,102,241,0.3),0_0_0_1px_rgba(255,255,255,0.1)_inset] transition-all duration-300 hover:-translate-y-0.5 hover:scale-[1.02] hover:shadow-[0_12px_30px_rgba(99,102,241,0.4),0_0_0_1px_rgba(255,255,255,0.15)_inset] active:translate-y-0 active:scale-100 after:content-['→'] after:text-lg after:transition-transform after:duration-300 hover:after:translate-x-1"
+            >
               Open auction view
             </Link>
           )}
         </div>
         {info && (
-          <div className="hero-meta">
+          <div className="relative z-10 mt-8 grid grid-cols-1 gap-5 border-t border-white/8 pt-8 sm:mt-6 sm:gap-4 sm:pt-6 md:grid-cols-[repeat(auto-fit,minmax(220px,1fr))]">
             {heroStats.map((stat) => (
-              <div key={stat.label} className="manager-stat">
-                <span>{stat.label}</span>
-                <strong>{stat.value}</strong>
+              <div 
+                key={stat.label} 
+                className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/70 to-slate-800/50 p-5 shadow-[0_4px_12px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.1)] backdrop-blur-[10px] transition-all duration-300 hover:-translate-y-0.5 hover:border-white/15 hover:bg-gradient-to-br hover:from-slate-900/85 hover:to-slate-800/65 hover:shadow-[0_8px_20px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] before:absolute before:left-0 before:right-0 before:top-0 before:h-0.5 before:bg-gradient-to-r before:from-indigo-500/60 before:via-green-500/60 before:to-indigo-500/60 before:bg-[length:200%_100%] before:animate-shimmer sm:p-4"
+              >
+                <span className="mb-2 block text-xs font-semibold uppercase tracking-wider text-white/65">{stat.label}</span>
+                <strong className="mt-1 block font-mono text-[0.95rem] font-medium leading-snug text-white break-all">{stat.value}</strong>
               </div>
             ))}
           </div>
@@ -702,19 +707,35 @@ const PresalePage = ({ account }) => {
       </div>
 
       {txStatus && (
-        <div className={`transaction-banner transaction-banner--${txStatus.status || "pending"}`}>
+        <div className={`flex items-center justify-between gap-4 rounded-2xl border px-6 py-4 text-base font-medium backdrop-blur-[10px] shadow-[0_4px_12px] animate-slideIn sm:flex-col sm:items-start sm:gap-3 sm:px-5 sm:py-4 ${
+          txStatus.status === "success" 
+            ? "border-green-500/50 bg-green-500/15 text-green-100 shadow-green-500/20" 
+            : txStatus.status === "error"
+            ? "border-red-500/50 bg-red-500/12 text-red-100 shadow-red-500/15"
+            : "border-blue-500/40 bg-blue-500/12 text-blue-100 shadow-blue-500/15"
+        }`}>
           <span>{txStatus.message}</span>
-          {txStatus.hash && <span className="transaction-banner__hash">{shortenHash(txStatus.hash)}</span>}
+          {txStatus.hash && (
+            <span className={`font-mono text-sm rounded-lg border px-3 py-1.5 ${
+              txStatus.status === "success"
+                ? "border-green-500/30 bg-green-500/15 text-green-500/95"
+                : txStatus.status === "error"
+                ? "border-red-500/30 bg-red-500/15 text-red-500/95"
+                : "border-yellow-500/20 bg-yellow-500/10 text-yellow-500/95"
+            }`}>
+              {shortenHash(txStatus.hash)}
+            </span>
+          )}
         </div>
       )}
 
       {loading ? (
-        <div className="presale-panel placeholder">Loading…</div>
+        <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-slate-950/90 to-slate-900/85 p-8 text-center text-lg text-white/70 shadow-[0_20px_50px_rgba(0,0,0,0.3),0_0_0_1px_rgba(255,255,255,0.05)_inset] backdrop-blur-[20px] transition-all duration-300 hover:border-white/15 hover:shadow-[0_25px_60px_rgba(0,0,0,0.4),0_0_0_1px_rgba(255,255,255,0.08)_inset] sm:p-6 sm:p-5">Loading…</div>
       ) : error ? (
-        <div className="presale-panel error">{error}</div>
+        <div className="rounded-3xl border border-red-500/40 bg-gradient-to-br from-red-900/20 to-red-800/15 p-8 text-red-100 shadow-[0_20px_50px_rgba(239,68,68,0.15),0_0_0_1px_rgba(239,68,68,0.2)_inset] sm:p-6 sm:p-5">{error}</div>
       ) : (
         <>
-          <div className="presale-panel">
+          <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-slate-950/90 to-slate-900/85 p-8 shadow-[0_20px_50px_rgba(0,0,0,0.3),0_0_0_1px_rgba(255,255,255,0.05)_inset] backdrop-blur-[20px] transition-all duration-300 hover:border-white/15 hover:shadow-[0_25px_60px_rgba(0,0,0,0.4),0_0_0_1px_rgba(255,255,255,0.08)_inset] sm:p-6 sm:p-5">
             <AuctionControls
               isOwner={isOwner}
               auctionAddress={info?.auction}
@@ -729,11 +750,16 @@ const PresalePage = ({ account }) => {
           </div>
 
           {auctions.length > 0 && (
-            <div className="presale-panel auction-panel">
-              <p className="text-base font-semibold text-white">Deployed auctions</p>
-              <ul>
+            <div className="relative rounded-3xl border border-white/10 bg-gradient-to-br from-slate-950/90 to-slate-900/85 p-8 shadow-[0_20px_50px_rgba(0,0,0,0.3),0_0_0_1px_rgba(255,255,255,0.05)_inset] backdrop-blur-[20px] transition-all duration-300 hover:border-white/15 hover:shadow-[0_25px_60px_rgba(0,0,0,0.4),0_0_0_1px_rgba(255,255,255,0.08)_inset] sm:p-6 sm:p-5">
+              <p className="mb-5 flex items-center gap-2 text-lg font-semibold text-white before:content-['📋'] before:text-xl">Deployed auctions</p>
+              <ul className="m-0 flex flex-col gap-3.5 p-0 list-none">
                 {auctions.map((auctionAddress) => (
-                  <li key={auctionAddress}>{auctionAddress}</li>
+                  <li 
+                    key={auctionAddress}
+                    className="relative overflow-hidden rounded-2xl border border-white/8 bg-gradient-to-br from-slate-900/80 to-slate-800/60 p-4 font-mono text-sm text-white/90 shadow-[0_2px_8px_rgba(0,0,0,0.15),inset_0_1px_0_rgba(255,255,255,0.05)] transition-all duration-200 hover:translate-x-1 hover:border-white/12 hover:bg-gradient-to-br hover:from-slate-900/95 hover:to-slate-800/75 hover:shadow-[0_4px_12px_rgba(0,0,0,0.2)] before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 before:bg-gradient-to-b before:from-indigo-500/80 before:to-green-500/80 before:opacity-0 before:transition-opacity before:duration-200 hover:before:opacity-100"
+                  >
+                    {auctionAddress}
+                  </li>
                 ))}
               </ul>
             </div>

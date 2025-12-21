@@ -9,7 +9,6 @@ import VestingTimeline from "./VestingTimeline";
 import VestingChart from "./VestingChart";
 import ClaimPanel from "./ClaimPanel";
 import VestingEmpty from "./VestingEmpty";
-import styles from "./css/VestingPage.module.css";
 
 const VestingContent = ({
   account,
@@ -54,7 +53,7 @@ const VestingContent = ({
   const hasAllocation = userAllocation && userAllocation > 0n;
 
   return (
-    <div className={styles.container}>
+    <div className="mx-auto flex max-w-7xl flex-col gap-8 relative z-10">
       <VestingHeader 
         lbpAddress={lbpAddressToCheck}
         secureLBPAddress={secureLBPAddress}
@@ -157,6 +156,7 @@ const VestingContent = ({
 };
 
 export default VestingContent;
+
 
 
 

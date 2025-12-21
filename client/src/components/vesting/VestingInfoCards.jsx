@@ -1,6 +1,5 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import styles from "./css/VestingInfoCards.module.css";
 
 const VestingInfoCards = ({
   escrowAddress,
@@ -15,30 +14,30 @@ const VestingInfoCards = ({
     lbpAddressToCheck.toLowerCase() !== secureLBPAddress.toLowerCase();
 
   return (
-    <div className={styles.infoGrid}>
-      <div className={styles.infoCard}>
-        <div className={styles.infoLabel}>Escrow Contract</div>
-        <div className={styles.infoValue}>{escrowAddress}</div>
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="relative overflow-hidden rounded-xl border border-slate-600/30 bg-gradient-to-br from-slate-700/40 to-slate-800/50 p-5 transition-all hover:translate-y-[-2px] hover:border-slate-600/60 hover:shadow-[0_10px_20px_-5px_rgba(0,0,0,0.3)] before:absolute before:inset-0 before:bg-gradient-to-br before:from-green-500/5 before:to-transparent before:opacity-0 before:transition-opacity hover:before:opacity-100">
+        <div className="relative z-10 mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Escrow Contract</div>
+        <div className="relative z-10 font-mono text-sm font-medium text-white break-all">{escrowAddress}</div>
       </div>
-      <div className={styles.infoCard}>
-        <div className={styles.infoLabel}>LBP Contract</div>
-        <div className={styles.infoValue}>{secureLBPAddress}</div>
+      <div className="relative overflow-hidden rounded-xl border border-slate-600/30 bg-gradient-to-br from-slate-700/40 to-slate-800/50 p-5 transition-all hover:translate-y-[-2px] hover:border-slate-600/60 hover:shadow-[0_10px_20px_-5px_rgba(0,0,0,0.3)] before:absolute before:inset-0 before:bg-gradient-to-br before:from-green-500/5 before:to-transparent before:opacity-0 before:transition-opacity hover:before:opacity-100">
+        <div className="relative z-10 mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">LBP Contract</div>
+        <div className="relative z-10 font-mono text-sm font-medium text-white break-all">{secureLBPAddress}</div>
         {hasLbpMismatch && (
-          <div className={styles.lbpMismatchWarning}>
-            <div className={styles.mismatchText}>
+          <div className="relative z-10 mt-2 rounded-lg border border-yellow-500/50 bg-yellow-500/20 p-3 text-xs text-yellow-400">
+            <div className="mb-2">
                 Expected LBP: {lbpAddressToCheck.slice(0, 8)}...{lbpAddressToCheck.slice(-6)}
             </div>
             {correctEscrowAddress && (
-              <div className={styles.correctEscrowSection}>
-                <div className={styles.correctEscrowLabel}>
+              <div className="mt-2 border-t border-yellow-500/30 pt-2">
+                <div className="mb-2 text-[0.7rem] opacity-90">
                   Correct Escrow for this LBP:
                 </div>
-                <div className={styles.correctEscrowAddress}>
+                <div className="mb-2 font-mono text-[0.7rem] break-all">
                   {correctEscrowAddress}
                 </div>
                 <Link
                   to={`/vesting/${correctEscrowAddress}?lbp=${lbpAddressToCheck}`}
-                  className={styles.correctEscrowLink}
+                  className="mt-1 inline-block rounded-md border border-green-500/50 bg-green-500/20 px-3 py-1.5 text-[0.7rem] font-semibold text-green-400 no-underline"
                 >
                   Go to Correct Escrow →
                 </Link>
@@ -47,19 +46,19 @@ const VestingInfoCards = ({
           </div>
         )}
       </div>
-      <div className={styles.infoCard}>
-        <div className={styles.infoLabel}>Token</div>
-        <div className={styles.infoValueBold}>
+      <div className="relative overflow-hidden rounded-xl border border-slate-600/30 bg-gradient-to-br from-slate-700/40 to-slate-800/50 p-5 transition-all hover:translate-y-[-2px] hover:border-slate-600/60 hover:shadow-[0_10px_20px_-5px_rgba(0,0,0,0.3)] before:absolute before:inset-0 before:bg-gradient-to-br before:from-green-500/5 before:to-transparent before:opacity-0 before:transition-opacity hover:before:opacity-100">
+        <div className="relative z-10 mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Token</div>
+        <div className="relative z-10 text-base font-bold text-white">
           {tokenSymbol} ({tokenAddress.slice(0, 6)}...{tokenAddress.slice(-4)})
         </div>
       </div>
-      <div className={styles.infoCard}>
-        <div className={styles.infoLabel}>Status</div>
-        <div className={styles.infoValueBold}>
+      <div className="relative overflow-hidden rounded-xl border border-slate-600/30 bg-gradient-to-br from-slate-700/40 to-slate-800/50 p-5 transition-all hover:translate-y-[-2px] hover:border-slate-600/60 hover:shadow-[0_10px_20px_-5px_rgba(0,0,0,0.3)] before:absolute before:inset-0 before:bg-gradient-to-br before:from-green-500/5 before:to-transparent before:opacity-0 before:transition-opacity hover:before:opacity-100">
+        <div className="relative z-10 mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Status</div>
+        <div className="relative z-10 text-base font-bold text-white">
           {finalized ? "Finalized" : "Not Finalized"}
         </div>
         {!finalized && (
-          <div className={styles.infoValueSmall}>
+          <div className="relative z-10 mt-2 text-xs text-white/70">
             SecureLBP: {secureLBPAddress.slice(0, 8)}...{secureLBPAddress.slice(-6)}
           </div>
         )}
@@ -69,6 +68,7 @@ const VestingInfoCards = ({
 };
 
 export default VestingInfoCards;
+
 
 
 
