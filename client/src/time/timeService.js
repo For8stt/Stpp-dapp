@@ -22,9 +22,7 @@ class TimeService {
     
     if (storedData && storedData.time && storedData.timestamp) {
       const timeSinceStored = systemTime - storedData.timestamp;
-      // If stored time is recent (within MAX_STORED_TIME_AGE), use it and continue from there
       if (timeSinceStored >= 0 && timeSinceStored < MAX_STORED_TIME_AGE) {
-        // Continue time from stored time + elapsed time
         this.currentTime = storedData.time + timeSinceStored;
         this.blockchainTimeOffset = storedData.offset || 0;
         this.lastSyncTime = storedData.syncTime || null;
@@ -158,6 +156,16 @@ class TimeService {
     this.provider = provider;
     this.isLocalNetwork = chainId === 31337 || chainId === 1337;
 
+    if (this.isLocalNetwork) {
+      this.clearStoredTime();
+      const systemTime = Math.floor(Date.now() / 1000);
+      this.currentTime = systemTime;
+      this.blockchainTimeOffset = 0;
+      this.lastSyncTime = null;
+      this.lastBlockchainTime = null;
+      this.timeSource = TIME_SOURCE.LOCAL;
+    }
+
     if (this.isLocalNetwork && !this.hardhatProvider) {
       try {
         this.hardhatProvider = new JsonRpcProvider("http://127.0.0.1:8545");
@@ -180,12 +188,9 @@ class TimeService {
         const block = await activeProvider.getBlock("latest");
         if (block?.timestamp) {
           const blockchainTime = Number(block.timestamp);
-          // Only update if blockchain time is ahead of current time
-          // This preserves the stored time continuation if it's more recent
           if (blockchainTime > previousTime) {
             this.currentTime = blockchainTime;
           }
-          // Always update offset and sync info for accurate future calculations
           this.blockchainTimeOffset = blockchainTime - systemTime;
           this.lastSyncTime = systemTime;
           this.lastBlockchainTime = blockchainTime;
@@ -204,11 +209,9 @@ class TimeService {
         const block = await fallbackProvider.getBlock("latest");
         if (block?.timestamp) {
           const blockchainTime = Number(block.timestamp);
-          // Only update if blockchain time is ahead of current time
           if (blockchainTime > previousTime) {
             this.currentTime = blockchainTime;
           }
-          // Always update offset and sync info for accurate future calculations
           this.blockchainTimeOffset = blockchainTime - systemTime;
           this.lastSyncTime = systemTime;
           this.lastBlockchainTime = blockchainTime;
@@ -221,7 +224,6 @@ class TimeService {
       }
     }
 
-    // Fallback to system time only if it's ahead of current time
     if (systemTime > previousTime) {
       this.currentTime = systemTime;
     }
@@ -255,7 +257,6 @@ class TimeService {
             this.timeSource = TIME_SOURCE.CHAIN;
             this.authoritativeTimeSource = TIME_SOURCE.CHAIN;
             this.lastBlockchainTime = blockchainTime; // Track last known blockchain time
-            // Only update time forward, never backward
             if (blockchainTime > previousTime) {
               this.currentTime = blockchainTime;
             }
@@ -279,7 +280,6 @@ class TimeService {
             this.timeSource = TIME_SOURCE.CHAIN;
             this.authoritativeTimeSource = TIME_SOURCE.CHAIN;
             this.lastBlockchainTime = blockchainTime; // Track last known blockchain time
-            // Only update time forward, never backward
             if (blockchainTime > previousTime) {
               this.currentTime = blockchainTime;
             }
