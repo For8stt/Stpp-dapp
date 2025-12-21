@@ -4,7 +4,6 @@ import { ethers } from "ethers";
 import { formatEth, formatToken } from "../../utils/auctionUtils";
 import { useAccount } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
-import styles from "./css/CommitForm.module.css";
 
 const CommitForm = ({ 
   form, 
@@ -52,23 +51,23 @@ const CommitForm = ({
   if (!auctionData) return null;
 
   return (
-    <div className={styles.formCard}>
-      <p className={styles.formTitle}>Commit Bid</p>
+    <div className="rounded-2xl border border-[rgba(255,255,255,0.1)] bg-[rgba(15,23,42,0.6)] p-8">
+      <p className="mb-6 text-2xl font-bold text-white">Commit Bid</p>
       <div>
-        <div className={styles.formField}>
-          <label className={styles.formLabel}>Quantity (whole units)</label>
+        <div className="mb-5">
+          <label className="mb-2 block text-sm font-medium text-[rgba(255,255,255,0.8)]">Quantity (whole units)</label>
           <input
-            className={styles.formInput}
+            className="w-full rounded-xl border border-[rgba(255,255,255,0.1)] bg-[rgba(15,23,42,0.8)] px-4 py-3 text-base text-white transition-all duration-300 focus:border-[rgba(99,102,241,0.5)] focus:bg-[rgba(15,23,42,0.95)] focus:outline-none"
             type="number"
             value={form.quantity}
             onChange={(e) => setForm({ ...form, quantity: e.target.value })}
             placeholder="1000"
           />
         </div>
-        <div className={styles.formField}>
-          <label className={styles.formLabel}>Price Tick Index</label>
+        <div className="mb-5">
+          <label className="mb-2 block text-sm font-medium text-[rgba(255,255,255,0.8)]">Price Tick Index</label>
           <select
-            className={styles.formSelect}
+            className="w-full rounded-xl border border-[rgba(255,255,255,0.1)] bg-[rgba(15,23,42,0.8)] px-4 py-3 text-base text-white transition-all duration-300 focus:border-[rgba(99,102,241,0.5)] focus:bg-[rgba(15,23,42,0.95)] focus:outline-none"
             value={form.priceTickIndex}
             onChange={(e) => setForm({ ...form, priceTickIndex: e.target.value })}
           >
@@ -79,11 +78,10 @@ const CommitForm = ({
             ))}
           </select>
         </div>
-        <div className={styles.formField}>
-          <label className={styles.formLabel}>Nonce (string or bytes32)</label>
+        <div className="mb-5">
+          <label className="mb-2 block text-sm font-medium text-[rgba(255,255,255,0.8)]">Nonce (string or bytes32)</label>
           <input
-            className={`${styles.formInput} font-mono`}
-            style={{ fontSize: '0.75rem' }}
+            className="w-full rounded-xl border border-[rgba(255,255,255,0.1)] bg-[rgba(15,23,42,0.8)] px-4 py-3 font-mono text-xs text-white transition-all duration-300 focus:border-[rgba(99,102,241,0.5)] focus:bg-[rgba(15,23,42,0.95)] focus:outline-none"
             value={form.nonce}
             onChange={(e) => setForm({ ...form, nonce: e.target.value })}
             placeholder="my-secret-nonce"
@@ -92,11 +90,10 @@ const CommitForm = ({
         {auctionData.merkleRoot && 
          auctionData.merkleRoot !== ethers.ZeroHash && 
          auctionData.merkleRoot !== "0x0000000000000000000000000000000000000000000000000000000000000000" && (
-          <div className={styles.formField}>
-            <label className={styles.formLabel}>Merkle Proof (comma separated bytes32)</label>
+          <div className="mb-5">
+            <label className="mb-2 block text-sm font-medium text-[rgba(255,255,255,0.8)]">Merkle Proof (comma separated bytes32)</label>
             <input
-              className={`${styles.formInput} font-mono`}
-              style={{ fontSize: '0.75rem' }}
+              className="w-full rounded-xl border border-[rgba(255,255,255,0.1)] bg-[rgba(15,23,42,0.8)] px-4 py-3 font-mono text-xs text-white transition-all duration-300 focus:border-[rgba(99,102,241,0.5)] focus:bg-[rgba(15,23,42,0.95)] focus:outline-none"
               value={form.merkleProof}
               onChange={(e) => setForm({ ...form, merkleProof: e.target.value })}
               placeholder="0x123...,0x456..."
@@ -104,28 +101,28 @@ const CommitForm = ({
           </div>
         )}
         {commitHashPreview && (
-          <div className={styles.infoBox}>
-            <p className={styles.infoLabel}>Commit Hash Preview:</p>
-            <p className="font-mono" style={{ fontSize: '0.75rem', wordBreak: 'break-all' }}>{commitHashPreview}</p>
+          <div className="mb-4 rounded-xl border border-[rgba(255,255,255,0.1)] bg-[rgba(15,23,42,0.8)] p-4">
+            <p className="mb-2 text-sm text-[rgba(255,255,255,0.7)]">Commit Hash Preview:</p>
+            <p className="break-all font-mono text-xs">{commitHashPreview}</p>
           </div>
         )}
-        <div className={styles.infoBox}>
-          <p className={styles.infoLabel}>ETH Required:</p>
-          <p className={styles.infoValue}>{ethRequired} ETH</p>
+        <div className="mb-4 rounded-xl border border-[rgba(255,255,255,0.1)] bg-[rgba(15,23,42,0.8)] p-4">
+          <p className="mb-2 text-sm text-[rgba(255,255,255,0.7)]">ETH Required:</p>
+          <p className="font-mono text-lg font-semibold text-white">{ethRequired} ETH</p>
         </div>
         {userData && (
-          <div className={styles.infoBox}>
-            <p className={styles.infoLabel}>Your Commits:</p>
-            <p className={styles.infoText}>Committed Qty: {formatToken(userData.committedQty)}</p>
-            <p className={styles.infoText}>Committed Deposit: {formatEth(userData.committedQty * (auctionData.priceTicks[0] || 0n))} ETH</p>
+          <div className="mb-4 rounded-xl border border-[rgba(255,255,255,0.1)] bg-[rgba(15,23,42,0.8)] p-4">
+            <p className="mb-2 text-sm text-[rgba(255,255,255,0.7)]">Your Commits:</p>
+            <p className="mb-1 text-sm text-[rgba(255,255,255,0.8)]">Committed Qty: {formatToken(userData.committedQty)}</p>
+            <p className="text-sm text-[rgba(255,255,255,0.8)]">Committed Deposit: {formatEth(userData.committedQty * (auctionData.priceTicks[0] || 0n))} ETH</p>
           </div>
         )}
         {!isConnected ? (
-          <div className={styles.infoBox} style={{ marginTop: '1rem', padding: '1rem', backgroundColor: 'rgba(255, 193, 7, 0.1)', border: '1px solid rgba(255, 193, 7, 0.3)' }}>
-            <p style={{ marginBottom: '0.75rem', color: 'rgba(255, 255, 255, 0.9)' }}>
+          <div className="mt-4 rounded-xl border border-[rgba(255,193,7,0.3)] bg-[rgba(255,193,7,0.1)] p-4">
+            <p className="mb-3 text-[rgba(255,255,255,0.9)]">
               Connect wallet to participate in the auction
             </p>
-            <div style={{ display: 'flex', justifyContent: 'center' }}>
+            <div className="flex justify-center">
               <ConnectButton />
             </div>
           </div>
@@ -133,7 +130,7 @@ const CommitForm = ({
           <button
             onClick={onSubmit}
             disabled={!form.quantity || !form.nonce || txState?.status === "pending"}
-            className={`${styles.submitButton} ${styles.commit}`}
+            className="mt-4 w-full rounded-xl border-0 bg-gradient-to-r from-[rgb(59,130,246)] to-[rgb(96,165,250)] px-4 py-4 text-base font-semibold text-white transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-50 hover:not-disabled:-translate-y-0.5 hover:not-disabled:bg-gradient-to-r hover:not-disabled:from-[rgb(96,165,250)] hover:not-disabled:to-[rgb(59,130,246)] hover:not-disabled:shadow-[0_10px_20px_rgba(59,130,246,0.3)]"
           >
             {txState?.status === "pending" ? "Submitting..." : "Submit Commit"}
           </button>
