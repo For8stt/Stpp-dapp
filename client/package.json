@@ -33,7 +33,6 @@
   },
   "scripts": {
     "start": "cross-env GENERATE_SOURCEMAP=false craco start",
-    "start:clean": "cross-env GENERATE_SOURCEMAP=false craco start",
     "build": "cross-env GENERATE_SOURCEMAP=false craco build",
     "test": "craco test",
     "eject": "react-scripts eject"
@@ -70,10 +69,7 @@
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
-    "autoprefixer": "^10.4.23",
     "cross-env": "^7.0.3",
-    "postcss": "^8.5.6",
-    "tailwindcss": "^3.4.19",
     "typescript": "4.9.5"
   },
   "overrides": {

@@ -8,8 +8,6 @@ import "@rainbow-me/rainbowkit/styles.css";
 import App from "./App";
 import { config } from "./config/wagmi";
 
-// Clear auction-related storage on app start (especially for local networks)
-// This ensures a fresh start when restarting the application
 if (typeof window !== "undefined") {
   const isLocalhost = window.location.hostname === "localhost" || 
                       window.location.hostname === "127.0.0.1" ||
@@ -17,19 +15,28 @@ if (typeof window !== "undefined") {
   
   if (isLocalhost) {
     try {
-      const timeServiceKeys = [
-        "timeService:lastTime",
-        "timeService:lastTimeTimestamp",
-        "timeService:blockchainOffset",
-        "timeService:lastSyncTime",
-        "timeService:lastBlockchainTime",
-      ];
+      const SESSION_FLAG = "sttp:session-initialized";
+      const isFreshSession = !window.sessionStorage.getItem(SESSION_FLAG);
+      
+      if (isFreshSession) {
+        const timeServiceKeys = [
+          "timeService:lastTime",
+          "timeService:lastTimeTimestamp",
+          "timeService:blockchainOffset",
+          "timeService:lastSyncTime",
+          "timeService:lastBlockchainTime",
+        ];
 
-      timeServiceKeys.forEach((key) => {
-        window.sessionStorage.removeItem(key);
-      });
+        timeServiceKeys.forEach((key) => {
+          window.localStorage.removeItem(key);
+        });
 
-      console.log("Cleared auction time storage for fresh start (localhost)");
+        window.sessionStorage.setItem(SESSION_FLAG, "true");
+        
+        console.log("Cleared auction time storage for fresh browser session (localhost)");
+      } else {
+        console.log("Preserving storage - page refresh detected (localhost)");
+      }
     } catch (error) {
       console.warn("Failed to clear storage:", error);
     }
