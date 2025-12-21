@@ -1,7 +1,6 @@
 /* eslint-env es2020 */
 import React, { useMemo } from "react";
 import { ethers } from "ethers";
-import styles from "./css/PriceDecayChart.module.css";
 
 const formatEth = (value) => {
   if (!value || value === 0n) return "0";
@@ -152,15 +151,22 @@ const PriceDecayChart = ({
 
   if (!priceTicks || priceTicks.length === 0) return null;
 
-  return (
-    <div className={`${styles.container} ${styles.fadeIn}`}>
+  const phaseDotColors = {
+    commit: "bg-[rgb(96,165,250)] animate-pulse",
+    reveal: "bg-[rgb(196,181,253)] animate-pulse",
+    finalized: "bg-[rgb(52,211,153)]",
+    notstarted: "bg-[rgb(148,163,184)]"
+  };
 
-      <div className={styles.header}>
-        <div className={styles.titleSection}>
-          <h2>Price Decay & Market Status</h2>
-          <div className={styles.phaseIndicator}>
-            <div className={`${styles.phaseDot} ${styles[phaseClass]}`} />
-            <p className={styles.phaseText}>
+  return (
+    <div className="mb-8 animate-fadeIn rounded-2xl border border-[rgba(255,255,255,0.1)] bg-gradient-to-br from-[rgba(15,23,42,0.7)] to-[rgba(30,41,59,0.7)] p-6 backdrop-blur-[10px] shadow-[0_20px_25px_-5px_rgba(0,0,0,0.3),0_10px_10px_-5px_rgba(0,0,0,0.2)]">
+
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="mb-1 text-xl font-bold text-white">Price Decay & Market Status</h2>
+          <div className="flex items-center gap-2">
+            <div className={`h-2 w-2 rounded-full ${phaseDotColors[phaseClass] || phaseDotColors.notstarted}`} />
+            <p className="text-sm text-[rgba(255,255,255,0.7)]">
               {phase === "Commit" && `Commit Phase - Price decreasing (${priceChangePercent.toFixed(2)}% down)`}
               {phase === "Reveal" && "Reveal Phase - Price locked"}
               {phase === "Finalized" && "Auction Finalized"}
@@ -168,18 +174,18 @@ const PriceDecayChart = ({
             </p>
           </div>
         </div>
-        <div className={styles.currentPriceCard}>
-          <p className={styles.currentPriceLabel}>Current Price</p>
-          <p className={styles.currentPriceValue}>
+        <div className="rounded-xl border-2 border-[rgba(59,130,246,0.3)] bg-gradient-to-br from-[rgba(59,130,246,0.2)] to-[rgba(37,99,235,0.2)] p-4 text-right shadow-[0_10px_15px_-3px_rgba(0,0,0,0.3)]">
+          <p className="mb-1 text-xs uppercase tracking-wider text-[rgba(255,255,255,0.7)]">Current Price</p>
+          <p className="text-2xl font-bold text-[rgb(147,197,253)]">
             {formatEth(BigInt(Math.floor(currentPrice)))} ETH
           </p>
           {timeRemaining && (
-            <p className={styles.timeRemaining}>
+            <p className="mt-1 text-xs text-[rgba(96,165,250,0.8)]">
               {timeRemaining.hours}h {timeRemaining.minutes}m {timeRemaining.seconds}s remaining
             </p>
           )}
           {priceChangePercent > 0 && (
-            <p className={styles.timeRemaining} style={{ color: 'rgba(96, 165, 250, 0.8)' }}>
+            <p className="mt-1 text-xs text-[rgba(96,165,250,0.8)]">
               {priceChangePercent.toFixed(2)}% below start
             </p>
           )}
@@ -187,8 +193,8 @@ const PriceDecayChart = ({
       </div>
 
 
-      <div className={styles.chartContainer}>
-        <svg className={styles.chartSvg} viewBox="0 0 1200 400" preserveAspectRatio="none">
+      <div className="relative mb-4 h-96 rounded-xl border-2 border-[rgba(255,255,255,0.1)] bg-gradient-to-br from-[rgba(30,41,59,0.6)] via-[rgba(30,41,59,0.4)] to-[rgba(15,23,42,0.6)] p-6 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)]">
+        <svg className="h-full w-full" viewBox="0 0 1200 400" preserveAspectRatio="none">
           <defs>
             <linearGradient id="priceGradient" x1="0%" y1="0%" x2="0%" y2="100%">
               <stop offset="0%" stopColor="rgb(59, 130, 246)" stopOpacity="0.4" />
@@ -728,54 +734,54 @@ const PriceDecayChart = ({
         </svg>
 
 
-        <div className={`${styles.axisLabel} ${styles.axisLabelY}`}>
+        <div className="absolute left-0 top-1/2 -translate-y-1/2 -rotate-90 text-xs font-semibold text-[rgba(255,255,255,0.6)]">
           Price (ETH)
         </div>
-        <div className={`${styles.axisLabel} ${styles.axisLabelX}`}>
+        <div className="absolute bottom-0 left-1/2 translate-x-1/2 translate-y-8 text-xs font-semibold text-[rgba(255,255,255,0.6)]">
           Time
         </div>
       </div>
 
-      <div className={styles.statusGrid}>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
 
-        <div className={styles.statusCard}>
-          <div className={styles.statusCardHeader}>
-            <p className={styles.statusCardTitle}>Soft Cap Progress</p>
-            <div className={`${styles.statusBadge} ${softCapProgress >= 1 ? styles.reached : styles.inProgress}`}>
+        <div className="rounded-xl border-2 border-[rgba(255,255,255,0.1)] bg-gradient-to-br from-[rgba(30,41,59,0.6)] to-[rgba(15,23,42,0.6)] p-5 shadow-[0_10px_15px_-3px_rgba(0,0,0,0.3)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_15px_20px_-3px_rgba(0,0,0,0.4)]">
+          <div className="mb-3 flex items-center justify-between">
+            <p className="text-sm font-semibold text-[rgba(255,255,255,0.8)]">Soft Cap Progress</p>
+            <div className={`rounded-md px-2 py-1 text-xs font-bold ${softCapProgress >= 1 ? 'bg-[rgba(16,185,129,0.2)] text-[rgb(110,231,183)] border border-[rgba(16,185,129,0.4)]' : 'bg-[rgba(59,130,246,0.2)] text-[rgb(147,197,253)] border border-[rgba(59,130,246,0.4)]'}`}>
               {softCapProgress >= 1 ? "REACHED" : "IN PROGRESS"}
             </div>
           </div>
-          <div className={styles.softCapContent}>
-            <div className={styles.softCapAmounts}>
-              <span className={styles.softCapCurrent}>
+          <div className="mb-2">
+            <div className="mb-1 flex items-baseline justify-between">
+              <span className="text-2xl font-bold text-white">
                 {formatEth(totalDepositCommitted)}
               </span>
-              <span className={styles.softCapTotal}>
+              <span className="text-sm text-[rgba(255,255,255,0.6)]">
                 / {formatEth(softCap)} ETH
               </span>
             </div>
-            <p className={styles.softCapRemaining}>
+            <p className="text-xs text-[rgba(255,255,255,0.5)]">
               {softCapProgress >= 1 
                 ? "Soft cap successfully reached!" 
                 : `${formatEth(BigInt(Math.floor(Math.max(0, Number(softCap) - Number(totalDepositCommitted)))))} ETH remaining`
               }
             </p>
           </div>
-          <div className={styles.progressBarContainer}>
+          <div className="mb-2 h-4 w-full overflow-hidden rounded-full bg-[rgba(51,65,85,0.5)] shadow-[inset_0_2px_4px_rgba(0,0,0,0.3)]">
             <div
-              className={`${styles.progressBar} ${softCapProgress >= 1 ? styles.reached : styles.inProgress}`}
+              className={`h-full rounded-full transition-all duration-500 ${softCapProgress >= 1 ? 'bg-gradient-to-r from-[rgb(16,185,129)] to-[rgb(5,150,105)] shadow-[0_10px_15px_-3px_rgba(16,185,129,0.5)]' : 'bg-gradient-to-r from-[rgb(59,130,246)] to-[rgb(37,99,235)] shadow-[0_10px_15px_-3px_rgba(59,130,246,0.5)]'}`}
               style={{ width: `${Math.min(softCapProgress * 100, 100)}%` }}
             />
           </div>
-          <div className={styles.progressFooter}>
-            <p className={styles.progressText}>
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-[rgba(255,255,255,0.6)]">
               {softCapProgress >= 1 
                 ? "Soft cap reached"
                 : `${Math.round(softCapProgress * 100)}% complete`
               }
             </p>
             {softCapProgress < 1 && (
-              <p className={styles.progressPercent}>
+              <p className="text-xs font-semibold text-[rgb(96,165,250)]">
                 {Math.round(softCapProgress * 100)}%
               </p>
             )}
@@ -783,73 +789,78 @@ const PriceDecayChart = ({
         </div>
 
 
-        <div className={styles.statusCard}>
-          <p className={styles.statusCardTitle}>Price Range</p>
-          <div className={styles.priceRangeContent}>
-            <div className={styles.priceRangeItem}>
-              <span className={styles.priceRangeLabel}>High:</span>
-              <span className={`${styles.priceRangeValue} ${styles.high}`}>
+        <div className="rounded-xl border-2 border-[rgba(255,255,255,0.1)] bg-gradient-to-br from-[rgba(30,41,59,0.6)] to-[rgba(15,23,42,0.6)] p-5 shadow-[0_10px_15px_-3px_rgba(0,0,0,0.3)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_15px_20px_-3px_rgba(0,0,0,0.4)]">
+          <p className="mb-3 text-sm font-semibold text-[rgba(255,255,255,0.8)]">Price Range</p>
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between rounded-lg bg-[rgba(15,23,42,0.4)] p-2">
+              <span className="text-sm text-[rgba(255,255,255,0.7)]">High:</span>
+              <span className="text-lg font-bold text-[rgb(248,113,113)]">
                 {formatEth(BigInt(Math.floor(startPrice)))} ETH
               </span>
             </div>
-            <div className={styles.priceRangeItem}>
-              <span className={styles.priceRangeLabel}>Low:</span>
-              <span className={`${styles.priceRangeValue} ${styles.low}`}>
+            <div className="flex items-center justify-between rounded-lg bg-[rgba(15,23,42,0.4)] p-2">
+              <span className="text-sm text-[rgba(255,255,255,0.7)]">Low:</span>
+              <span className="text-lg font-bold text-[rgb(74,222,128)]">
                 {formatEth(BigInt(Math.floor(endPrice)))} ETH
               </span>
             </div>
-            <div className={`${styles.priceRangeItem} ${styles.range}`}>
-              <span className={styles.priceRangeLabel}>Range:</span>
-              <span className={`${styles.priceRangeValue} ${styles.range}`}>
+            <div className="mt-2 flex items-center justify-between rounded-lg border border-[rgba(59,130,246,0.3)] bg-[rgba(59,130,246,0.1)] p-2">
+              <span className="text-sm text-[rgba(255,255,255,0.7)]">Range:</span>
+              <span className="text-lg font-bold text-[rgb(96,165,250)]">
                 {formatEth(BigInt(Math.floor(priceRange)))} ETH
               </span>
             </div>
-            <div className={styles.priceRangeItem}>
-              <span className={styles.priceRangeLabel}>Change:</span>
-              <span className={`${styles.priceRangeValue} ${styles.range}`}>
+            <div className="flex items-center justify-between rounded-lg bg-[rgba(15,23,42,0.4)] p-2">
+              <span className="text-sm text-[rgba(255,255,255,0.7)]">Change:</span>
+              <span className="text-lg font-bold text-[rgb(96,165,250)]">
                 {priceChangePercent.toFixed(2)}%
               </span>
             </div>
           </div>
         </div>
 
-        <div className={styles.statusCard}>
-          <p className={styles.statusCardTitle}>Time Status</p>
-          <div className={styles.timeStatusContent}>
-            <div className={styles.timeStatusItem}>
-              <span className={styles.timeStatusLabel}>Phase:</span>
-              <span className={`${styles.timeStatusValue} ${styles[phaseClass]}`}>
+        <div className="rounded-xl border-2 border-[rgba(255,255,255,0.1)] bg-gradient-to-br from-[rgba(30,41,59,0.6)] to-[rgba(15,23,42,0.6)] p-5 shadow-[0_10px_15px_-3px_rgba(0,0,0,0.3)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_15px_20px_-3px_rgba(0,0,0,0.4)]">
+          <p className="mb-3 text-sm font-semibold text-[rgba(255,255,255,0.8)]">Time Status</p>
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between rounded-lg bg-[rgba(15,23,42,0.4)] p-2">
+              <span className="text-sm text-[rgba(255,255,255,0.7)]">Phase:</span>
+              <span className={`rounded px-2 py-1 text-base font-bold ${
+                phaseClass === 'commit' ? 'bg-[rgba(59,130,246,0.2)] text-[rgb(147,197,253)] border border-[rgba(59,130,246,0.4)]' :
+                phaseClass === 'reveal' ? 'bg-[rgba(147,51,234,0.2)] text-[rgb(196,181,253)] border border-[rgba(147,51,234,0.4)]' :
+                phaseClass === 'finalized' ? 'bg-[rgba(16,185,129,0.2)] text-[rgb(110,231,183)] border border-[rgba(16,185,129,0.4)]' :
+                'bg-[rgba(71,85,105,0.2)] text-[rgb(148,163,184)] border border-[rgba(71,85,105,0.4)]'
+              }`}>
                 {phase}
               </span>
             </div>
             {timeRemaining && (
-              <div className={styles.timeStatusItem}>
-                <span className={styles.timeStatusLabel}>Time Remaining:</span>
-                <span className={`${styles.timeStatusValue} ${styles.white}`}>
+              <div className="flex items-center justify-between rounded-lg bg-[rgba(15,23,42,0.4)] p-2">
+                <span className="text-sm text-[rgba(255,255,255,0.7)]">Time Remaining:</span>
+                <span className="rounded px-2 py-1 text-base font-bold text-white">
                   {timeRemaining.hours}h {timeRemaining.minutes}m
                 </span>
               </div>
             )}
             {phase === "Commit" && (
-              <div className={styles.timeStatusItem}>
-                <span className={styles.timeStatusLabel}>Commit Ends:</span>
-                <span className={`${styles.timeStatusValue} ${styles.white}`}>
+              <div className="flex items-center justify-between rounded-lg bg-[rgba(15,23,42,0.4)] p-2">
+                <span className="text-sm text-[rgba(255,255,255,0.7)]">Commit Ends:</span>
+                <span className="rounded px-2 py-1 text-base font-bold text-white">
                   {formatDateTime(commitEndTime)}
                 </span>
               </div>
             )}
             {phase === "Reveal" && (
-              <div className={styles.timeStatusItem}>
-                <span className={styles.timeStatusLabel}>Reveal Ends:</span>
-                <span className={`${styles.timeStatusValue} ${styles.white}`}>
+              <div className="flex items-center justify-between rounded-lg bg-[rgba(15,23,42,0.4)] p-2">
+                <span className="text-sm text-[rgba(255,255,255,0.7)]">Reveal Ends:</span>
+                <span className="rounded px-2 py-1 text-base font-bold text-white">
                   {formatDateTime(revealEndTime)}
                 </span>
               </div>
             )}
             {finalized && (
-              <div className={`${styles.timeStatusItem} ${styles.finalized}`}>
-                <span className={styles.timeStatusLabel}>Status:</span>
-                <span className={`${styles.timeStatusValue} ${styles.green}`}>
+              <div className="flex items-center justify-between rounded-lg border border-[rgba(16,185,129,0.3)] bg-[rgba(16,185,129,0.1)] p-2">
+                <span className="text-sm text-[rgba(255,255,255,0.7)]">Status:</span>
+                <span className="rounded px-2 py-1 text-base font-bold text-[rgb(52,211,153)]">
                   Finalized
                 </span>
               </div>

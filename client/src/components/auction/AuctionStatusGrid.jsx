@@ -1,54 +1,53 @@
 import React from "react";
 import { formatEth, formatToken } from "../../utils/auctionUtils";
-import styles from "./css/AuctionStatusGrid.module.css";
 
 const AuctionStatusGrid = React.memo(({ auctionData }) => {
   if (!auctionData) return null;
 
   return (
-    <div className={styles.statusGrid}>
-      <div className={styles.statusItem}>
-        <p className={styles.statusLabel}>Tokens for Sale</p>
-        <p className={styles.statusValue}>{formatToken(auctionData.tokensForSale)}</p>
+    <div className="mb-8 grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
+      <div className="rounded-2xl border border-[rgba(255,255,255,0.1)] bg-[rgba(15,23,42,0.6)] p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-[rgba(99,102,241,0.3)] hover:bg-[rgba(15,23,42,0.8)]">
+        <p className="mb-2 text-sm uppercase tracking-wider text-[rgba(255,255,255,0.7)]">Tokens for Sale</p>
+        <p className="font-mono text-2xl font-bold text-white">{formatToken(auctionData.tokensForSale)}</p>
       </div>
-      <div className={styles.statusItem}>
-        <p className={styles.statusLabel}>Total Committed</p>
-        <p className={styles.statusValue}>{formatEth(auctionData.totalDepositCommitted)} ETH</p>
+      <div className="rounded-2xl border border-[rgba(255,255,255,0.1)] bg-[rgba(15,23,42,0.6)] p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-[rgba(99,102,241,0.3)] hover:bg-[rgba(15,23,42,0.8)]">
+        <p className="mb-2 text-sm uppercase tracking-wider text-[rgba(255,255,255,0.7)]">Total Committed</p>
+        <p className="font-mono text-2xl font-bold text-white">{formatEth(auctionData.totalDepositCommitted)} ETH</p>
       </div>
-      <div className={styles.statusItem}>
-        <p className={styles.statusLabel}>Total Revealed Qty</p>
-        <p className={styles.statusValue}>{formatToken(auctionData.totalQtyRevealed)}</p>
+      <div className="rounded-2xl border border-[rgba(255,255,255,0.1)] bg-[rgba(15,23,42,0.6)] p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-[rgba(99,102,241,0.3)] hover:bg-[rgba(15,23,42,0.8)]">
+        <p className="mb-2 text-sm uppercase tracking-wider text-[rgba(255,255,255,0.7)]">Total Revealed Qty</p>
+        <p className="font-mono text-2xl font-bold text-white">{formatToken(auctionData.totalQtyRevealed)}</p>
       </div>
-      <div className={styles.statusItem}>
-        <p className={styles.statusLabel}>Total Revealed Deposit</p>
-        <p className={styles.statusValue}>{formatEth(auctionData.totalDepositsRevealed)} ETH</p>
+      <div className="rounded-2xl border border-[rgba(255,255,255,0.1)] bg-[rgba(15,23,42,0.6)] p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-[rgba(99,102,241,0.3)] hover:bg-[rgba(15,23,42,0.8)]">
+        <p className="mb-2 text-sm uppercase tracking-wider text-[rgba(255,255,255,0.7)]">Total Revealed Deposit</p>
+        <p className="font-mono text-2xl font-bold text-white">{formatEth(auctionData.totalDepositsRevealed)} ETH</p>
       </div>
-      <div className={styles.statusItem}>
-        <p className={styles.statusLabel}>Bonus Reserve Remaining</p>
-        <p className={styles.statusValue}>{formatToken(auctionData.bonusReserveRemaining)}</p>
+      <div className="rounded-2xl border border-[rgba(255,255,255,0.1)] bg-[rgba(15,23,42,0.6)] p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-[rgba(99,102,241,0.3)] hover:bg-[rgba(15,23,42,0.8)]">
+        <p className="mb-2 text-sm uppercase tracking-wider text-[rgba(255,255,255,0.7)]">Bonus Reserve Remaining</p>
+        <p className="font-mono text-2xl font-bold text-white">{formatToken(auctionData.bonusReserveRemaining)}</p>
       </div>
-      <div className={styles.statusItem}>
-        <p className={styles.statusLabel}>Soft Cap</p>
-        <p className={`${styles.statusValue} ${auctionData.totalDepositCommitted >= auctionData.softCap ? styles.success : ''}`}>
+      <div className="rounded-2xl border border-[rgba(255,255,255,0.1)] bg-[rgba(15,23,42,0.6)] p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-[rgba(99,102,241,0.3)] hover:bg-[rgba(15,23,42,0.8)]">
+        <p className="mb-2 text-sm uppercase tracking-wider text-[rgba(255,255,255,0.7)]">Soft Cap</p>
+        <p className={`font-mono text-2xl font-bold ${auctionData.totalDepositCommitted >= auctionData.softCap ? 'text-[rgb(110,231,183)]' : 'text-white'}`}>
           {formatEth(auctionData.softCap)}
           {auctionData.totalDepositCommitted >= auctionData.softCap && (
-            <span style={{ marginLeft: '0.5rem' }}>Reached</span>
+            <span className="ml-2">Reached</span>
           )}
         </p>
       </div>
       {auctionData.finalized && (
         <>
-          <div className={styles.statusItem}>
-            <p className={styles.statusLabel}>Clearing Price</p>
-            <p className={styles.statusValue}>{formatEth(auctionData.clearingPrice)} ETH</p>
+          <div className="rounded-2xl border border-[rgba(255,255,255,0.1)] bg-[rgba(15,23,42,0.6)] p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-[rgba(99,102,241,0.3)] hover:bg-[rgba(15,23,42,0.8)]">
+            <p className="mb-2 text-sm uppercase tracking-wider text-[rgba(255,255,255,0.7)]">Clearing Price</p>
+            <p className="font-mono text-2xl font-bold text-white">{formatEth(auctionData.clearingPrice)} ETH</p>
           </div>
-          <div className={styles.statusItem}>
-            <p className={styles.statusLabel}>Tokens Sold</p>
-            <p className={styles.statusValue}>{formatToken(auctionData.tokensSold)}</p>
+          <div className="rounded-2xl border border-[rgba(255,255,255,0.1)] bg-[rgba(15,23,42,0.6)] p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-[rgba(99,102,241,0.3)] hover:bg-[rgba(15,23,42,0.8)]">
+            <p className="mb-2 text-sm uppercase tracking-wider text-[rgba(255,255,255,0.7)]">Tokens Sold</p>
+            <p className="font-mono text-2xl font-bold text-white">{formatToken(auctionData.tokensSold)}</p>
           </div>
-          <div className={styles.statusItem}>
-            <p className={styles.statusLabel}>Total Raised</p>
-            <p className={styles.statusValue}>{formatEth(auctionData.totalRaised)} ETH</p>
+          <div className="rounded-2xl border border-[rgba(255,255,255,0.1)] bg-[rgba(15,23,42,0.6)] p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-[rgba(99,102,241,0.3)] hover:bg-[rgba(15,23,42,0.8)]">
+            <p className="mb-2 text-sm uppercase tracking-wider text-[rgba(255,255,255,0.7)]">Total Raised</p>
+            <p className="font-mono text-2xl font-bold text-white">{formatEth(auctionData.totalRaised)} ETH</p>
           </div>
         </>
       )}

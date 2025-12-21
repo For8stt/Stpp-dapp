@@ -75,27 +75,27 @@ const ContractInfo = ({ account, refreshKey }) => {
   };
 
   return (
-    <section className="card">
-      <header>
-        <h2>Contract Overview</h2>
-        <p className="muted">Live balances updated in real time</p>
+    <section className="rounded-[12px] bg-surface p-6 shadow-card">
+      <header className="mb-6">
+        <h2 className="m-0 mb-2 text-2xl font-semibold text-text">Contract Overview</h2>
+        <p className="m-0 text-text-muted">Live balances updated in real time</p>
       </header>
-      <div className="metrics">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4">
         <div>
-          <span className="label">Contract Balance</span>
-          <strong>{formatEth(contractBalance)}</strong>
+          <span className="block text-[0.85rem] text-text-muted">Contract Balance</span>
+          <strong className="block mt-1 text-lg font-semibold text-text">{formatEth(contractBalance)}</strong>
         </div>
         <div>
-          <span className="label">Connected Account</span>
-          <strong>{account || "Not connected"}</strong>
+          <span className="block text-[0.85rem] text-text-muted">Connected Account</span>
+          <strong className="block mt-1 text-lg font-semibold text-text break-all">{account || "Not connected"}</strong>
         </div>
         <div>
-          <span className="label">Wallet Balance</span>
-          <strong>{formatEth(userBalance)}</strong>
+          <span className="block text-[0.85rem] text-text-muted">Wallet Balance</span>
+          <strong className="block mt-1 text-lg font-semibold text-text">{formatEth(userBalance)}</strong>
         </div>
         <div>
-          <span className="label">Your Deposit</span>
-          <strong>{formatEth(userDeposit)}</strong>
+          <span className="block text-[0.85rem] text-text-muted">Your Deposit</span>
+          <strong className="block mt-1 text-lg font-semibold text-text">{formatEth(userDeposit)}</strong>
         </div>
       </div>
     </section>

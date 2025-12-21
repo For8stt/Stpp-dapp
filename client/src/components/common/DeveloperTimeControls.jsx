@@ -139,12 +139,12 @@ const DeveloperTimeControls = ({ onTimeAdvanced, useDays = false }) => {
               value={useDays ? days : minutes}
               onChange={(e) => useDays ? setDays(e.target.value) : setMinutes(e.target.value)}
               placeholder={useDays ? "e.g., 30 for 30 days" : "e.g., 60 for 1 hour"}
-              step={useDays ? "1" : "0.1"}
-              className="w-full rounded-lg border-2 border-amber-500/40 bg-black/40 px-4 py-2.5 text-sm font-medium text-white placeholder:text-amber-400/50 focus:border-amber-400 focus:bg-black/60 focus:outline-none focus:ring-2 focus:ring-amber-400/50"
+              step={useDays ? "1" : "1"}
+              className="w-full appearance-none rounded-lg border-2 border-amber-500/40 bg-black/40 pr-16 pl-4 py-2.5 text-sm font-medium text-white placeholder:text-amber-400/50 focus:border-amber-400 focus:bg-black/60 focus:outline-none focus:ring-2 focus:ring-amber-400/50 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
               disabled={loading}
-              min={useDays ? "1" : "0.1"}
+              min={useDays ? "1" : "1"}
             />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-amber-400/70">
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-amber-400/70 pointer-events-none">
               {useDays ? "days" : "min"}
             </span>
           </div>

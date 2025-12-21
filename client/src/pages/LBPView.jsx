@@ -12,7 +12,6 @@ import PriceChart from "../components/lbp/PriceChart";
 import WeightScheduleChart from "../components/lbp/WeightScheduleChart";
 import BidForm from "../components/lbp/BidForm";
 import FinalizedPanel from "../components/lbp/FinalizedPanel";
-import styles from "./css/LBPView.module.css";
 
 const REFRESH_RATE_MS = 2000;
 
@@ -95,10 +94,10 @@ const LbpView = () => {
 
   if (loading) {
     return (
-      <div className={styles.loadingContainer}>
-        <div className={styles.loadingContent}>
-          <div className={styles.spinner}></div>
-          <p className={styles.loadingText}>Loading LBP data...</p>
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-center">
+          <div className="mx-auto mb-6 h-14 w-14 animate-spin rounded-full border-4 border-transparent border-t-[rgb(74,222,128)] border-r-[rgba(74,222,128,0.3)] shadow-[0_0_20px_rgba(74,222,128,0.3)]"></div>
+          <p className="text-lg font-medium text-white text-shadow-[0_2px_4px_rgba(0,0,0,0.3)]">Loading LBP data...</p>
         </div>
       </div>
     );
@@ -106,10 +105,10 @@ const LbpView = () => {
 
   if (error) {
     return (
-      <div className={styles.errorContainer}>
-        <div className={styles.errorCard}>
-          <h2 className={styles.errorTitle}>Error</h2>
-          <p className={styles.errorText}>{error}</p>
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-[rgb(15,23,42)] via-[rgb(30,41,59)] to-[rgb(15,23,42)]">
+        <div className="relative max-w-md overflow-hidden rounded-2xl border border-[rgba(239,68,68,0.5)] bg-gradient-to-br from-[rgba(239,68,68,0.15)] to-[rgba(220,38,38,0.1)] p-8 backdrop-blur-[8px] shadow-[0_20px_25px_-5px_rgba(239,68,68,0.2),0_10px_10px_-5px_rgba(0,0,0,0.2)] before:absolute before:left-0 before:right-0 before:top-0 before:h-0.5 before:bg-gradient-to-r before:from-[rgba(239,68,68,0.8)] before:via-[rgba(248,113,113,0.8)] before:to-[rgba(239,68,68,0.8)] before:bg-[length:200%_100%] before:animate-[shimmer_3s_ease-in-out_infinite]">
+          <h2 className="relative z-10 mb-3 text-2xl font-extrabold text-[rgb(248,113,113)]">Error</h2>
+          <p className="relative z-10 leading-relaxed text-[rgb(252,165,165)]">{error}</p>
         </div>
       </div>
     );
@@ -117,17 +116,17 @@ const LbpView = () => {
 
   if (!lbpData) {
     return (
-      <div className={styles.emptyContainer}>
-        <div className={styles.emptyContent}>
-          <p className={styles.emptyText}>LBP not found</p>
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-center">
+          <p className="text-lg font-medium text-white text-shadow-[0_2px_4px_rgba(0,0,0,0.3)]">LBP not found</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className={styles.page}>
-      <div className={styles.container}>
+    <div className="min-h-screen">
+      <div className="relative z-10 mx-auto flex max-w-[80rem] flex-col gap-8">
         <LBPHeader
           lbpAddress={lbpAddress}
           lbpData={lbpData}

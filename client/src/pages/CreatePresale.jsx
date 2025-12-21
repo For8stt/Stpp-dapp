@@ -6,7 +6,6 @@ import CreatePresaleForm from "../components/presale/CreatePresaleForm";
 import loadContract from "../services/web3/loadContract";
 import { handleTxError, showTxSuccess, showTxInfo } from "../utils/txErrorHandler";
 import { ensureProvider } from "../services/web3/provider";
-import styles from "./css/CreatePresale.module.css";
 
 const STORAGE_KEY = "sttp:recent-presales";
 const now = () => Math.floor(Date.now() / 1000);
@@ -389,35 +388,40 @@ const CreatePresale = ({ account, onConnect }) => {
   };
 
   return (
-    <section className={styles.page}>
-      <div className={styles.heroCard}>
-        <div className={styles.heroContent}>
-          <h1 className={styles.heroTitle}>Create a permissionless presale</h1>
-          <p className={styles.heroSubtitle}>
+    <section className="mx-auto flex max-w-[1200px] flex-col gap-8 px-6 pb-16 pt-8">
+      <div className="relative flex flex-col justify-between gap-8 overflow-hidden rounded-[2rem] border border-border bg-gradient-to-br from-[#0f172a] via-[#1e293b] to-[#0f172a] p-6 shadow-card transition-all duration-300 hover:border-[rgba(255,255,255,0.25)] hover:shadow-[0_25px_60px_rgba(0,0,0,0.5)] lg:flex-row lg:items-center lg:gap-12 lg:p-12">
+        <div className="relative z-10 flex-1">
+          <h1 className="mb-3 bg-gradient-to-br from-text to-[#cbd5e1] bg-clip-text text-[2rem] font-bold leading-tight text-transparent lg:text-[2.5rem]">
+            Create a permissionless presale
+          </h1>
+          <p className="mb-6 max-w-[480px] text-base leading-relaxed text-text-muted">
             Configure your auction parameters and deploy a dedicated PresaleManager clone via the public factory.
             Launch your token sale with advanced Dutch auction mechanics and automated liquidity bootstrapping.
           </p>
-          <div className={styles.heroStats}>
+          <div className="mt-6 flex flex-col gap-4 rounded-2xl border border-border bg-muted p-4 text-sm text-text-muted backdrop-blur-sm transition-all duration-300 hover:border-[rgba(255,255,255,0.25)] hover:bg-[rgba(255,255,255,0.03)] lg:flex-row lg:gap-8">
             <div>
               <p>Smart contracts</p>
-              <strong>Automated deployment</strong>
+              <strong className="mt-1 block text-[0.95rem] font-semibold text-text">Automated deployment</strong>
             </div>
             <div>
               <p>Liquidity bootstrap</p>
-              <strong>Built-in LBP</strong>
+              <strong className="mt-1 block text-[0.95rem] font-semibold text-text">Built-in LBP</strong>
             </div>
           </div>
         </div>
-        <div className={styles.heroActions}>
+        <div className="relative z-10 flex flex-col items-start gap-6 lg:items-end">
           {!connectedAccount ? (
-            <button onClick={onConnect} className={styles.heroButton}>
+            <button 
+              onClick={onConnect} 
+              className="flex items-center gap-2 rounded-lg border border-[rgba(255,255,255,0.1)] bg-gradient-to-r from-primary via-[#7c3aed] to-[#ec4899] px-5 py-2.5 text-sm font-medium text-white shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl active:translate-y-0"
+            >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
               Connect Wallet
             </button>
           ) : (
-            <div className={styles.connectedPill}>
+            <div className="flex items-center gap-2 rounded-lg border border-[rgba(20,184,166,0.4)] bg-gradient-to-br from-[rgba(20,184,166,0.15)] to-[rgba(16,185,129,0.15)] px-4 py-1.5 text-xs font-medium text-[#5eead4] shadow-[0_2px_8px_rgba(20,184,166,0.15)] backdrop-blur-sm">
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
@@ -428,37 +432,35 @@ const CreatePresale = ({ account, onConnect }) => {
       </div>
 
       {/* Form Section */}
-      <div className={styles.formCard}>
+      <div className="relative overflow-hidden rounded-[2rem] border border-border bg-gradient-to-br from-[#0f172a] to-[#1e293b] p-6 shadow-card backdrop-blur-[12px] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_25px_60px_rgba(0,0,0,0.5)] lg:p-10">
         {/* Balance Check Display */}
         {connectedAccount && formValues.saleToken && requiredAmount && (
-          <div style={{
-            padding: "1rem",
-            marginBottom: "1rem",
-            borderRadius: "8px",
-            backgroundColor: hasSufficientBalance === false ? "rgba(239, 68, 68, 0.1)" : "rgba(34, 197, 94, 0.1)",
-            border: `1px solid ${hasSufficientBalance === false ? "rgba(239, 68, 68, 0.3)" : "rgba(34, 197, 94, 0.3)"}`
-          }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
-              <span style={{ fontSize: "0.875rem", color: "rgba(255, 255, 255, 0.7)" }}>Token Balance Check</span>
-              {balanceLoading && <span style={{ fontSize: "0.875rem", color: "rgba(255, 255, 255, 0.5)" }}>Loading...</span>}
+          <div className={`mb-4 rounded-lg border p-4 ${
+            hasSufficientBalance === false 
+              ? "border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.1)]" 
+              : "border-[rgba(34,197,94,0.3)] bg-[rgba(34,197,94,0.1)]"
+          }`}>
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-sm text-[rgba(255,255,255,0.7)]">Token Balance Check</span>
+              {balanceLoading && <span className="text-sm text-[rgba(255,255,255,0.5)]">Loading...</span>}
             </div>
             {balanceError ? (
-              <div style={{ fontSize: "0.875rem", color: "rgba(239, 68, 68, 0.9)" }}>{balanceError}</div>
+              <div className="text-sm text-[rgba(239,68,68,0.9)]">{balanceError}</div>
             ) : tokenBalance !== null ? (
               <>
-                <div style={{ fontSize: "0.875rem", color: "rgba(255, 255, 255, 0.9)", marginBottom: "0.25rem" }}>
+                <div className="mb-1 text-sm text-[rgba(255,255,255,0.9)]">
                   <strong>Required:</strong> {ethers.formatEther(requiredAmount)} tokens
                 </div>
-                <div style={{ fontSize: "0.875rem", color: "rgba(255, 255, 255, 0.9)", marginBottom: "0.25rem" }}>
+                <div className="mb-1 text-sm text-[rgba(255,255,255,0.9)]">
                   <strong>Available:</strong> {ethers.formatEther(tokenBalance)} tokens
                 </div>
                 {hasSufficientBalance === false && (
-                  <div style={{ fontSize: "0.875rem", color: "rgba(239, 68, 68, 0.9)", marginTop: "0.5rem", fontWeight: "500" }}>
+                  <div className="mt-2 text-sm font-medium text-[rgba(239,68,68,0.9)]">
                     ⚠️ Insufficient balance! You need {ethers.formatEther(requiredAmount - tokenBalance)} more tokens to create this auction.
                   </div>
                 )}
                 {hasSufficientBalance === true && (
-                  <div style={{ fontSize: "0.875rem", color: "rgba(34, 197, 94, 0.9)", marginTop: "0.5rem", fontWeight: "500" }}>
+                  <div className="mt-2 text-sm font-medium text-[rgba(34,197,94,0.9)]">
                     ✓ Sufficient balance
                   </div>
                 )}

@@ -6,6 +6,7 @@ import AppRouter from "./router";
 import { clearConnectionState, resetConnection } from "./services/web3/contract";
 import "./styles/globals.css";
 import "./styles/theme.css";
+import "./styles/tailwind.css";
 import "react-toastify/dist/ReactToastify.css";
 
 const App = () => {

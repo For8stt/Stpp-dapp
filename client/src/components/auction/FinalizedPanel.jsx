@@ -5,7 +5,6 @@ import { Contract } from "ethers";
 import { formatEth, formatToken } from "../../utils/auctionUtils";
 import { ensureProvider } from "../../services/web3/provider";
 import allAbis from "../../abi/allAbis.json";
-import styles from "./css/FinalizedPanel.module.css";
 
 const FinalizedPanel = React.memo(({ auctionData, isOwner, onLaunchLBP, managerAddress, auctionAddress }) => {
   const [lbpAddress, setLbpAddress] = useState(null);
@@ -40,71 +39,57 @@ const FinalizedPanel = React.memo(({ auctionData, isOwner, onLaunchLBP, managerA
   if (!auctionData || !auctionData.finalized) return null;
 
   return (
-    <div className={styles.finalizedPanel}>
-      <p className={styles.finalizedTitle}>Auction Finalized</p>
-      <div className={styles.finalizedGrid}>
-        <div className={styles.finalizedItem}>
-          <p className={styles.finalizedLabel}>Tokens Sold</p>
-          <p className={styles.finalizedValue}>{formatToken(auctionData.tokensSold)}</p>
+    <div className="mb-8 rounded-2xl border border-[rgba(16,185,129,0.3)] bg-[rgba(15,23,42,0.6)] p-8">
+      <p className="mb-6 text-2xl font-bold text-[rgb(110,231,183)]">Auction Finalized</p>
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-6">
+        <div className="flex flex-col gap-2">
+          <p className="text-sm uppercase tracking-wider text-[rgba(255,255,255,0.7)]">Tokens Sold</p>
+          <p className="font-mono text-2xl font-bold text-[rgb(110,231,183)]">{formatToken(auctionData.tokensSold)}</p>
         </div>
-        <div className={styles.finalizedItem}>
-          <p className={styles.finalizedLabel}>Total Raised</p>
-          <p className={styles.finalizedValue}>{formatEth(auctionData.totalRaised)} ETH</p>
+        <div className="flex flex-col gap-2">
+          <p className="text-sm uppercase tracking-wider text-[rgba(255,255,255,0.7)]">Total Raised</p>
+          <p className="font-mono text-2xl font-bold text-[rgb(110,231,183)]">{formatEth(auctionData.totalRaised)} ETH</p>
         </div>
-        <div className={styles.finalizedItem}>
-          <p className={styles.finalizedLabel}>ETH for Treasury</p>
-          <p className={styles.finalizedValue}>{formatEth(auctionData.ethForTreasury)} ETH</p>
+        <div className="flex flex-col gap-2">
+          <p className="text-sm uppercase tracking-wider text-[rgba(255,255,255,0.7)]">ETH for Treasury</p>
+          <p className="font-mono text-2xl font-bold text-[rgb(110,231,183)]">{formatEth(auctionData.ethForTreasury)} ETH</p>
         </div>
-        <div className={styles.finalizedItem}>
-          <p className={styles.finalizedLabel}>Clearing Price</p>
-          <p className={styles.finalizedValue}>{formatEth(auctionData.clearingPrice)} ETH</p>
+        <div className="flex flex-col gap-2">
+          <p className="text-sm uppercase tracking-wider text-[rgba(255,255,255,0.7)]">Clearing Price</p>
+          <p className="font-mono text-2xl font-bold text-[rgb(110,231,183)]">{formatEth(auctionData.clearingPrice)} ETH</p>
         </div>
       </div>
       {!auctionData.lbpLaunched && isOwner && onLaunchLBP && (
         <button
           onClick={onLaunchLBP}
-          className={`${styles.actionButton} ${styles.indigo}`}
-          style={{ marginTop: '1rem' }}
+          className="mt-4 w-full rounded-xl border-0 bg-gradient-to-r from-[rgb(99,102,241)] to-[rgb(129,140,248)] px-6 py-3 font-semibold text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-gradient-to-r hover:from-[rgb(129,140,248)] hover:to-[rgb(99,102,241)] hover:shadow-[0_10px_20px_rgba(99,102,241,0.3)]"
         >
           Launch LBP
         </button>
       )}
       {!auctionData.lbpLaunched && isOwner && !onLaunchLBP && managerAddress && (
-        <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: 'rgba(99, 102, 241, 0.1)', borderRadius: '0.75rem', border: '1px solid rgba(99, 102, 241, 0.3)' }}>
-          <p style={{ fontSize: '0.875rem', color: 'rgba(255, 255, 255, 0.9)', marginBottom: '0.75rem', fontWeight: '500' }}>
+        <div className="mt-4 rounded-xl border border-[rgba(99,102,241,0.3)] bg-[rgba(99,102,241,0.1)] p-4">
+          <p className="mb-3 text-sm font-medium text-[rgba(255,255,255,0.9)]">
             Ready to Launch LBP
           </p>
-          <p style={{ fontSize: '0.75rem', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '0.5rem' }}>
+          <p className="text-xs text-[rgba(255,255,255,0.6)]">
             LBP will be available here once launched.
           </p>
         </div>
       )}
       {auctionData.lbpLaunched && (lbpAddress || auctionData.lbpTokenRecipient !== ethers.ZeroAddress) && (
-        <div style={{ marginTop: '1.5rem', padding: '1rem', backgroundColor: 'rgba(99, 102, 241, 0.1)', borderRadius: '0.75rem', border: '1px solid rgba(99, 102, 241, 0.3)' }}>
-          <p style={{ fontSize: '0.875rem', color: 'rgba(255, 255, 255, 0.9)', marginBottom: '0.75rem', fontWeight: '500' }}>
+        <div className="mt-6 rounded-xl border border-[rgba(99,102,241,0.3)] bg-[rgba(99,102,241,0.1)] p-4">
+          <p className="mb-3 text-sm font-medium text-[rgba(255,255,255,0.9)]">
              LBP Successfully Launched
           </p>
           {lbpAddress && (
             <>
-              <p style={{ fontSize: '0.75rem', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '0.5rem', fontFamily: 'monospace' }}>
+              <p className="mb-2 font-mono text-xs text-[rgba(255,255,255,0.6)]">
                 LBP Contract: {lbpAddress}
               </p>
               <Link
                 to={`/lbp/${lbpAddress}`}
-                style={{
-                  display: 'inline-block',
-                  padding: '0.5rem 1rem',
-                  backgroundColor: 'rgb(99, 102, 241)',
-                  color: 'white',
-                  borderRadius: '0.5rem',
-                  fontSize: '0.875rem',
-                  fontWeight: '500',
-                  textDecoration: 'none',
-                  transition: 'background-color 0.2s',
-                  marginTop: '0.5rem'
-                }}
-                onMouseEnter={(e) => e.target.style.backgroundColor = 'rgb(79, 70, 229)'}
-                onMouseLeave={(e) => e.target.style.backgroundColor = 'rgb(99, 102, 241)'}
+                className="mt-2 inline-block rounded-lg bg-[rgb(99,102,241)] px-4 py-2 text-sm font-medium text-white no-underline transition-colors hover:bg-[rgb(79,70,229)]"
               >
                 View LBP →
               </Link>

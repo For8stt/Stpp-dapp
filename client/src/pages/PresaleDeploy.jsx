@@ -107,7 +107,7 @@ const PresaleDeploy = () => {
     deployments?.entries && deployments.entries.length > 0
       ? deployments.entries[deployments.entries.length - 1]
       : null;
-  const legacyAddresses = latestEntry?.deployments ?? latestEntry ?? {};
+  const legacyAddresses = useMemo(() => latestEntry?.deployments ?? latestEntry ?? {}, [latestEntry]);
   const addressBook = useAddressBook();
 
   const [walletAddress, setWalletAddress] = useState("");
@@ -131,7 +131,7 @@ const PresaleDeploy = () => {
       records.push(legacyAddresses);
     }
     return records;
-  }, [resolvedRegistry, legacyAddresses]);
+  }, [resolvedRegistry, legacyAddresses, addressBook?.default]);
   const resolveAddressValue = useCallback(
     (keys) => {
       for (const record of resolvedRecords) {
@@ -281,50 +281,54 @@ const PresaleDeploy = () => {
 
   if (!latestEntry) {
     return (
-      <section className="page">
-        <div className="card">
-          <h2>No deployment history found</h2>
-          <p>Run the on-chain deploy script to initialize the permissionless presale system.</p>
+      <section className="flex flex-col gap-6">
+        <div className="rounded-[12px] bg-surface p-6 shadow-card">
+          <h2 className="m-0 mb-2 text-2xl font-semibold text-text">No deployment history found</h2>
+          <p className="m-0 text-text-muted">Run the on-chain deploy script to initialize the permissionless presale system.</p>
         </div>
       </section>
     );
   }
 
   return (
-    <section className="page">
-      <div className="card">
-        <h1>Presale Deployment Console</h1>
-        <p>Interact with the permissionless presale factory deployed on-chain.</p>
+    <section className="flex flex-col gap-6">
+      <div className="rounded-[12px] bg-surface p-6 shadow-card">
+        <h1 className="m-0 mb-2 text-3xl font-bold text-text">Presale Deployment Console</h1>
+        <p className="m-0 text-text-muted">Interact with the permissionless presale factory deployed on-chain.</p>
       </div>
 
-      <div className="card">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div className="rounded-[12px] bg-surface p-6 shadow-card">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
           <div>
-            <h2>Wallet</h2>
-            <p>Address: {walletAddress || "Not connected"}</p>
-            <p>Network: {networkName || "Unknown"}</p>
+            <h2 className="m-0 mb-2 text-2xl font-semibold text-text">Wallet</h2>
+            <p className="m-0 mb-1 text-text-muted">Address: {walletAddress || "Not connected"}</p>
+            <p className="m-0 text-text-muted">Network: {networkName || "Unknown"}</p>
           </div>
-          <button className="btn primary" onClick={connectWallet} disabled={initializing}>
+          <button
+            className="cursor-pointer rounded-lg border-0 bg-primary px-6 py-3 text-base font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            onClick={connectWallet}
+            disabled={initializing}
+          >
             {walletAddress ? "Reconnect" : "Connect Wallet"}
           </button>
         </div>
       </div>
 
-      <div className="card">
-        <h2>Deployed Contracts</h2>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "1rem" }}>
+      <div className="rounded-[12px] bg-surface p-6 shadow-card">
+        <h2 className="m-0 mb-4 text-2xl font-semibold text-text">Deployed Contracts</h2>
+        <div className="flex flex-wrap gap-4">
           {infoCards.map((card) => (
             <PresaleInfoCard key={card.name} title={card.name} address={resolveAddressValue(card.keys)} />
           ))}
         </div>
       </div>
 
-      <div className="card">
-        <h2>Existing Presales</h2>
+      <div className="rounded-[12px] bg-surface p-6 shadow-card">
+        <h2 className="m-0 mb-4 text-2xl font-semibold text-text">Existing Presales</h2>
         {!factoryAvailable ? (
-          <p>Factory not deployed, no presales to display.</p>
+          <p className="m-0 text-text-muted">Factory not deployed, no presales to display.</p>
         ) : loading ? (
-          <p>Loading presales…</p>
+          <p className="m-0 text-text-muted">Loading presales…</p>
         ) : (
           <PresaleList items={userPresales} />
         )}

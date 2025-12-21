@@ -33,7 +33,6 @@ import { ensureProvider, setTargetChainIdHex } from "../services/web3/provider";
 import { generateCommitHash, parseMerkleProof, calculateDeposit } from "../utils/commitUtils";
 import { REFRESH_INTERVAL_MS, PHASES, DEFAULT_LBP_CONFIG } from "../constants/auction";
 import { deepEqual } from "../utils/objectUtils";
-import styles from "./css/AuctionView.module.css";
 
 
 const AuctionView = () => {
@@ -442,20 +441,20 @@ const AuctionView = () => {
 
   if (isInitialLoading) {
     return (
-      <section className={styles.page}>
-        <div className={styles.loadingContainer}>Loading auction data…</div>
+      <section className="mx-auto min-h-screen max-w-[1400px] animate-[fadeInUp_0.6s_ease-out] px-6 pb-16 pt-8">
+        <div className="rounded-2xl border border-[rgba(255,255,255,0.12)] bg-gradient-to-br from-[rgba(15,23,42,0.8)] to-[rgba(30,41,59,0.8)] p-12 text-center text-[rgba(255,255,255,0.7)] shadow-[0_10px_30px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.05)]">Loading auction data…</div>
       </section>
     );
   }
 
   if (error) {
     return (
-      <section className={styles.page}>
-        <div className={styles.errorContainer}>
+      <section className="mx-auto min-h-screen max-w-[1400px] animate-[fadeInUp_0.6s_ease-out] px-6 pb-16 pt-8">
+        <div className="rounded-2xl border border-[rgba(239,68,68,0.4)] bg-gradient-to-br from-[rgba(239,68,68,0.1)] to-[rgba(220,38,38,0.1)] p-12 text-center text-[rgb(254,202,202)] shadow-[0_10px_30px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.05)]">
           <p>{error}</p>
-          {contractsError && <p style={{ marginTop: '1rem', fontSize: '0.875rem' }}>Contract Error: {contractsError}</p>}
-          {auctionDataError && <p style={{ marginTop: '1rem', fontSize: '0.875rem' }}>Data Error: {auctionDataError}</p>}
-          {!auctionContract && <p style={{ marginTop: '1rem', fontSize: '0.875rem' }}>Auction contract not loaded</p>}
+          {contractsError && <p className="mt-4 text-sm">Contract Error: {contractsError}</p>}
+          {auctionDataError && <p className="mt-4 text-sm">Data Error: {auctionDataError}</p>}
+          {!auctionContract && <p className="mt-4 text-sm">Auction contract not loaded</p>}
         </div>
       </section>
     );
@@ -463,18 +462,18 @@ const AuctionView = () => {
 
   if (!auctionData) {
     return (
-      <section className={styles.page}>
-        <div className={styles.emptyContainer}>
+      <section className="mx-auto min-h-screen max-w-[1400px] animate-[fadeInUp_0.6s_ease-out] px-6 pb-16 pt-8">
+        <div className="rounded-2xl border border-[rgba(255,255,255,0.12)] bg-gradient-to-br from-[rgba(15,23,42,0.8)] to-[rgba(30,41,59,0.8)] p-12 text-center text-[rgba(255,255,255,0.7)] shadow-[0_10px_30px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.05)]">
           <p>No auction data available</p>
-          {auctionContract && <p style={{ marginTop: '1rem', fontSize: '0.875rem' }}>Contract loaded but data not fetched. The auction may not be initialized yet.</p>}
-          {!auctionContract && <p style={{ marginTop: '1rem', fontSize: '0.875rem' }}>Waiting for contract to load...</p>}
+          {auctionContract && <p className="mt-4 text-sm">Contract loaded but data not fetched. The auction may not be initialized yet.</p>}
+          {!auctionContract && <p className="mt-4 text-sm">Waiting for contract to load...</p>}
         </div>
       </section>
     );
   }
 
   return (
-    <section className={styles.page}>
+    <section className="mx-auto flex min-h-screen max-w-[1400px] flex-col gap-8 px-6 pb-16 pt-8 animate-[fadeInUp_0.6s_ease-out]">
       <AuctionHeader
         address={address}
         auctionAddress={auctionAddress}
@@ -492,7 +491,7 @@ const AuctionView = () => {
       <ReservePanel auctionData={auctionData} onDemandCheck={handleDemandCheck} />
 
       {/* Commit & Reveal Forms */}
-      <div className={styles.formsGrid}>
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         {phase === PHASES.COMMIT && (
           <CommitForm
             form={commitForm}
@@ -537,12 +536,12 @@ const AuctionView = () => {
       {!auctionData.finalized && <AllocationPanel userData={userData} />}
 
       {phase === PHASES.FINALIZED && !auctionData.finalized && (
-        <div className={styles.finalizationPanel}>
-          <p className={styles.finalizationTitle}>Auction Ready for Finalization</p>
-          <p style={{ fontSize: '0.875rem', color: 'rgba(255, 255, 255, 0.7)', marginBottom: '1rem' }}>
+        <div className="rounded-2xl border border-[rgba(245,158,11,0.4)] bg-gradient-to-br from-[rgba(245,158,11,0.1)] to-[rgba(217,119,6,0.1)] p-6 shadow-[0_10px_30px_rgba(245,158,11,0.2),inset_0_1px_0_rgba(255,255,255,0.05)]">
+          <p className="mb-4 text-base font-bold text-[rgb(251,191,36)]">Auction Ready for Finalization</p>
+          <p className="mb-4 text-sm text-[rgba(255,255,255,0.7)]">
             The reveal phase has ended. {isOwner ? (
               <>
-                You can finalize the auction on the <Link to={`/manager/${address}`} style={{ color: 'rgb(110, 231, 183)', textDecoration: 'underline' }}>Presale Manager page</Link>.
+                You can finalize the auction on the <Link to={`/manager/${address}`} className="text-[rgb(110,231,183)] underline">Presale Manager page</Link>.
               </>
             ) : (
               "Waiting for the owner to finalize the auction on the Presale Manager page."
@@ -551,8 +550,7 @@ const AuctionView = () => {
           {isOwner && (
             <Link
               to={`/manager/${address}`}
-              className={`${styles.actionButton} ${styles.amber}`}
-              style={{ display: 'inline-block', textDecoration: 'none', textAlign: 'center' }}
+              className="inline-block rounded-2xl border-0 bg-gradient-to-r from-[rgb(245,158,11)] to-[rgb(217,119,6)] px-6 py-3 text-center text-sm font-bold uppercase tracking-wider text-[rgb(15,23,42)] no-underline transition-all duration-300 hover:-translate-y-0.5 hover:bg-gradient-to-r hover:from-[rgb(217,119,6)] hover:to-[rgb(245,158,11)] hover:shadow-[0_8px_20px_rgba(245,158,11,0.3)]"
             >
               Go to Presale Manager →
             </Link>

@@ -2,7 +2,6 @@ import React from "react";
 import { formatEth, formatToken } from "../../utils/auctionUtils";
 import { useAccount } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
-import styles from "./css/RevealForm.module.css";
 
 const RevealForm = ({ 
   form, 
@@ -16,33 +15,33 @@ const RevealForm = ({
   if (!auctionData) return null;
 
   return (
-    <div className={styles.formCard}>
-      <p className={styles.formTitle}>Reveal Bid</p>
+    <div className="rounded-2xl border border-[rgba(255,255,255,0.1)] bg-[rgba(15,23,42,0.6)] p-8">
+      <p className="mb-6 text-2xl font-bold text-white">Reveal Bid</p>
       <div>
-        <div className={styles.formField}>
-          <label className={styles.formLabel}>Commit Index</label>
+        <div className="mb-5">
+          <label className="mb-2 block text-sm font-medium text-[rgba(255,255,255,0.8)]">Commit Index</label>
           <input
-            className={styles.formInput}
+            className="w-full rounded-xl border border-[rgba(255,255,255,0.1)] bg-[rgba(15,23,42,0.8)] px-4 py-3 text-base text-white transition-all duration-300 focus:border-[rgba(147,51,234,0.5)] focus:bg-[rgba(15,23,42,0.95)] focus:outline-none"
             type="number"
             value={form.commitIndex}
             onChange={(e) => setForm({ ...form, commitIndex: e.target.value })}
             placeholder="0"
           />
         </div>
-        <div className={styles.formField}>
-          <label className={styles.formLabel}>Quantity (must match commit)</label>
+        <div className="mb-5">
+          <label className="mb-2 block text-sm font-medium text-[rgba(255,255,255,0.8)]">Quantity (must match commit)</label>
           <input
-            className={styles.formInput}
+            className="w-full rounded-xl border border-[rgba(255,255,255,0.1)] bg-[rgba(15,23,42,0.8)] px-4 py-3 text-base text-white transition-all duration-300 focus:border-[rgba(147,51,234,0.5)] focus:bg-[rgba(15,23,42,0.95)] focus:outline-none"
             type="number"
             value={form.quantity}
             onChange={(e) => setForm({ ...form, quantity: e.target.value })}
             placeholder="1000"
           />
         </div>
-        <div className={styles.formField}>
-          <label className={styles.formLabel}>Price Tick Index (must match commit)</label>
+        <div className="mb-5">
+          <label className="mb-2 block text-sm font-medium text-[rgba(255,255,255,0.8)]">Price Tick Index (must match commit)</label>
           <select
-            className={styles.formSelect}
+            className="w-full rounded-xl border border-[rgba(255,255,255,0.1)] bg-[rgba(15,23,42,0.8)] px-4 py-3 text-base text-white transition-all duration-300 focus:border-[rgba(147,51,234,0.5)] focus:bg-[rgba(15,23,42,0.95)] focus:outline-none"
             value={form.priceTickIndex}
             onChange={(e) => setForm({ ...form, priceTickIndex: e.target.value })}
           >
@@ -53,29 +52,28 @@ const RevealForm = ({
             ))}
           </select>
         </div>
-        <div className={styles.formField}>
-          <label className={styles.formLabel}>Nonce (exact same as commit)</label>
+        <div className="mb-5">
+          <label className="mb-2 block text-sm font-medium text-[rgba(255,255,255,0.8)]">Nonce (exact same as commit)</label>
           <input
-            className={`${styles.formInput} font-mono`}
-            style={{ fontSize: '0.75rem' }}
+            className="w-full rounded-xl border border-[rgba(255,255,255,0.1)] bg-[rgba(15,23,42,0.8)] px-4 py-3 font-mono text-xs text-white transition-all duration-300 focus:border-[rgba(147,51,234,0.5)] focus:bg-[rgba(15,23,42,0.95)] focus:outline-none"
             value={form.nonce}
             onChange={(e) => setForm({ ...form, nonce: e.target.value })}
             placeholder="my-secret-nonce"
           />
         </div>
         {userData && (
-          <div className={styles.infoBox}>
-            <p className={styles.infoLabel}>Your Reveals:</p>
-            <p className={styles.infoText}>Revealed Qty: {formatToken(userData.revealedQty)}</p>
-            <p className={styles.infoText}>Revealed Deposit: {formatEth(userData.revealedDeposit)} ETH</p>
+          <div className="mb-4 rounded-xl border border-[rgba(255,255,255,0.1)] bg-[rgba(15,23,42,0.8)] p-4">
+            <p className="mb-2 text-sm text-[rgba(255,255,255,0.7)]">Your Reveals:</p>
+            <p className="mb-1 text-sm text-[rgba(255,255,255,0.8)]">Revealed Qty: {formatToken(userData.revealedQty)}</p>
+            <p className="text-sm text-[rgba(255,255,255,0.8)]">Revealed Deposit: {formatEth(userData.revealedDeposit)} ETH</p>
           </div>
         )}
         {!isConnected ? (
-          <div className={styles.infoBox} style={{ marginTop: '1rem', padding: '1rem', backgroundColor: 'rgba(255, 193, 7, 0.1)', border: '1px solid rgba(255, 193, 7, 0.3)' }}>
-            <p style={{ marginBottom: '0.75rem', color: 'rgba(255, 255, 255, 0.9)' }}>
+          <div className="mt-4 rounded-xl border border-[rgba(255,193,7,0.3)] bg-[rgba(255,193,7,0.1)] p-4">
+            <p className="mb-3 text-[rgba(255,255,255,0.9)]">
               Connect wallet to reveal your bid
             </p>
-            <div style={{ display: 'flex', justifyContent: 'center' }}>
+            <div className="flex justify-center">
               <ConnectButton />
             </div>
           </div>
@@ -83,7 +81,7 @@ const RevealForm = ({
           <button
             onClick={onSubmit}
             disabled={!form.quantity || !form.nonce || txState?.status === "pending"}
-            className={`${styles.submitButton} ${styles.reveal}`}
+            className="mt-4 w-full rounded-xl border-0 bg-gradient-to-r from-[rgb(147,51,234)] to-[rgb(168,85,247)] px-4 py-4 text-base font-semibold text-white transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-50 hover:not-disabled:-translate-y-0.5 hover:not-disabled:bg-gradient-to-r hover:not-disabled:from-[rgb(168,85,247)] hover:not-disabled:to-[rgb(147,51,234)] hover:not-disabled:shadow-[0_10px_20px_rgba(147,51,234,0.3)]"
           >
             {txState?.status === "pending" ? "Submitting..." : "Reveal Bid"}
           </button>

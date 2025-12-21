@@ -5,15 +5,15 @@ import ConnectWalletButton from "../components/common/ConnectWalletButton";
 import NetworkInfo from "../components/common/NetworkInfo";
 
 const Home = ({ account }) => (
-  <section className="page home">
-    <div className="hero">
+  <section className="flex flex-col gap-6">
+    <div className="flex max-w-[640px] flex-col gap-4">
       <h1>Lock Contract Dashboard</h1>
       <p>Connect your wallet to manage deposits, monitor balances, and access the dashboard.</p>
       <NetworkInfo />
       {account ? (
-        <div className="connected-banner">
+        <div className="flex items-center gap-4 rounded-lg bg-muted px-4 py-3">
           <span>Connected as {account}</span>
-          <NavLink className="btn primary" to="/dashboard">
+          <NavLink className="rounded-lg bg-primary px-6 py-3 text-base text-white" to="/dashboard">
             Go to Dashboard
           </NavLink>
         </div>
