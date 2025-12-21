@@ -10,7 +10,6 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
-import styles from "../../pages/css/LBPView.module.css";
 
 const PriceChart = ({ chartData, lbpData, poolData, spotPrice, currentTime }) => {
   if (!poolData || !lbpData) {
@@ -19,9 +18,9 @@ const PriceChart = ({ chartData, lbpData, poolData, spotPrice, currentTime }) =>
 
   if (!chartData || chartData.length === 0) {
     return (
-      <div className={styles.chartPanel}>
-        <h2 className={styles.chartTitle}>Price Chart (Live)</h2>
-        <div style={{ padding: "2rem", textAlign: "center", color: "rgba(255, 255, 255, 0.6)" }}>
+      <div className="relative overflow-hidden rounded-2xl border border-[rgba(51,65,85,0.6)] bg-gradient-to-br from-[rgba(30,41,59,0.8)] to-[rgba(15,23,42,0.9)] p-8 pt-10 backdrop-blur-[12px] backdrop-saturate-[180%] shadow-[0_20px_25px_-5px_rgba(0,0,0,0.3),0_10px_10px_-5px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.1)] transition-all duration-300 before:absolute before:left-0 before:right-0 before:top-0 before:h-0.5 before:bg-gradient-to-r before:from-[rgba(168,85,247,0.8)] before:via-[rgba(6,182,212,0.8)] before:to-[rgba(168,85,247,0.8)] before:bg-[length:200%_100%] before:animate-shimmer">
+        <h2 className="relative z-10 mb-8 bg-gradient-to-br from-white to-[#cbd5e1] bg-clip-text text-[1.75rem] font-extrabold leading-tight tracking-[-0.02em] text-transparent">Price Chart (Live)</h2>
+        <div className="p-8 text-center text-[rgba(255,255,255,0.6)]">
           <p>Waiting for price data...</p>
         </div>
       </div>
@@ -71,8 +70,8 @@ const PriceChart = ({ chartData, lbpData, poolData, spotPrice, currentTime }) =>
   }
 
   return (
-    <div className={styles.chartPanel}>
-      <h2 className={styles.chartTitle}>Price Chart (Live)</h2>
+    <div className="relative overflow-hidden rounded-2xl border border-[rgba(51,65,85,0.6)] bg-gradient-to-br from-[rgba(30,41,59,0.8)] to-[rgba(15,23,42,0.9)] p-8 pt-10 backdrop-blur-[12px] backdrop-saturate-[180%] shadow-[0_20px_25px_-5px_rgba(0,0,0,0.3),0_10px_10px_-5px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.1)] transition-all duration-300 before:absolute before:left-0 before:right-0 before:top-0 before:h-0.5 before:bg-gradient-to-r before:from-[rgba(168,85,247,0.8)] before:via-[rgba(6,182,212,0.8)] before:to-[rgba(168,85,247,0.8)] before:bg-[length:200%_100%] before:animate-shimmer">
+      <h2 className="relative z-10 mb-8 bg-gradient-to-br from-white to-[#cbd5e1] bg-clip-text text-[1.75rem] font-extrabold leading-tight tracking-[-0.02em] text-transparent">Price Chart (Live)</h2>
       <ResponsiveContainer width="100%" height={300}>
         <LineChart 
           data={sortedChartData}
