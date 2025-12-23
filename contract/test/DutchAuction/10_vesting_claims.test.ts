@@ -21,10 +21,13 @@ async function commitBid(
 ) {
     const { auction, priceTicks } = ctx;
     const nonce = randomNonce();
-    const commitHash = buildCommitHash(priceTickIndex, qty, nonce);
-    const deposit = qty * priceTicks[0];
+    // Convert qty to wei if it's a whole number
+    const qtyWei = qty < 10n**18n ? qty * 10n**18n : qty;
+    const commitHash = buildCommitHash(priceTickIndex, qtyWei, nonce);
+    // deposit in wei (ETH) = (qtyWei * priceTicks[0]) / 1e18
+    const deposit = (qtyWei * priceTicks[0]) / 10n**18n;
     await auction.connect(signer).commit(commitHash, [], { value: deposit });
-    return { nonce, deposit, priceTickIndex };
+    return { nonce, deposit, priceTickIndex, qty: qtyWei };
 }
 
 async function finalizeSuccessfulAuction(
@@ -40,14 +43,15 @@ async function finalizeSuccessfulAuction(
     const commitData = await commitBid(ctx, { signer, qty, priceTickIndex });
 
     await time.increaseTo(commitEndTime + 1n);
+    // Use qty in wei from commitBid result
     await auction
         .connect(signer)
-        .reveal(Number(priceTickIndex), qty, commitData.nonce, 0);
+        .reveal(Number(priceTickIndex), commitData.qty, commitData.nonce, 0);
 
     await time.increaseTo(revealEndTime + 1n);
     await auction.finalize();
 
-    return { qty, ...commitData };
+    return { qty: commitData.qty, ...commitData };
 }
 
 describe("DutchAuction – 10_vesting_claims", function () {
@@ -62,11 +66,13 @@ describe("DutchAuction – 10_vesting_claims", function () {
 
         await time.increaseTo(startTime + 1n);
         const nonce = randomNonce();
-        const qty = 25n;
-        await auction.connect(alice).commit(buildCommitHash(0n, qty, nonce), [], { value: qty * priceTicks[0] });
+        const qtyWhole = 25n;
+        const qtyWei = qtyWhole * 10n**18n;
+        const deposit = (qtyWei * priceTicks[0]) / 10n**18n;
+        await auction.connect(alice).commit(buildCommitHash(0n, qtyWei, nonce), [], { value: deposit });
 
         await time.increaseTo(commitEndTime + 1n);
-        await auction.connect(alice).reveal(0, qty, nonce, 0);
+        await auction.connect(alice).reveal(0, qtyWei, nonce, 0);
 
         expect(await token.balanceOf(await alice.getAddress())).to.equal(0n);
         expect(await auction.tokensClaimed(await alice.getAddress())).to.equal(0n);
@@ -78,11 +84,13 @@ describe("DutchAuction – 10_vesting_claims", function () {
 
         await time.increaseTo(startTime + 1n);
         const nonce = randomNonce();
-        const qty = 40n;
-        await auction.connect(alice).commit(buildCommitHash(0n, qty, nonce), [], { value: qty * priceTicks[0] });
+        const qtyWhole = 40n;
+        const qtyWei = qtyWhole * 10n**18n;
+        const deposit = (qtyWei * priceTicks[0]) / 10n**18n;
+        await auction.connect(alice).commit(buildCommitHash(0n, qtyWei, nonce), [], { value: deposit });
 
         await time.increaseTo(commitEndTime + 1n);
-        await auction.connect(alice).reveal(0, qty, nonce, 0);
+        await auction.connect(alice).reveal(0, qtyWei, nonce, 0);
 
         await expect(auction.connect(alice).claim()).to.be.revertedWithCustomError(auction, "AuctionNotFinalized");
     });
@@ -91,19 +99,21 @@ describe("DutchAuction – 10_vesting_claims", function () {
         const ctx = await loadFixture(
             fixtureWithOverrides({
                 softCap: ethers.parseEther("100"),
-                tokensForSale: 50n,
-                perAddressCap: 100n
+                tokensForSale: ethers.parseUnits("50", 18),
+                perAddressCap: ethers.parseUnits("100", 18)
             })
         );
         const { auction, alice, startTime, commitEndTime, revealEndTime, priceTicks } = ctx;
 
         await time.increaseTo(startTime + 1n);
         const nonce = randomNonce();
-        const qty = 50n;
-        await auction.connect(alice).commit(buildCommitHash(0n, qty, nonce), [], { value: qty * priceTicks[0] });
+        const qtyWhole = 50n;
+        const qtyWei = qtyWhole * 10n**18n;
+        const deposit = (qtyWei * priceTicks[0]) / 10n**18n;
+        await auction.connect(alice).commit(buildCommitHash(0n, qtyWei, nonce), [], { value: deposit });
 
         await time.increaseTo(commitEndTime + 1n);
-        await auction.connect(alice).reveal(0, qty, nonce, 0);
+        await auction.connect(alice).reveal(0, qtyWei, nonce, 0);
 
         await time.increaseTo(revealEndTime + 1n);
         await auction.finalize();
@@ -228,17 +238,20 @@ describe("DutchAuction – 10_vesting_claims", function () {
         const ctx = await loadFixture(
             fixtureWithOverrides({
                 vestingDuration: 0n,
-                bonusReserve: 50n,
+                bonusReserve: ethers.parseUnits("50", 18),
                 earlyBonusPct: bonusPct,
-                tokensForSale: saleAmount,
-                perAddressCap: saleAmount,
+                tokensForSale: ethers.parseUnits(saleAmount.toString(), 18),
+                perAddressCap: ethers.parseUnits(saleAmount.toString(), 18),
                 softCap: ethers.parseEther("0.005")
             })
         );
         const { auction, alice } = ctx;
 
-        const { qty } = await finalizeSuccessfulAuction(ctx, { qty: saleAmount });
-        const expectedBonus = (qty * bonusPct) / BPS_DENOMINATOR;
+        // saleAmount is a whole number, convert to wei
+        const saleAmountWei = ethers.parseUnits(saleAmount.toString(), 18);
+        const { qty: qtyWei } = await finalizeSuccessfulAuction(ctx, { qty: saleAmountWei });
+        // bonus = (qtyWei * bonusPct) / BPS_DENOMINATOR (both in wei)
+        const expectedBonus = (qtyWei * bonusPct) / BPS_DENOMINATOR;
 
         await expect(auction.connect(alice).claim())
             .to.emit(auction, "BonusAllocated")
@@ -249,28 +262,30 @@ describe("DutchAuction – 10_vesting_claims", function () {
         const ctx = await loadFixture(
             fixtureWithOverrides({
                 vestingDuration: 0n,
-                tokensForSale: 60n,
-                perAddressCap: 60n,
+                tokensForSale: ethers.parseUnits("60", 18),
+                perAddressCap: ethers.parseUnits("60", 18),
                 softCap: ethers.parseEther("0.05")
             })
         );
         const { auction, alice, startTime, commitEndTime, revealEndTime, priceTicks } = ctx;
 
         await time.increaseTo(startTime + 1n);
-        const qty = 60n;
+        const qtyWhole = 60n;
+        const qtyWei = qtyWhole * 10n**18n;
         const nonce = randomNonce();
-        const deposit = qty * priceTicks[0];
+        const deposit = (qtyWei * priceTicks[0]) / 10n**18n;
 
-        await auction.connect(alice).commit(buildCommitHash(2n, qty, nonce), [], { value: deposit });
+        await auction.connect(alice).commit(buildCommitHash(2n, qtyWei, nonce), [], { value: deposit });
 
         await time.increaseTo(commitEndTime + 1n);
-        await auction.connect(alice).reveal(2, qty, nonce, 0);
+        await auction.connect(alice).reveal(2, qtyWei, nonce, 0);
 
         await time.increaseTo(revealEndTime + 1n);
         await auction.finalize();
 
         const clearingPrice = priceTicks[2];
-        const expectedPayment = qty * clearingPrice;
+        // paymentDue = (qtyWei * clearingPrice) / 1e18
+        const expectedPayment = (qtyWei * clearingPrice) / 10n**18n;
         const expectedRefund = deposit - expectedPayment;
 
         const balanceBefore = await ethers.provider.getBalance(await alice.getAddress());
@@ -291,12 +306,14 @@ describe("DutchAuction – 10_vesting_claims", function () {
         const { auction, alice, outsider, startTime, commitEndTime, revealEndTime, priceTicks, config } = ctx;
 
         await time.increaseTo(startTime + 1n);
-        const qty = config.tokensForSale;
+        // config.tokensForSale is now in wei
+        const qtyWei = config.tokensForSale;
         const nonce = randomNonce();
-        await auction.connect(alice).commit(buildCommitHash(0n, qty, nonce), [], { value: qty * priceTicks[0] });
+        const deposit = (qtyWei * priceTicks[0]) / 10n**18n;
+        await auction.connect(alice).commit(buildCommitHash(0n, qtyWei, nonce), [], { value: deposit });
 
         await time.increaseTo(commitEndTime + 1n);
-        await auction.connect(alice).reveal(0, qty, nonce, 0);
+        await auction.connect(alice).reveal(0, qtyWei, nonce, 0);
 
         await time.increaseTo(revealEndTime + 1n);
         await auction.finalize();

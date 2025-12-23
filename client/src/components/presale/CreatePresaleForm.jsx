@@ -120,7 +120,7 @@ const CreatePresaleForm = ({ values, onChange, onSubmit, submitting, disabled })
         name="demandCheckDelay"
         value={values.demandCheckDelay}
         onChange={onChange}
-        placeholder="1800"
+        placeholder="600"
       />
       <Input
         label="Early bonus window (seconds)"
@@ -155,7 +155,8 @@ const CreatePresaleForm = ({ values, onChange, onSubmit, submitting, disabled })
         name="thresholdLow"
         value={values.thresholdLow}
         onChange={onChange}
-        placeholder="0"
+        placeholder="100"
+        helper="ETH threshold for low demand; if deposits are below this at demand check time, the auction can be accelerated."
       />
       <Input
         label="Max decay multiplier"
@@ -190,7 +191,7 @@ const CreatePresaleForm = ({ values, onChange, onSubmit, submitting, disabled })
         name="vestingDuration"
         value={values.vestingDuration}
         onChange={onChange}
-        placeholder="2592000"
+        placeholder="10800"
       />
       <TextArea
         label="Price ticks (comma separated, ETH units)"

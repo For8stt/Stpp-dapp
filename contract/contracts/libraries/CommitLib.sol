@@ -27,8 +27,11 @@ library CommitLib {
 
     /**
      * @dev Checks deposits match the implied quantity at a given reference price.
+     * @notice qty is in wei (token amount with 18 decimals), referencePrice is in wei (ETH per token with 18 decimals).
+     * @notice deposit = (qty * referencePrice) / 1e18
+     * @notice Example: qty = 1.5e18 (1.5 tokens), referencePrice = 1e18 (1 ETH/token) => deposit = 1.5e18 wei
      */
     function depositMatches(uint256 deposit, uint256 qty, uint256 referencePrice) internal pure returns (bool) {
-        return deposit == qty * referencePrice;
+        return deposit == (qty * referencePrice) / 1e18;
     }
 }

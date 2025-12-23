@@ -1,7 +1,8 @@
 import React from "react";
+import { ethers } from "ethers";
 import { formatEth } from "../../utils/auctionUtils";
 
-const ReservePanel = React.memo(({ auctionData, onDemandCheck }) => {
+const ReservePanel = React.memo(({ auctionData, onDemandCheck, isOwner }) => {
   if (!auctionData || auctionData.thresholdLow <= 0n) return null;
 
   return (
@@ -22,9 +23,12 @@ const ReservePanel = React.memo(({ auctionData, onDemandCheck }) => {
         </div>
         <div className="flex flex-col gap-2">
           <p className="text-sm uppercase tracking-wider text-[rgba(255,255,255,0.7)]">Threshold Low</p>
-          <p className="font-mono text-lg font-semibold text-white">{formatEth(auctionData.thresholdLow)}</p>
+          <p className="font-mono text-lg font-semibold text-white">{formatEth(auctionData.thresholdLow || 0n)} ETH</p>
+          {process.env.NODE_ENV === "development" && (
+            <p className="text-xs text-[rgba(255,255,255,0.5)] font-mono">(raw: {auctionData.thresholdLow?.toString()})</p>
+          )}
         </div>
-        {process.env.NODE_ENV === "development" && onDemandCheck && (
+        {process.env.NODE_ENV === "development" && onDemandCheck && isOwner && (
           <div className="col-span-2">
             <button
               onClick={onDemandCheck}

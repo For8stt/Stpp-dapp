@@ -34,17 +34,17 @@ const getInitialValues = () => ({
   startTime: toDateInput(3600),
   commitDuration: "3600",
   revealDuration: "3600",
-  demandCheckDelay: "1800",
+  demandCheckDelay: "600",
   earlyBonusWindow: "600",
   earlyBonusPct: "0",
   nonRevealPenaltyBps: "0",
   lbpStableShareBps: "4000",
-  thresholdLow: "0",
+  thresholdLow: "100",
   maxDecayMultiplier: "1",
   minCommitDuration: "600",
   merkleRoot: "",
-  vestingStart: toDateInput(86400),
-  vestingDuration: "2592000",
+  vestingStart: toDateInput(7200), // Will be calculated as startTime + 1 hour in buildAuctionInput
+  vestingDuration: "10800", // 3 hours (3 * 60 * 60 = 10800 seconds)
   priceTicks: "1,0.9,0.8",
   lbpStart: toDateInput(7200),
   lbpEnd: toDateInput(17200),
@@ -52,7 +52,7 @@ const getInitialValues = () => ({
   poolEndWeightToken: "20",
   poolSwapFee: "0.003",
   vestingCliffDuration: "0",
-  vestingFinalDuration: "2592000",
+  vestingFinalDuration: "2592000", // 30 days for LBP (30 * 24 * 60 * 60 = 2592000 seconds)
   vestingCliffPercentBP: "0",
 });
 
@@ -84,7 +84,19 @@ const CreatePresale = ({ account, onConnect }) => {
   const connectedAccount = account;
 
   const handleChange = (field, value) => {
-    setFormValues((prev) => ({ ...prev, [field]: value }));
+    setFormValues((prev) => {
+      const updated = { ...prev, [field]: value };
+      if (field === "startTime" && value) {
+        try {
+          const startTime = parseTimestamp(value);
+          const vestingStartTime = startTime + 3600; // 1 hour after auction start
+          updated.vestingStart = new Date(vestingStartTime * 1000).toISOString().slice(0, 16);
+        } catch (err) {
+          console.warn("Failed to update vestingStart:", err);
+        }
+      }
+      return updated;
+    });
   };
 
   const priceTicks = useMemo(
@@ -145,6 +157,7 @@ const CreatePresale = ({ account, onConnect }) => {
   const buildAuctionInput = () => {
     const startTime = parseTimestamp(formValues.startTime);
     const demandCheckTime = startTime + Number(formValues.demandCheckDelay || 0);
+    const vestingStart = startTime + 3600; // 1 hour after auction start
     return {
       saleToken: formValues.saleToken,
       treasury: formValues.treasury,
@@ -159,11 +172,11 @@ const CreatePresale = ({ account, onConnect }) => {
       earlyBonusPct: parseBps(formValues.earlyBonusPct),
       nonRevealPenaltyBps: parseBps(formValues.nonRevealPenaltyBps),
       lbpStableShareBps: parseBps(formValues.lbpStableShareBps),
-      thresholdLow: Number(formValues.thresholdLow || 0),
+      thresholdLow: parseEtherValue(formValues.thresholdLow || "100"),
       maxDecayMultiplier: ethers.parseUnits(formValues.maxDecayMultiplier || "1", 18).toString(),
       minCommitDuration: Number(formValues.minCommitDuration || 0),
       demandCheckTime,
-      vestingStart: parseTimestamp(formValues.vestingStart),
+      vestingStart, // Automatically calculated as startTime + 1 hour
       vestingDuration: Number(formValues.vestingDuration || 0),
       merkleRoot: formValues.merkleRoot && formValues.merkleRoot.trim() !== "" 
         ? formValues.merkleRoot.trim() 

@@ -10,7 +10,7 @@ const DEFAULT_TOKEN_SYMBOL = "TOKEN";
 /**
  * Fetches auction data from contract
  */
-export const useAuctionData = (auctionContract) => {
+export const useAuctionData = (auctionContract, managerContract = null, auctionAddress = null) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -109,6 +109,10 @@ export const useAuctionData = (auctionContract) => {
         lbpTokenRecipient,
         lbpStableRecipient,
         merkleRoot,
+        nonRevealPenaltyBps,
+        vestingStart,
+        vestingDuration,
+        initialCommitEndTime,
       ] = await Promise.all([
         safeContractCall(() => auctionContract.startTime(), 0n),
         safeContractCall(() => auctionContract.commitEndTime(), 0n),
@@ -145,6 +149,10 @@ export const useAuctionData = (auctionContract) => {
           ethers.ZeroAddress
         ),
         safeContractCall(() => auctionContract.merkleRoot(), ethers.ZeroHash),
+        safeContractCall(() => auctionContract.nonRevealPenaltyBps(), 0n),
+        safeContractCall(() => auctionContract.vestingStart(), 0n),
+        safeContractCall(() => auctionContract.vestingDuration(), 0n),
+        safeContractCall(() => auctionContract.initialCommitEndTime(), 0n),
       ]);
 
       const tickLength = Number(priceTicksLength);
@@ -153,10 +161,35 @@ export const useAuctionData = (auctionContract) => {
 
       const tokenSymbol = await fetchTokenSymbol(saleTokenAddr);
 
+      let demandCheckTime = 0;
+      if (managerContract && auctionAddress) {
+        try {
+          const upkeepControllerAddr = await safeContractCall(
+            () => managerContract.upkeepController(),
+            ethers.ZeroAddress
+          );
+          if (upkeepControllerAddr && upkeepControllerAddr !== ethers.ZeroAddress) {
+            const upkeepControllerAbi = allAbis.UpkeepController || [];
+            if (upkeepControllerAbi.length > 0) {
+              const provider = ensureProvider();
+              const upkeepController = new Contract(upkeepControllerAddr, upkeepControllerAbi, provider);
+              const checkTime = await safeContractCall(
+                () => upkeepController.demandCheckTime(auctionAddress),
+                0n
+              );
+              demandCheckTime = Number(checkTime);
+            }
+          }
+        } catch (err) {
+          console.warn("Failed to fetch demandCheckTime:", err);
+        }
+      }
+
       setData({
         startTime: Number(startTime),
         commitEndTime: Number(commitEndTime),
         revealEndTime: Number(revealEndTime),
+        initialCommitEndTime: Number(initialCommitEndTime),
         tokensForSale,
         bonusReserve,
         bonusReserveRemaining,
@@ -185,6 +218,10 @@ export const useAuctionData = (auctionContract) => {
         lbpTokenRecipient,
         lbpStableRecipient,
         merkleRoot: merkleRoot || ethers.ZeroHash,
+        nonRevealPenaltyBps,
+        vestingStart: Number(vestingStart),
+        vestingDuration: Number(vestingDuration),
+        demandCheckTime,
       });
     } catch (err) {
       console.error("Failed to fetch auction data:", err);
@@ -194,7 +231,7 @@ export const useAuctionData = (auctionContract) => {
         setLoading(false);
       }
     }
-  }, [auctionContract, data, fetchPriceTicks, fetchPriceBuckets, fetchTokenSymbol]);
+  }, [auctionContract, managerContract, auctionAddress, data, fetchPriceTicks, fetchPriceBuckets, fetchTokenSymbol]);
 
   useEffect(() => {
     if (auctionContract) {
@@ -204,7 +241,7 @@ export const useAuctionData = (auctionContract) => {
       setError(null);
       setLoading(false);
     }
-  }, [auctionContract, fetchData]);
+  }, [auctionContract, managerContract, auctionAddress, fetchData]);
 
   return {
     data,

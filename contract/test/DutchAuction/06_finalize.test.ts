@@ -16,6 +16,7 @@ type BidRequest = {
 
 interface CommitmentInfo {
     nonce: string;
+    qty: bigint; // qty in wei
 }
 
 async function commitBids(ctx: Awaited<ReturnType<typeof deployAuctionFixture>>, bids: BidRequest[]) {
@@ -29,7 +30,7 @@ async function commitBids(ctx: Awaited<ReturnType<typeof deployAuctionFixture>>,
             qty: bid.qty
         });
         const address = await bid.signer.getAddress();
-        commitments.set(address, { nonce: result.nonce });
+        commitments.set(address, { nonce: result.nonce, qty: result.qty });
     }
 
     await time.increaseTo(ctx.commitEndTime + 1n);
@@ -45,7 +46,8 @@ async function revealBids(
         const address = await bid.signer.getAddress();
         const commitment = commitments.get(address);
         if (!commitment) throw new Error("missing commitment");
-        await ctx.auction.connect(bid.signer).reveal(bid.priceTickIndex, bid.qty, commitment.nonce, 0);
+        // Use qty in wei from commitment (stored by commitBid)
+        await ctx.auction.connect(bid.signer).reveal(bid.priceTickIndex, commitment.qty, commitment.nonce, 0);
     }
 }
 
@@ -78,8 +80,8 @@ describe("DutchAuction – 06_finalize", function () {
 
     it("should compute clearing price, mark success, and populate treasury", async function () {
         const overrides = {
-            tokensForSale: 200n,
-            bonusReserve: 100n
+            tokensForSale: ethers.parseUnits("200", 18),
+            bonusReserve: ethers.parseUnits("100", 18)
         };
         const ctx = await loadFixture(fixtureWithOverrides(overrides));
         const bids: BidRequest[] = [
@@ -93,14 +95,17 @@ describe("DutchAuction – 06_finalize", function () {
         await time.increaseTo(ctx.revealEndTime + 1n);
 
         const clearingPrice = await ctx.auction.priceTicks(1);
-        const expectedTotalRaised = overrides.tokensForSale * clearingPrice;
-        const expectedFilledAbove = 100n;
-        const expectedAtClearing = 140n;
-        const expectedRemaining = overrides.tokensForSale - expectedFilledAbove;
+        // tokensForSale is in wei, so totalRaised = (tokensSold * clearingPrice) / 1e18
+        // tokensSold will be 200 (in wei), so expectedTotalRaised = (200 * 10^18 * clearingPrice) / 1e18 = 200 * clearingPrice
+        const tokensSoldWei = ethers.parseUnits("200", 18);
+        const expectedTotalRaised = (tokensSoldWei * clearingPrice) / 10n**18n;
+        const expectedFilledAbove = ethers.parseUnits("100", 18);
+        const expectedAtClearing = ethers.parseUnits("140", 18);
+        const expectedRemaining = tokensSoldWei - expectedFilledAbove;
 
         await expect(ctx.auction.connect(ctx.deployer).finalize())
             .to.emit(ctx.auction, "AuctionFinalized")
-            .withArgs(true, clearingPrice, overrides.tokensForSale, expectedTotalRaised);
+            .withArgs(true, clearingPrice, tokensSoldWei, expectedTotalRaised);
 
         expect(await ctx.auction.finalized()).to.equal(true);
         expect(await ctx.auction.successful()).to.equal(true);
@@ -116,7 +121,7 @@ describe("DutchAuction – 06_finalize", function () {
     });
 
     it("should handle demand below supply by selling cumulative revealed quantity", async function () {
-        const overrides = { tokensForSale: 400n };
+        const overrides = { tokensForSale: ethers.parseUnits("400", 18) };
         const ctx = await loadFixture(fixtureWithOverrides(overrides));
         const bids: BidRequest[] = [
             { signer: ctx.alice, priceTickIndex: 0n, qty: 120n },
@@ -130,14 +135,19 @@ describe("DutchAuction – 06_finalize", function () {
 
         await ctx.auction.connect(ctx.deployer).finalize();
 
-        const totalQty = bids.reduce((acc, bid) => acc + bid.qty, 0n);
+        // bids are in whole numbers, convert to wei for calculation
+        const totalQtyWei = bids.reduce((acc, bid) => {
+            const qtyWei = bid.qty < 10n**18n ? bid.qty * 10n**18n : bid.qty;
+            return acc + qtyWei;
+        }, 0n);
         const lastTickIndex = (await ctx.auction.priceTicksLength()) - 1n;
         const lastPrice = await ctx.auction.priceTicks(lastTickIndex);
-        const expectedRaised = totalQty * lastPrice;
+        // totalRaised = (tokensSold * clearingPrice) / 1e18
+        const expectedRaised = (totalQtyWei * lastPrice) / 10n**18n;
 
         expect(await ctx.auction.successful()).to.equal(true);
         expect(await ctx.auction.clearingTickIndex()).to.equal(lastTickIndex);
-        expect(await ctx.auction.tokensSold()).to.equal(totalQty);
+        expect(await ctx.auction.tokensSold()).to.equal(totalQtyWei);
         expect(await ctx.auction.totalRaised()).to.equal(expectedRaised);
         expect(await ctx.auction.proRataNumerator()).to.equal(0n);
         expect(await ctx.auction.proRataDenominator()).to.equal(0n);

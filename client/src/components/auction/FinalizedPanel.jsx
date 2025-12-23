@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { ethers } from "ethers";
 import { Contract } from "ethers";
-import { formatEth, formatToken } from "../../utils/auctionUtils";
+import { formatEth, formatTokenUnits } from "../../utils/auctionUtils";
 import { ensureProvider } from "../../services/web3/provider";
 import allAbis from "../../abi/allAbis.json";
 
@@ -16,7 +16,6 @@ const FinalizedPanel = React.memo(({ auctionData, isOwner, onLaunchLBP, managerA
         return;
       }
       try {
-        // Use read-only provider to avoid wallet connection popup
         const provider = ensureProvider();
         const abi = allAbis.PresaleManager || [];
         if (abi.length === 0) {
@@ -38,13 +37,41 @@ const FinalizedPanel = React.memo(({ auctionData, isOwner, onLaunchLBP, managerA
 
   if (!auctionData || !auctionData.finalized) return null;
 
+  if (!auctionData.successful) {
+    return (
+      <div className="mb-8 rounded-2xl border border-[rgba(239,68,68,0.4)] bg-[rgba(15,23,42,0.6)] p-8">
+        <p className="mb-6 text-2xl font-bold text-[rgb(239,68,68)]">Auction Failed</p>
+        <div className="mb-4 rounded-xl border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.1)] p-4">
+          <p className="mb-2 text-sm font-semibold text-[rgb(239,68,68)]">Soft Cap Not Met</p>
+          <p className="text-sm text-[rgba(255,255,255,0.8)]">
+            The auction did not meet the minimum soft cap requirement. All deposits will be refunded.
+          </p>
+        </div>
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-6">
+          <div className="flex flex-col gap-2">
+            <p className="text-sm uppercase tracking-wider text-[rgba(255,255,255,0.7)]">Tokens Sold</p>
+            <p className="font-mono text-2xl font-bold text-[rgb(239,68,68)]">{formatTokenUnits(auctionData.tokensSold || 0n)}</p>
+          </div>
+          <div className="flex flex-col gap-2">
+            <p className="text-sm uppercase tracking-wider text-[rgba(255,255,255,0.7)]">Total Raised</p>
+            <p className="font-mono text-2xl font-bold text-[rgb(239,68,68)]">{formatEth(auctionData.totalRaised || 0n)} ETH</p>
+          </div>
+          <div className="flex flex-col gap-2">
+            <p className="text-sm uppercase tracking-wider text-[rgba(255,255,255,0.7)]">Soft Cap</p>
+            <p className="font-mono text-2xl font-bold text-white">{formatEth(auctionData.softCap || 0n)} ETH</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="mb-8 rounded-2xl border border-[rgba(16,185,129,0.3)] bg-[rgba(15,23,42,0.6)] p-8">
       <p className="mb-6 text-2xl font-bold text-[rgb(110,231,183)]">Auction Finalized</p>
       <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-6">
         <div className="flex flex-col gap-2">
           <p className="text-sm uppercase tracking-wider text-[rgba(255,255,255,0.7)]">Tokens Sold</p>
-          <p className="font-mono text-2xl font-bold text-[rgb(110,231,183)]">{formatToken(auctionData.tokensSold)}</p>
+          <p className="font-mono text-2xl font-bold text-[rgb(110,231,183)]">{formatTokenUnits(auctionData.tokensSold)}</p>
         </div>
         <div className="flex flex-col gap-2">
           <p className="text-sm uppercase tracking-wider text-[rgba(255,255,255,0.7)]">Total Raised</p>

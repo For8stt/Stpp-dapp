@@ -43,10 +43,14 @@ export async function commitBid(
 ) {
     const { auction, priceTicks } = ctx;
     const nonce = randomNonce();
-    const commitHash = buildCommitHash(params.priceTickIndex, params.qty, nonce);
-    const deposit = params.qty * priceTicks[0];
+    // qty must be in wei (18 decimals) for commit hash
+    // If qty is passed as whole number, convert to wei
+    const qtyWei = params.qty < 1e18 ? params.qty * 10n**18n : params.qty;
+    const commitHash = buildCommitHash(params.priceTickIndex, qtyWei, nonce);
+    // deposit in wei (ETH) = (qtyWei * priceTicks[0]) / 1e18
+    const deposit = (qtyWei * priceTicks[0]) / 10n**18n;
     await auction.connect(params.signer).commit(commitHash, params.merkleProof ?? [], { value: deposit });
-    return { nonce, commitHash, deposit };
+    return { nonce, commitHash, deposit, qty: qtyWei };
 }
 
 export function fixtureWithOverrides(overrides: Partial<AuctionTestConfig>) {
@@ -80,10 +84,13 @@ export async function deployAuctionFixture(overrides: Partial<AuctionTestConfig>
         startTime: overrides.startTime ?? defaultStart,
         commitDuration: overrides.commitDuration ?? 900n,
         revealDuration: overrides.revealDuration ?? 900n,
-        perAddressCap: overrides.perAddressCap ?? 200n,
+        // perAddressCap must be in wei (18 decimals) to match qty storage
+        perAddressCap: overrides.perAddressCap ?? ethers.parseUnits("200", 18),
         softCap: overrides.softCap ?? ethers.parseEther("0.2"),
-        tokensForSale: overrides.tokensForSale ?? 150n,
-        bonusReserve: overrides.bonusReserve ?? 30n,
+        // tokensForSale must be in wei (18 decimals)
+        tokensForSale: overrides.tokensForSale ?? ethers.parseUnits("150", 18),
+        // bonusReserve must be in wei (18 decimals)
+        bonusReserve: overrides.bonusReserve ?? ethers.parseUnits("30", 18),
         earlyBonusWindow: overrides.earlyBonusWindow ?? 300n,
         earlyBonusPct: overrides.earlyBonusPct ?? 500n,
         nonRevealPenaltyBps: overrides.nonRevealPenaltyBps ?? 100n,
@@ -124,7 +131,8 @@ export async function deployAuctionFixture(overrides: Partial<AuctionTestConfig>
         priceTicks: finalConfig.priceTicks
     });
 
-    const fundingAmount = finalConfig.tokensForSale + finalConfig.bonusReserve + 10n;
+    // tokensForSale and bonusReserve are now in wei, so add buffer in wei too
+    const fundingAmount = finalConfig.tokensForSale + finalConfig.bonusReserve + ethers.parseUnits("10", 18);
     await token.transfer(await auction.getAddress(), fundingAmount);
 
     const commitEndTime = finalConfig.startTime + finalConfig.commitDuration;

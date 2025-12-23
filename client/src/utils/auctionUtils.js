@@ -23,6 +23,19 @@ export const formatToken = (value, decimals = 18) => {
   }
 };
 
+/**
+ * Format token quantity in wei (18 decimals) as decimal string
+ * Used for revealedQty, allocatedQty, totalQtyRevealed which are now stored in wei
+ */
+export const formatTokenUnits = (value, decimals = 18) => {
+  if (!value || value === 0n) return "0";
+  try {
+    return ethers.formatUnits(value, decimals);
+  } catch {
+    return "0";
+  }
+};
+
 export const getPhase = (now, startTime, commitEndTime, revealEndTime, finalized) => {
   if (finalized) return "Finalized";
   if (now < startTime) return "NotStarted";

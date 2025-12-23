@@ -1,5 +1,5 @@
 import React from "react";
-import { formatEth, formatToken } from "../../utils/auctionUtils";
+import { formatEth, formatToken, formatTokenUnits } from "../../utils/auctionUtils";
 
 const AllocationPanel = React.memo(({ userData }) => {
   if (!userData || userData.revealedQty <= 0n) return null;
@@ -10,7 +10,7 @@ const AllocationPanel = React.memo(({ userData }) => {
       <div className="mb-4 grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-6">
         <div className="flex flex-col gap-2">
           <p className="text-sm uppercase tracking-wider text-[rgba(255,255,255,0.7)]">Estimated Allocation</p>
-          <p className="font-mono text-2xl font-bold text-white">{formatToken(userData.revealedQty)}</p>
+          <p className="font-mono text-2xl font-bold text-white">{formatTokenUnits(userData.revealedQty)}</p>
         </div>
         <div className="flex flex-col gap-2">
           <p className="text-sm uppercase tracking-wider text-[rgba(255,255,255,0.7)]">Estimated Payment</p>

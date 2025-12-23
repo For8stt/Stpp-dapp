@@ -41,7 +41,7 @@ async function deployFixture() {
         vestingStart: now + 120n,
         vestingDuration: 0n,
         merkleRoot: ethers.ZeroHash,
-        priceTicks: [2n, 1n]
+        priceTicks: [ethers.parseEther("2"), ethers.parseEther("1")]
     };
 
     const auctionAddress = await manager.createAuction.staticCall(auctionInput);
@@ -70,7 +70,8 @@ async function fullPipelineFixture() {
 
     const commitQty = ethers.parseUnits("10", 18);
     const priceTicks = await Promise.all([auction.priceTicks(0), auction.priceTicks(1)]);
-    const deposit = commitQty * priceTicks[0];
+    // commitQty is in wei, deposit = (commitQty * priceTicks[0]) / 1e18
+    const deposit = (commitQty * priceTicks[0]) / 10n**18n;
     const nonce = ethers.hexlify(ethers.randomBytes(32));
     const commitHash = ethers.keccak256(
         ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256", "bytes32"], [0, commitQty, nonce])
@@ -85,7 +86,9 @@ async function fullPipelineFixture() {
     await time.increaseTo(config.startTime + config.commitDuration + config.revealDuration + 1n);
     await manager.finalizeAuction(await auction.getAddress());
 
-    const stableShare = (commitQty * priceTicks[1] * config.lbpStableShareBps) / BPS_DENOMINATOR;
+    // totalRaised = (tokensSold * clearingPrice) / 1e18, stableShare = (totalRaised * lbpStableShareBps) / BPS_DENOMINATOR
+    const totalRaised = (commitQty * priceTicks[1]) / 10n**18n;
+    const stableShare = (totalRaised * config.lbpStableShareBps) / BPS_DENOMINATOR;
     const lbpStart = config.startTime + config.commitDuration + config.revealDuration + 600n;
     const launchConfig = {
         startTime: lbpStart,
@@ -136,7 +139,8 @@ describe("PresaleManager", function () {
 
         const commitQty = ethers.parseUnits("10", 18);
         const priceTicks = await Promise.all([auction.priceTicks(0), auction.priceTicks(1)]);
-        const deposit = commitQty * priceTicks[0];
+        // commitQty is in wei, deposit = (commitQty * priceTicks[0]) / 1e18
+        const deposit = (commitQty * priceTicks[0]) / 10n**18n;
         const nonce = ethers.hexlify(ethers.randomBytes(32));
         const commitHash = ethers.keccak256(
             ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256", "bytes32"], [0, commitQty, nonce])
@@ -149,11 +153,15 @@ describe("PresaleManager", function () {
         await auction.connect(alice).reveal(0, commitQty, nonce, 0);
 
         await time.increaseTo(config.startTime + config.commitDuration + config.revealDuration + 1n);
+        // totalRaised = (tokensSold * clearingPrice) / 1e18
+        const expectedTotalRaised = (commitQty * priceTicks[1]) / 10n**18n;
         await expect(manager.finalizeAuction(await auction.getAddress()))
             .to.emit(auction, "AuctionFinalized")
-            .withArgs(true, priceTicks[1], commitQty, commitQty * priceTicks[1]);
+            .withArgs(true, priceTicks[1], commitQty, expectedTotalRaised);
 
-        const stableShare = (commitQty * priceTicks[1] * config.lbpStableShareBps) / BPS_DENOMINATOR;
+        // stableShare = (totalRaised * lbpStableShareBps) / BPS_DENOMINATOR
+        // totalRaised is in wei (ETH), so stableShare is also in wei
+        const stableShare = (expectedTotalRaised * config.lbpStableShareBps) / BPS_DENOMINATOR;
         const lbpStart = config.startTime + config.commitDuration + config.revealDuration + 600n;
         const launchConfig = {
             startTime: lbpStart,
@@ -217,7 +225,8 @@ describe("PresaleManager", function () {
 
         const commitQty = ethers.parseUnits("10", 18);
         const priceTicks = await Promise.all([auction.priceTicks(0), auction.priceTicks(1)]);
-        const deposit = commitQty * priceTicks[0];
+        // commitQty is in wei, deposit = (commitQty * priceTicks[0]) / 1e18
+        const deposit = (commitQty * priceTicks[0]) / 10n**18n;
         const nonce = ethers.hexlify(ethers.randomBytes(32));
         const commitHash = ethers.keccak256(
             ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256", "bytes32"], [0, commitQty, nonce])

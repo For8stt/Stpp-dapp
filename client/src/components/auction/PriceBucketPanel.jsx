@@ -1,5 +1,5 @@
 import React from "react";
-import { formatEth, formatToken } from "../../utils/auctionUtils";
+import { formatEth, formatTokenUnits } from "../../utils/auctionUtils";
 
 const PriceBucketPanel = React.memo(({ auctionData, priceBuckets }) => {
   if (!auctionData?.priceTicks || auctionData.priceTicks.length === 0) return null;
@@ -39,7 +39,7 @@ const PriceBucketPanel = React.memo(({ auctionData, priceBuckets }) => {
                   >
                     {bucket.total > 0n && (
                       <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-xs font-semibold text-white text-shadow-[0_1px_2px_rgba(0,0,0,0.5)]">
-                        {formatToken(bucket.total)}
+                        {formatTokenUnits(bucket.total)}
                       </div>
                     )}
                   </div>

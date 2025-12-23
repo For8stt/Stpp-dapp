@@ -231,7 +231,8 @@ contract DutchAuction is IAuction, Ownable, ReentrancyGuard, DutchAuctionEvents,
     }
 
     /// @notice Submits a sealed bid commitment backed by ETH deposit during the commit window.
-    /// @dev Checks whitelist proof, per-address cap, and ensures deposit maps to integer quantity.
+    /// @dev Checks whitelist proof, per-address cap, and ensures deposit maps to quantity in wei.
+    /// @notice All qty values are stored in wei (18 decimals) to support fractional token amounts.
     function commit(bytes32 commitHash, bytes32[] calldata merkleProof) external payable nonReentrant {
         if (!initialized) revert AuctionNotInitialized();
         if (block.timestamp < startTime || block.timestamp > commitEndTime) revert AuctionNotActive();
@@ -239,9 +240,14 @@ contract DutchAuction is IAuction, Ownable, ReentrancyGuard, DutchAuctionEvents,
 
         if (!CommitLib.verifyWhitelist(merkleRoot, merkleProof, msg.sender)) revert InvalidProof();
 
-        uint256 impliedQty = msg.value / priceTicks[0];
+        // Calculate implied qty in wei: qtyWei = (msg.value * 1e18) / priceTicks[0]
+        // priceTicks[0] is in wei (ETH per token), msg.value is in wei (ETH deposit)
+        // Example: msg.value = 1.5 ETH = 1.5e18 wei, priceTicks[0] = 1 ETH = 1e18 wei
+        // => impliedQty = (1.5e18 * 1e18) / 1e18 = 1.5e18 wei (1.5 tokens)
+        uint256 impliedQty = (msg.value * 1e18) / priceTicks[0];
         if (impliedQty == 0) revert DepositTooSmall();
-        if (impliedQty * priceTicks[0] != msg.value) revert DepositMismatch();
+        // Verify deposit matches: deposit = (qty * priceTicks[0]) / 1e18
+        if (!CommitLib.depositMatches(msg.value, impliedQty, priceTicks[0])) revert DepositMismatch();
 
         if (committedQty[msg.sender] + impliedQty > perAddressCap) revert CapExceeded();
 
@@ -264,6 +270,7 @@ contract DutchAuction is IAuction, Ownable, ReentrancyGuard, DutchAuctionEvents,
 
     /// @notice Opens a committed bid by revealing its parameters and recording demand.
     /// @dev Verifies the original hash, applies bonuses, and aggregates quantity into buckets.
+    /// @param qty Token quantity in wei (18 decimals). Example: 1.5 tokens = 1.5e18 wei.
     function reveal(uint256 priceTickIndex, uint256 qty, bytes32 nonce, uint256 commitIndex) external nonReentrant {
         if (!initialized) revert AuctionNotInitialized();
         if (block.timestamp <= commitEndTime || block.timestamp > revealEndTime) revert RevealPhaseClosed();
@@ -362,7 +369,9 @@ contract DutchAuction is IAuction, Ownable, ReentrancyGuard, DutchAuctionEvents,
         successful = true;
         finalized = true;
 
-        uint256 totalPaymentsDue = tokensSold * clearingPrice;
+        // tokensSold is in wei, clearingPrice is in wei (ETH per token)
+        // totalPaymentsDue in wei (ETH) = (tokensSold * clearingPrice) / 1e18
+        uint256 totalPaymentsDue = (tokensSold * clearingPrice) / 1e18;
         ethForTreasury = totalPaymentsDue;
 
         emit AuctionFinalized(true, clearingPrice, tokensSold, totalRaised);
@@ -508,7 +517,9 @@ contract DutchAuction is IAuction, Ownable, ReentrancyGuard, DutchAuctionEvents,
         }
         bonusReserveRemaining -= bonusTotal;
 
-        uint256 paymentDue = allocated * clearingPrice;
+        // allocated is in wei (token amount), clearingPrice is in wei (ETH per token)
+        // paymentDue in wei (ETH) = (allocated * clearingPrice) / 1e18
+        uint256 paymentDue = (allocated * clearingPrice) / 1e18;
 
         allocation = AllocationData({
             totalQty: allocated,

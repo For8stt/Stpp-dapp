@@ -25,6 +25,8 @@ export const useUserAuctionData = (auctionContract, account, isFinalized) => {
         revealedDeposit,
         commitsCount,
         revealedBidsCount,
+        refundedAmount,
+        tokensClaimed,
       ] = await Promise.all([
         safeContractCall(() => auctionContract.committedQty(account), 0n),
         safeContractCall(() => auctionContract.revealedQty(account), 0n),
@@ -47,9 +49,10 @@ export const useUserAuctionData = (auctionContract, account, isFinalized) => {
           },
           0n
         ),
+        safeContractCall(() => auctionContract.refundedAmount(account), 0n),
+        safeContractCall(() => auctionContract.tokensClaimed(account), 0n),
       ]);
 
-      // Fetch allocation if finalized
       let allocation = null;
       if (isFinalized) {
         const alloc = await safeContractCall(
@@ -66,13 +69,43 @@ export const useUserAuctionData = (auctionContract, account, isFinalized) => {
         }
       }
 
+      let commits = [];
+      if (isFinalized && commitsCount > 0) {
+        const commitPromises = [];
+        for (let i = 0; i < Number(commitsCount); i++) {
+          commitPromises.push(
+            safeContractCall(
+              () => auctionContract.commits(account, i),
+              null
+            )
+          );
+        }
+        const commitResults = await Promise.all(commitPromises);
+        commits = commitResults
+          .map((commit, index) => {
+            if (!commit) return null;
+            return {
+              index,
+              commitHash: commit.commitHash,
+              deposit: commit.deposit,
+              commitTime: commit.commitTime,
+              revealed: commit.revealed,
+              withdrawn: commit.withdrawn,
+            };
+          })
+          .filter(Boolean);
+      }
+
       setData({
         committedQty,
         revealedQty,
         revealedDeposit,
         commitsCount: Number(commitsCount),
         revealedBidsCount: Number(revealedBidsCount),
+        refundedAmount,
+        tokensClaimed,
         allocation,
+        commits,
       });
     } catch (err) {
       console.error("Failed to fetch user data:", err);

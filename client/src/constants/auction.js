@@ -26,7 +26,7 @@ export const DEFAULT_LBP_CONFIG = {
   poolSwapFee: "0.003",
   vestingStartTime: Math.floor(Date.now() / 1000) + 3600,
   vestingCliffDuration: 0,
-  vestingFinalDuration: 2592000,
+  vestingFinalDuration: 2592000, // 30 days for LBP (30 * 24 * 60 * 60 = 2592000 seconds)
   vestingCliffPercentBP: 0,
 };
 

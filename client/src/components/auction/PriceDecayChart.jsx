@@ -43,8 +43,11 @@ const PriceDecayChart = ({
   finalized,
   clearingPrice,
   totalDepositCommitted,
+  totalDepositsRevealed,
   softCap,
-  phase
+  phase,
+  initialCommitEndTime,
+  demandCheckTime
 }) => {
   const startPrice = useMemo(() => {
     return priceTicks && priceTicks.length > 0 ? Number(priceTicks[0]) : 0;
@@ -61,6 +64,22 @@ const PriceDecayChart = ({
   const timeRange = useMemo(() => {
     return revealEndTime - startTime;
   }, [revealEndTime, startTime]);
+
+  const isShortened = useMemo(() => {
+    if (!initialCommitEndTime || initialCommitEndTime === 0) return false;
+    return commitEndTime < initialCommitEndTime;
+  }, [commitEndTime, initialCommitEndTime]);
+
+  const originalRevealEndTime = useMemo(() => {
+    if (!isShortened || !initialCommitEndTime) return revealEndTime;
+    const revealDuration = revealEndTime - commitEndTime;
+    return initialCommitEndTime + revealDuration;
+  }, [isShortened, initialCommitEndTime, revealEndTime, commitEndTime]);
+
+  const originalTimeRange = useMemo(() => {
+    if (!isShortened || !originalRevealEndTime) return timeRange;
+    return originalRevealEndTime - startTime;
+  }, [isShortened, originalRevealEndTime, startTime, timeRange]);
   const { currentPrice, currentProgress } = useMemo(() => {
     if (!startPrice || !endPrice || !timeRange) {
       return { currentPrice: 0, currentProgress: 0 };
@@ -77,8 +96,9 @@ const PriceDecayChart = ({
     return { currentPrice: price, currentProgress: progress };
   }, [currentTime, startTime, revealEndTime, timeRange, startPrice, priceRange, endPrice]);
   const softCapProgress = useMemo(() => {
-    return softCap > 0n ? Math.min(Number(totalDepositCommitted) / Number(softCap), 1) : 0;
-  }, [softCap, totalDepositCommitted]);
+    const depositsToCheck = totalDepositsRevealed !== undefined ? totalDepositsRevealed : totalDepositCommitted;
+    return softCap > 0n ? Math.min(Number(depositsToCheck) / Number(softCap), 1) : 0;
+  }, [softCap, totalDepositsRevealed, totalDepositCommitted]);
 
   const timeRemaining = useMemo(() => {
     if (currentTime >= revealEndTime) return null;
@@ -102,19 +122,57 @@ const PriceDecayChart = ({
     const paddingTop = 40;
     const paddingBottom = 60;
     const chartHeight = svgHeight - paddingTop - paddingBottom;
+    const paddingLeft = 50;
+    const chartWidth = svgWidth - paddingLeft - 50;
     
     for (let i = 0; i <= numPoints; i++) {
       const t = i / numPoints;
-      const time = startTime + (t * timeRange);
+      
+      if (isShortened && originalTimeRange) {
+        const time = startTime + (t * timeRange); // Actual time in shortened timeline
+        const timeProgressInShortened = (time - startTime) / timeRange;
+        const price = startPrice - (priceRange * timeProgressInShortened);
+        const timeProgressOnOriginal = (time - startTime) / originalTimeRange;
+        const x = paddingLeft + (timeProgressOnOriginal * chartWidth);
+        const yPercent = priceRange > 0 ? ((price - endPrice) / priceRange) : 0;
+        const y = paddingTop + (chartHeight * (1 - yPercent));
+        
+        pts.push(`${x},${y}`);
+      } else {
+        const time = startTime + (t * timeRange);
+        const price = startPrice - (priceRange * t);
+        const x = paddingLeft + (t * chartWidth);
+        const yPercent = priceRange > 0 ? ((price - endPrice) / priceRange) : 0;
+        const y = paddingTop + (chartHeight * (1 - yPercent));
+        
+        pts.push(`${x},${y}`);
+      }
+    }
+    return pts;
+  }, [startPrice, endPrice, priceRange, timeRange, startTime, isShortened, originalTimeRange]);
+
+  const originalPoints = useMemo(() => {
+    if (!isShortened || !startPrice || !priceRange || !originalTimeRange) return [];
+    const pts = [];
+    const numPoints = 300;
+    const svgWidth = 1200;
+    const svgHeight = 400;
+    const paddingTop = 40;
+    const paddingBottom = 60;
+    const chartHeight = svgHeight - paddingTop - paddingBottom;
+    
+    for (let i = 0; i <= numPoints; i++) {
+      const t = i / numPoints;
+      const time = startTime + (t * originalTimeRange);
       const price = startPrice - (priceRange * t);
-      const x = (t * (svgWidth - 100)) + 50; // 50px padding on left, 50px on right
+      const x = (t * (svgWidth - 100)) + 50;
       const yPercent = priceRange > 0 ? ((price - endPrice) / priceRange) : 0;
-      const y = paddingTop + (chartHeight * (1 - yPercent)); // High price at top (small Y)
+      const y = paddingTop + (chartHeight * (1 - yPercent));
       
       pts.push(`${x},${y}`);
     }
     return pts;
-  }, [startPrice, endPrice, priceRange, timeRange, startTime]);
+  }, [isShortened, startPrice, endPrice, priceRange, originalTimeRange, startTime]);
 
   const tickMarkers = useMemo(() => {
     if (!priceTicks || priceTicks.length === 0 || !startPrice || !priceRange) return [];
@@ -161,6 +219,36 @@ const PriceDecayChart = ({
   return (
     <div className="mb-8 animate-fadeIn rounded-2xl border border-[rgba(255,255,255,0.1)] bg-gradient-to-br from-[rgba(15,23,42,0.7)] to-[rgba(30,41,59,0.7)] p-6 backdrop-blur-[10px] shadow-[0_20px_25px_-5px_rgba(0,0,0,0.3),0_10px_10px_-5px_rgba(0,0,0,0.2)]">
 
+      {/* Adjustment Alert Banner */}
+      {isShortened && (
+        <div className="mb-6 animate-fadeIn rounded-xl border-2 border-[rgba(245,158,11,0.4)] bg-gradient-to-br from-[rgba(245,158,11,0.15)] to-[rgba(217,119,6,0.15)] p-4 shadow-[0_10px_15px_-3px_rgba(245,158,11,0.2)]">
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0">
+              <svg className="h-6 w-6 text-[rgb(251,191,36)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <p className="mb-2 text-base font-bold text-[rgb(251,191,36)]">
+                Low participation detected. The auction timeline has been shortened.
+              </p>
+              <div className="flex flex-wrap items-center gap-4 text-sm text-[rgba(255,255,255,0.8)]">
+                <div className="flex items-center gap-2">
+                  <span className="line-through text-[rgba(255,255,255,0.5)]">
+                    Original commit end: {formatDateTime(initialCommitEndTime)}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-[rgb(251,191,36)]">
+                    New commit end: {formatDateTime(commitEndTime)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="mb-1 text-xl font-bold text-white">Price Decay & Market Status</h2>
@@ -172,6 +260,15 @@ const PriceDecayChart = ({
               {phase === "Finalized" && "Auction Finalized"}
               {phase === "NotStarted" && "Auction not started yet"}
             </p>
+            {isShortened ? (
+              <span className="ml-2 rounded px-2 py-0.5 text-xs font-semibold bg-[rgba(245,158,11,0.2)] text-[rgb(251,191,36)] border border-[rgba(245,158,11,0.4)]">
+                Adjusted
+              </span>
+            ) : initialCommitEndTime > 0 && currentTime < initialCommitEndTime && demandCheckTime > 0 && currentTime >= demandCheckTime ? (
+              <span className="ml-2 rounded px-2 py-0.5 text-xs font-semibold bg-[rgba(59,130,246,0.2)] text-[rgb(147,197,253)] border border-[rgba(59,130,246,0.4)]">
+                Eligible for Adjustment
+              </span>
+            ) : null}
           </div>
         </div>
         <div className="rounded-xl border-2 border-[rgba(59,130,246,0.3)] bg-gradient-to-br from-[rgba(59,130,246,0.2)] to-[rgba(37,99,235,0.2)] p-4 text-right shadow-[0_10px_15px_-3px_rgba(0,0,0,0.3)]">
@@ -239,6 +336,252 @@ const PriceDecayChart = ({
           ))}
 
 
+          {/* Original timeline (dashed) if shortened */}
+          {isShortened && originalPoints.length > 0 && (
+            <>
+              <polyline
+                points={originalPoints.join(" ")}
+                fill="none"
+                stroke="rgba(148, 163, 184, 0.3)"
+                strokeWidth="4"
+                strokeDasharray="12,8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                opacity="0.6"
+              />
+            </>
+          )}
+
+          {/* Demand checkpoint marker - rendered AFTER blue line */}
+          {(() => {
+            if (!demandCheckTime || demandCheckTime <= 0 || demandCheckTime < startTime) return null;
+            
+            const svgWidth = 1200;
+            const svgHeight = 400;
+            const paddingTop = 40;
+            const paddingBottom = 60;
+            const chartHeight = svgHeight - paddingTop - paddingBottom;
+            const paddingLeft = 50;
+            const chartWidth = svgWidth - paddingLeft - 50;
+            const effectiveTimeRange = isShortened ? originalTimeRange : timeRange;
+            const effectiveRevealEnd = isShortened ? originalRevealEndTime : revealEndTime;
+            if (demandCheckTime > effectiveRevealEnd) return null;
+            
+            const demandCheckProgress = (demandCheckTime - startTime) / effectiveTimeRange;
+            const demandCheckX = paddingLeft + (demandCheckProgress * chartWidth);
+            const demandCheckPrice = startPrice - (priceRange * demandCheckProgress);
+            const yPercent = priceRange > 0 ? ((demandCheckPrice - endPrice) / priceRange) : 0;
+            const demandCheckY = paddingTop + (chartHeight * (1 - yPercent));
+            
+            return (
+              <g key="demand-check-marker">
+                <line
+                  x1={demandCheckX}
+                  y1={paddingTop}
+                  x2={demandCheckX}
+                  y2={svgHeight - paddingBottom}
+                  stroke="rgb(245, 158, 11)"
+                  strokeWidth="3"
+                  strokeDasharray="10,6"
+                  opacity="0.8"
+                />
+                <circle
+                  cx={demandCheckX}
+                  cy={demandCheckY}
+                  r="8"
+                  fill="rgb(245, 158, 11)"
+                  stroke="white"
+                  strokeWidth="2.5"
+                  filter="url(#glow)"
+                />
+                <g>
+                  <rect
+                    x={demandCheckX - 60}
+                    y={demandCheckY - 30}
+                    width="120"
+                    height="22"
+                    rx="5"
+                    fill="rgba(15, 23, 42, 0.95)"
+                    stroke="rgb(245, 158, 11)"
+                    strokeWidth="2"
+                  />
+                  <text
+                    x={demandCheckX}
+                    y={demandCheckY - 15}
+                    fill="rgb(251, 191, 36)"
+                    fontSize="11"
+                    textAnchor="middle"
+                    fontWeight="bold"
+                  >
+                    {formatEth(BigInt(Math.floor(demandCheckPrice)))} ETH
+                  </text>
+                </g>
+                <g>
+                  <rect
+                    x={demandCheckX - 70}
+                    y={svgHeight - paddingBottom + 10}
+                    width="140"
+                    height="32"
+                    rx="5"
+                    fill="rgba(15, 23, 42, 0.95)"
+                    stroke="rgb(245, 158, 11)"
+                    strokeWidth="2"
+                  />
+                  <text
+                    x={demandCheckX}
+                    y={svgHeight - paddingBottom + 25}
+                    fill="rgb(251, 191, 36)"
+                    fontSize="12"
+                    fontWeight="bold"
+                    textAnchor="middle"
+                  >
+                    {formatTime(demandCheckTime)}
+                  </text>
+                  <text
+                    x={demandCheckX}
+                    y={svgHeight - paddingBottom + 38}
+                    fill="rgba(251, 191, 36, 0.8)"
+                    fontSize="10"
+                    fontWeight="600"
+                    textAnchor="middle"
+                  >
+                    Demand Check
+                  </text>
+                </g>
+                {/* Tooltip on hover */}
+                <title>
+                  At this time, the protocol evaluates participation and may shorten the auction if demand is low.
+                </title>
+              </g>
+            );
+          })()}
+
+          {/* Shaded area for accelerated phase (if shortened) */}
+          {isShortened && originalPoints.length > 0 && points.length > 0 && (() => {
+            const svgHeight = 400;
+            const paddingTop = 40;
+            const paddingBottom = 60;
+            const chartHeight = svgHeight - paddingTop - paddingBottom;
+            const startY = paddingTop + chartHeight;
+            const svgWidth = 1200;
+            const paddingLeft = 50;
+            const chartWidth = svgWidth - paddingLeft - 50;
+            const revealEndProgress = (revealEndTime - startTime) / originalTimeRange;
+            const revealEndX = paddingLeft + (revealEndProgress * chartWidth);
+            const originalRevealEndProgress = (originalRevealEndTime - startTime) / originalTimeRange;
+            const originalRevealEndX = paddingLeft + (originalRevealEndProgress * chartWidth);
+            const lastShortenedPoint = points[points.length - 1].split(',');
+            const shortenedEndX = parseFloat(lastShortenedPoint[0]);
+            const shortenedEndY = parseFloat(lastShortenedPoint[1]);
+            const originalAtShortenedEnd = originalPoints.find(pt => {
+              const [x] = pt.split(',');
+              return Math.abs(parseFloat(x) - shortenedEndX) < 1;
+            });
+            
+            let originalYAtShortenedEnd = startY;
+            if (originalAtShortenedEnd) {
+              originalYAtShortenedEnd = parseFloat(originalAtShortenedEnd.split(',')[1]);
+            } else {
+              for (let i = 0; i < originalPoints.length - 1; i++) {
+                const [x1, y1] = originalPoints[i].split(',').map(Number);
+                const [x2, y2] = originalPoints[i + 1].split(',').map(Number);
+                if (shortenedEndX >= x1 && shortenedEndX <= x2) {
+                  const t = (shortenedEndX - x1) / (x2 - x1);
+                  originalYAtShortenedEnd = y1 + (y2 - y1) * t;
+                  break;
+                }
+              }
+            }
+            const demandCheckProgress = demandCheckTime > 0 ? (demandCheckTime - startTime) / originalTimeRange : 0;
+            const divergenceX = paddingLeft + (demandCheckProgress * chartWidth);
+            const divergencePrice = startPrice - (priceRange * demandCheckProgress);
+            const divergenceYPercent = priceRange > 0 ? ((divergencePrice - endPrice) / priceRange) : 0;
+            const divergenceY = paddingTop + (chartHeight * (1 - divergenceYPercent));
+            const shortenedCurvePoints = points.filter(pt => {
+              const [x] = pt.split(',');
+              const xNum = parseFloat(x);
+              return xNum >= divergenceX && xNum <= shortenedEndX;
+            });
+            const originalCurvePoints = originalPoints.filter(pt => {
+              const [x] = pt.split(',');
+              const xNum = parseFloat(x);
+              return xNum >= divergenceX && xNum <= shortenedEndX;
+            });
+            
+            if (shortenedCurvePoints.length > 0 && originalCurvePoints.length > 0) {
+              const shortenedPoints = shortenedCurvePoints.map(pt => pt);
+              const originalPointsReversed = [...originalCurvePoints].reverse().map(pt => pt);
+              const polygonPoints = [
+                `${divergenceX},${divergenceY}`, // Start at divergence
+                ...shortenedPoints, // Follow shortened curve
+                `${shortenedEndX},${originalYAtShortenedEnd}`, // End of shortened curve, but at original curve Y
+                ...originalPointsReversed, // Follow original curve backwards
+                `${divergenceX},${divergenceY}` // Close back to start
+              ].join(" ");
+              
+              return (
+                <g>
+                  <polygon
+                    points={polygonPoints}
+                    fill="rgba(245, 158, 11, 0.15)"
+                    stroke="rgba(245, 158, 11, 0.3)"
+                    strokeWidth="2"
+                    strokeDasharray="4,4"
+                  />
+                </g>
+              );
+            }
+            
+            return null;
+          })()}
+
+          {/* Area gradient for current timeline (only if not shortened, or show both) */}
+          {points.length > 0 && !isShortened && (() => {
+            const svgHeight = 400;
+            const paddingTop = 40;
+            const paddingBottom = 60;
+            const chartHeight = svgHeight - paddingTop - paddingBottom;
+            const startY = paddingTop + chartHeight; // Bottom of chart (lowest price)
+            const firstPoint = points[0].split(',');
+            const lastPoint = points[points.length - 1].split(',');
+            const areaPoints = `50,${startY} ${points.join(" ")} ${lastPoint[0]},${startY}`;
+            
+            return (
+              <polygon
+                points={areaPoints}
+                fill="url(#areaGradient)"
+              />
+            );
+          })()}
+
+          {/* Current (shortened) timeline - solid line, rendered BEFORE markers */}
+          {points.length > 0 && (
+            <>
+              <polyline
+                points={points.join(" ")}
+                fill="none"
+                stroke="rgba(59, 130, 246, 0.4)"
+                strokeWidth="10"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <polyline
+                points={points.join(" ")}
+                fill="none"
+                stroke="rgb(59, 130, 246)"
+                strokeWidth="6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                filter="url(#glow)"
+                style={!isShortened ? {
+                  strokeDasharray: '2000',
+                  strokeDashoffset: '2000',
+                  animation: 'drawLine 2s ease-out forwards'
+                } : {}}
+              />
+            </>
+          )}
+
           {currentTime >= startTime && (
             <>
 
@@ -250,8 +593,8 @@ const PriceDecayChart = ({
                 const chartHeight = svgHeight - paddingTop - paddingBottom;
                 const paddingLeft = 50;
                 const chartWidth = svgWidth - paddingLeft - 50;
-                
-                const commitEndProgress = (commitEndTime - startTime) / timeRange;
+                const effectiveTimeRangeForX = isShortened ? originalTimeRange : timeRange;
+                const commitEndProgress = (commitEndTime - startTime) / effectiveTimeRangeForX;
                 const commitEndX = paddingLeft + (commitEndProgress * chartWidth);
                 const yPercent = priceRange > 0 ? ((commitEndPrice - endPrice) / priceRange) : 0;
                 const commitEndY = paddingTop + (chartHeight * (1 - yPercent));
@@ -343,8 +686,8 @@ const PriceDecayChart = ({
                 const chartHeight = svgHeight - paddingTop - paddingBottom;
                 const paddingLeft = 50;
                 const chartWidth = svgWidth - paddingLeft - 50;
-                
-                const revealEndProgress = (revealEndTime - startTime) / timeRange;
+                const effectiveTimeRangeForX = isShortened ? originalTimeRange : timeRange;
+                const revealEndProgress = (revealEndTime - startTime) / effectiveTimeRangeForX;
                 const revealEndX = paddingLeft + (revealEndProgress * chartWidth);
                 const yPercent = priceRange > 0 ? ((revealEndPrice - endPrice) / priceRange) : 0;
                 const revealEndY = paddingTop + (chartHeight * (1 - yPercent));
@@ -427,51 +770,77 @@ const PriceDecayChart = ({
                   </g>
                 );
               })()}
-            </>
-          )}
-          {points.length > 0 && (() => {
-            const svgHeight = 400;
-            const paddingTop = 40;
-            const paddingBottom = 60;
-            const chartHeight = svgHeight - paddingTop - paddingBottom;
-            const startY = paddingTop + chartHeight; // Bottom of chart (lowest price)
-            const endY = paddingTop; // Top of chart (highest price)
-            const firstPoint = points[0].split(',');
-            const lastPoint = points[points.length - 1].split(',');
-            const areaPoints = `50,${startY} ${points.join(" ")} ${lastPoint[0]},${startY}`;
-            
-            return (
-              <polygon
-                points={areaPoints}
-                fill="url(#areaGradient)"
-              />
-            );
-          })()}
 
-          {points.length > 0 && (
-            <>
-              <polyline
-                points={points.join(" ")}
-                fill="none"
-                stroke="rgba(59, 130, 246, 0.4)"
-                strokeWidth="10"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <polyline
-                points={points.join(" ")}
-                fill="none"
-                stroke="rgb(59, 130, 246)"
-                strokeWidth="6"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                filter="url(#glow)"
-                style={{
-                  strokeDasharray: '2000',
-                  strokeDashoffset: '2000',
-                  animation: 'drawLine 2s ease-out forwards'
-                }}
-              />
+              {/* Original Reveal End marker on dashed line (if shortened) */}
+              {isShortened && originalRevealEndTime && originalPoints.length > 0 && (() => {
+                const svgWidth = 1200;
+                const svgHeight = 400;
+                const paddingTop = 40;
+                const paddingBottom = 60;
+                const chartHeight = svgHeight - paddingTop - paddingBottom;
+                const paddingLeft = 50;
+                const chartWidth = svgWidth - paddingLeft - 50;
+                const originalRevealEndProgress = (originalRevealEndTime - startTime) / originalTimeRange;
+                const originalRevealEndX = paddingLeft + (originalRevealEndProgress * chartWidth);
+                const originalRevealEndPrice = startPrice - (priceRange * originalRevealEndProgress);
+                const yPercent = priceRange > 0 ? ((originalRevealEndPrice - endPrice) / priceRange) : 0;
+                const originalRevealEndY = paddingTop + (chartHeight * (1 - yPercent));
+                
+                return (
+                  <g>
+                    <line
+                      x1={originalRevealEndX}
+                      y1={paddingTop}
+                      x2={originalRevealEndX}
+                      y2={svgHeight - paddingBottom}
+                      stroke="rgba(148, 163, 184, 0.5)"
+                      strokeWidth="2"
+                      strokeDasharray="8,6"
+                      opacity="0.5"
+                    />
+                    <circle
+                      cx={originalRevealEndX}
+                      cy={originalRevealEndY}
+                      r="6"
+                      fill="rgba(148, 163, 184, 0.6)"
+                      stroke="rgba(255, 255, 255, 0.5)"
+                      strokeWidth="2"
+                    />
+                    <g>
+                      <rect
+                        x={originalRevealEndX - 50}
+                        y={svgHeight - paddingBottom - 40}
+                        width="100"
+                        height="24"
+                        rx="5"
+                        fill="rgba(15, 23, 42, 0.95)"
+                        stroke="rgba(148, 163, 184, 0.6)"
+                        strokeWidth="2"
+                      />
+                      <text
+                        x={originalRevealEndX}
+                        y={svgHeight - paddingBottom - 25}
+                        fill="rgba(148, 163, 184, 0.9)"
+                        fontSize="11"
+                        fontWeight="bold"
+                        textAnchor="middle"
+                      >
+                        {formatTime(originalRevealEndTime)}
+                      </text>
+                      <text
+                        x={originalRevealEndX}
+                        y={svgHeight - paddingBottom - 12}
+                        fill="rgba(148, 163, 184, 0.7)"
+                        fontSize="9"
+                        fontWeight="600"
+                        textAnchor="middle"
+                      >
+                        Original Reveal End
+                      </text>
+                    </g>
+                  </g>
+                );
+              })()}
             </>
           )}
 
@@ -484,8 +853,9 @@ const PriceDecayChart = ({
             const paddingLeft = 50;
             
             const price = startPrice - (priceRange * (percent / 100));
-            const yPercent = (100 - percent) / 100; // Invert: 0% -> 100%, 100% -> 0%
-            const y = paddingTop + (chartHeight * yPercent);
+            const yPercent = priceRange > 0 ? ((price - endPrice) / priceRange) : 0;
+        
+            const y = paddingTop + (chartHeight * (1 - yPercent));
             
             return (
               <g key={`y-label-${percent}`}>
@@ -532,8 +902,9 @@ const PriceDecayChart = ({
             const chartHeight = svgHeight - paddingTop - paddingBottom;
             const paddingLeft = 50;
             const chartWidth = svgWidth - paddingLeft - 50;
-            
-            const currentX = paddingLeft + (currentProgress * chartWidth);
+            const effectiveTimeRangeForX = isShortened ? originalTimeRange : timeRange;
+            const currentProgressForX = effectiveTimeRangeForX > 0 ? (currentTime - startTime) / effectiveTimeRangeForX : 0;
+            const currentX = paddingLeft + (currentProgressForX * chartWidth);
             const yPercent = priceRange > 0 ? ((currentPrice - endPrice) / priceRange) : 0;
             const currentY = paddingTop + (chartHeight * (1 - yPercent));
             
@@ -693,16 +1064,20 @@ const PriceDecayChart = ({
             const x = paddingLeft + (percent / 100 * chartWidth);
             let label = "";
             let phaseColor = "rgba(255,255,255,0.5)";
+            const commitEndPercent = ((commitEndTime - startTime) / timeRange * 100);
+            const revealEndPercent = ((revealEndTime - startTime) / timeRange * 100);
+            if (Math.abs(percent - commitEndPercent) < 5) {
+              return null;
+            }
+            if (Math.abs(percent - revealEndPercent) < 5) {
+              if (!isShortened) {
+                return null;
+              }
+            }
             
             if (percent === 0) {
               label = formatTime(startTime);
               phaseColor = "rgba(59, 130, 246, 0.8)";
-            } else if (Math.abs(percent - ((commitEndTime - startTime) / timeRange * 100)) < 5) {
-              label = formatTime(commitEndTime);
-              phaseColor = "rgba(59, 130, 246, 0.8)";
-            } else if (percent === 100) {
-              label = formatTime(revealEndTime);
-              phaseColor = "rgba(147, 51, 234, 0.8)";
             }
             
             if (label) {
@@ -754,7 +1129,7 @@ const PriceDecayChart = ({
           <div className="mb-2">
             <div className="mb-1 flex items-baseline justify-between">
               <span className="text-2xl font-bold text-white">
-                {formatEth(totalDepositCommitted)}
+                {formatEth(totalDepositsRevealed !== undefined ? totalDepositsRevealed : totalDepositCommitted)}
               </span>
               <span className="text-sm text-[rgba(255,255,255,0.6)]">
                 / {formatEth(softCap)} ETH
@@ -763,7 +1138,7 @@ const PriceDecayChart = ({
             <p className="text-xs text-[rgba(255,255,255,0.5)]">
               {softCapProgress >= 1 
                 ? "Soft cap successfully reached!" 
-                : `${formatEth(BigInt(Math.floor(Math.max(0, Number(softCap) - Number(totalDepositCommitted)))))} ETH remaining`
+                : `${formatEth(BigInt(Math.floor(Math.max(0, Number(softCap) - Number(totalDepositsRevealed !== undefined ? totalDepositsRevealed : totalDepositCommitted)))))} ETH remaining`
               }
             </p>
           </div>
@@ -867,6 +1242,14 @@ const PriceDecayChart = ({
             )}
           </div>
         </div>
+      </div>
+
+      {/* Disclaimer */}
+      <div className="mt-4 rounded-lg border border-[rgba(59,130,246,0.3)] bg-[rgba(59,130,246,0.05)] p-3">
+        <p className="text-xs text-[rgba(255,255,255,0.6)] leading-relaxed">
+          <strong className="text-[rgba(255,255,255,0.8)]">Note:</strong> This chart visualizes auction timing and urgency. 
+          Final price is determined by clearing logic, not by the curve.
+        </p>
       </div>
     </div>
   );

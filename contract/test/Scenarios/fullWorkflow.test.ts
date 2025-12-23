@@ -78,7 +78,7 @@ async function deployFullWorkflowFixture() {
     const commitDuration = 600n;
     const revealDuration = 600n;
     const demandCheckTime = startTime + 180n;
-    const priceTicks = [2n, 1n];
+    const priceTicks = [ethers.parseEther("2"), ethers.parseEther("1")];
 
     const whitelist = buildMerkleWhitelist([alice.address, bob.address, carol.address]);
 
@@ -194,9 +194,10 @@ describe("Scenario – STPP full lifecycle", function () {
         const commitBob = ethers.keccak256(abi.encode(["uint256", "uint256", "bytes32"], [1, qtyBob, nonceBob]));
         const commitCarol = ethers.keccak256(abi.encode(["uint256", "uint256", "bytes32"], [0, qtyCarol, nonceCarol]));
 
-        const depositAlice = qtyAlice * priceTicks[0];
-        const depositBob = qtyBob * priceTicks[0];
-        const depositCarol = qtyCarol * priceTicks[0];
+        // qtyAlice, qtyBob, qtyCarol are in wei, deposit = (qty * priceTicks[0]) / 1e18
+        const depositAlice = (qtyAlice * priceTicks[0]) / 10n**18n;
+        const depositBob = (qtyBob * priceTicks[0]) / 10n**18n;
+        const depositCarol = (qtyCarol * priceTicks[0]) / 10n**18n;
 
         await expect(
             auction.connect(alice).commit(commitAlice, whitelistProofs[alice.address.toLowerCase()], { value: depositAlice })
@@ -235,12 +236,16 @@ describe("Scenario – STPP full lifecycle", function () {
 
         // Finalize the Dutch auction once reveal window elapses.
         const finalizeTx = await manager.finalizeAuction(auctionAddress);
+        const tokensSold = qtyAlice + qtyBob; // both in wei
+        const lastPrice = priceTicks[priceTicks.length - 1];
+        // totalRaised = (tokensSold * clearingPrice) / 1e18
+        const expectedTotalRaised = (tokensSold * lastPrice) / 10n**18n;
         await expect(finalizeTx)
             .to.emit(auction, "AuctionFinalized")
-            .withArgs(true, priceTicks[priceTicks.length - 1], qtyAlice + qtyBob, (qtyAlice + qtyBob) * priceTicks[priceTicks.length - 1]);
+            .withArgs(true, lastPrice, tokensSold, expectedTotalRaised);
 
         expect(await auction.successful()).to.equal(true);
-        expect(await auction.tokensSold()).to.equal(qtyAlice + qtyBob);
+        expect(await auction.tokensSold()).to.equal(tokensSold);
 
         // Carol withdraws unrevealed commit minus penalty.
         // Unrevealed bidder recovers deposit minus configured penalty.

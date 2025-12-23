@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useMemo } from "react";
+import { ethers } from "ethers";
 
 const ControlButton = ({ label, onClick, disabled }) => (
   <button
@@ -31,10 +32,58 @@ const AuctionControls = ({
   onLaunchLbp,
   onFinalizeLbp,
   onUnwind,
+  onAccelerateAuction,
   lbpConfig,
   onLbpConfigChange,
   disabled,
+  auctionData,
+  currentTime,
 }) => {
+  const accelerateButtonState = useMemo(() => {
+    if (!auctionData || !currentTime || !auctionAddress) {
+      return { enabled: false, tooltip: "Auction data not available" };
+    }
+
+    const demandCheckTime = auctionData.demandCheckTime || 0;
+    const commitEndTime = auctionData.commitEndTime || 0;
+    const finalized = auctionData.finalized || false;
+
+    if (finalized) {
+      return { enabled: false, tooltip: "Auction is already finalized" };
+    }
+
+    if (currentTime < demandCheckTime) {
+      const timeUntilCheck = demandCheckTime - currentTime;
+      const hours = Math.floor(timeUntilCheck / 3600);
+      const minutes = Math.floor((timeUntilCheck % 3600) / 60);
+      return {
+        enabled: false,
+        tooltip: `Acceleration can only be triggered after the demand check time (${hours}h ${minutes}m remaining)`,
+      };
+    }
+
+    if (currentTime >= commitEndTime) {
+      return { enabled: false, tooltip: "Commit phase has ended. Cannot accelerate auction." };
+    }
+
+    return { enabled: true, tooltip: null };
+  }, [auctionData, currentTime, auctionAddress]);
+
+  const demandStatus = useMemo(() => {
+    if (!auctionData) return null;
+    const totalDepositCommitted = auctionData.totalDepositCommitted || 0n;
+    const thresholdLow = auctionData.thresholdLow || 0n;
+    const isLowDemand = thresholdLow > 0n ? totalDepositCommitted < thresholdLow : false;
+    
+    return {
+      totalDepositCommitted,
+      thresholdLow,
+      isLowDemand,
+      formattedDeposit: ethers.formatEther(totalDepositCommitted),
+      formattedThreshold: ethers.formatEther(thresholdLow), // Format from wei to ETH
+    };
+  }, [auctionData]);
+
   if (!isOwner) {
     return (
       <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900/70 to-slate-800/50 p-6 text-center text-sm text-white/80 shadow-[0_4px_12px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-[10px]">
@@ -58,6 +107,62 @@ const AuctionControls = ({
           <ControlButton label="Unwind LBP" onClick={onUnwind} disabled={disabled} />
         </div>
       </div>
+
+      {/* Accelerate Auction Section */}
+      {isOwner && auctionAddress && auctionData && (
+        <div className="rounded-2xl border border-amber-500/20 bg-gradient-to-br from-amber-900/20 to-amber-800/10 p-6 shadow-[0_4px_12px_rgba(245,158,11,0.1),inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-[10px]">
+          <div className="mb-4">
+            <p className="mb-2 flex items-center gap-2 text-base font-semibold text-amber-200 before:content-['⚡'] before:text-lg">
+              Accelerate Auction (Low Demand)
+            </p>
+            <p className="text-xs text-white/60 leading-relaxed">
+              This manual action triggers the same dynamic reserve adjustment used by automated keepers. 
+              The auction will only shorten if low participation is detected on-chain.
+            </p>
+          </div>
+
+          {/* Demand Status Indicator */}
+          {demandStatus && demandStatus.thresholdLow > 0n && (
+            <div className="mb-4 rounded-xl border border-white/10 bg-slate-900/50 p-4">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-white/70">Demand Status</p>
+              <div className="flex flex-col gap-2 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-white/80">Total Deposits:</span>
+                  <span className="font-mono font-semibold text-white">{demandStatus.formattedDeposit} ETH</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-white/80">Threshold Low:</span>
+                  <span className="font-mono font-semibold text-white">{demandStatus.formattedThreshold} ETH</span>
+                </div>
+                <div className="mt-2 flex items-center justify-between rounded-lg border px-3 py-2 border-white/10 bg-slate-800/50">
+                  <span className="text-white/80">Status:</span>
+                  <span className={`font-semibold ${
+                    demandStatus.isLowDemand 
+                      ? "text-amber-400" 
+                      : "text-green-400"
+                  }`}>
+                    {demandStatus.isLowDemand ? "Low demand detected" : "Demand above threshold"}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onAccelerateAuction}
+              disabled={disabled || !accelerateButtonState.enabled}
+              title={accelerateButtonState.tooltip || undefined}
+              className="flex-1 rounded-lg border border-amber-500/40 bg-gradient-to-r from-amber-600/30 to-amber-700/20 px-5 py-2.5 text-sm font-semibold text-amber-200 transition-all hover:border-amber-500/60 hover:from-amber-600/40 hover:to-amber-700/30 active:from-amber-600/25 active:to-amber-700/15 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-amber-500/40 disabled:hover:from-amber-600/30 disabled:hover:to-amber-700/20"
+            >
+              Accelerate Auction (Low Demand)
+            </button>
+          </div>
+          {accelerateButtonState.tooltip && (
+            <p className="mt-2 text-xs text-amber-300/70">{accelerateButtonState.tooltip}</p>
+          )}
+        </div>
+      )}
 
       <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/80 to-slate-800/60 p-6 shadow-[0_4px_12px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-[10px]">
         <p className="mb-4 mt-0 flex items-center gap-2 text-sm font-semibold text-white before:content-['⚙️'] before:text-base">LBP config override</p>

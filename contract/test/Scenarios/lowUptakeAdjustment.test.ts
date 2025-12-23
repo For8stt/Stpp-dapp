@@ -69,7 +69,7 @@ async function deployLowUptakeFixture() {
     const revealDuration = 600n;
     const demandCheckTime = startTime + 240n;
 
-    const priceTicks = [4n, 3n, 2n];
+    const priceTicks = [ethers.parseEther("4"), ethers.parseEther("3"), ethers.parseEther("2")];
     const whitelist = buildMerkleWhitelist([alice, bob, carol, dave, erin].map((s) => s.address));
 
     const auctionInput = {
@@ -169,7 +169,8 @@ describe("Scenario – Low Uptake Adjustment", function () {
             const commitHash = ethers.keccak256(abi.encode(["uint256", "uint256", "bytes32"], [entry.priceIndex, entry.qty, nonce]));
             const commitIndex = commitCounts.get(entry.signer.address) ?? 0;
             commitCounts.set(entry.signer.address, commitIndex + 1);
-            const deposit = entry.qty * basePrice;
+            // entry.qty is in wei, deposit = (qty * basePrice) / 1e18
+            const deposit = (entry.qty * basePrice) / 10n**18n;
             await auction
                 .connect(entry.signer)
                 .commit(commitHash, whitelistProofs[entry.signer.address.toLowerCase()], { value: deposit });
@@ -180,8 +181,14 @@ describe("Scenario – Low Uptake Adjustment", function () {
             await commitBid(entry);
         }
 
+        // Calculate expected total deposit: sum of (qty * basePrice) / 1e18 for each bid
+        const expectedDeposit = earlyBids.reduce((sum, entry) => {
+            const deposit = (entry.qty * basePrice) / 10n**18n;
+            return sum + deposit;
+        }, 0n);
+
         const initialCommitted = await auction.totalDepositCommitted();
-        expect(initialCommitted).to.equal(ethers.parseEther("48"));
+        expect(initialCommitted).to.equal(expectedDeposit);
         expect(initialCommitted).to.be.lt(await auction.softCap());
 
         // --- Phase 2: Owner triggers reserve adjustment ---
@@ -208,8 +215,15 @@ describe("Scenario – Low Uptake Adjustment", function () {
             await commitBid(entry);
         }
 
+        // Calculate expected total deposit: sum of all bids
+        const allBids = [...earlyBids, ...lateBids];
+        const expectedTotalDeposit = allBids.reduce((sum, entry) => {
+            const deposit = (entry.qty * basePrice) / 10n**18n;
+            return sum + deposit;
+        }, 0n);
+
         const committedAfterAdjustment = await auction.totalDepositCommitted();
-        expect(committedAfterAdjustment).to.equal(ethers.parseEther("110"));
+        expect(committedAfterAdjustment).to.equal(expectedTotalDeposit);
         expect(committedAfterAdjustment).to.be.gte(await auction.softCap());
 
         // --- Phase 4: Reveal bids for all participants ---

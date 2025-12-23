@@ -12,14 +12,14 @@ import {
 
 const SUCCESS_OVERRIDES = {
     softCap: ethers.parseEther("0.02"),
-    perAddressCap: 200n,
-    tokensForSale: 120n
+    perAddressCap: ethers.parseUnits("200", 18),
+    tokensForSale: ethers.parseUnits("120", 18)
 };
 
 const FAILURE_OVERRIDES = {
     softCap: ethers.parseEther("5"),
-    perAddressCap: 200n,
-    tokensForSale: 120n
+    perAddressCap: ethers.parseUnits("200", 18),
+    tokensForSale: ethers.parseUnits("120", 18)
 };
 
 async function advanceToCommitStart(ctx: FixtureContext) {
@@ -58,11 +58,14 @@ async function commitBid(
     const bidder = await signer.getAddress();
     const nextIndex = Number(await ctx.auction.commitsCount(bidder));
     const usedNonce = nonce ?? randomNonce();
-    const deposit = qty * ctx.priceTicks[0];
+    // Convert qty to wei if it's a whole number
+    const qtyWei = qty < 10n**18n ? qty * 10n**18n : qty;
+    // deposit in wei (ETH) = (qtyWei * priceTicks[0]) / 1e18
+    const deposit = (qtyWei * ctx.priceTicks[0]) / 10n**18n;
 
-    await ctx.auction.connect(signer).commit(buildCommitHash(priceTickIndex, qty, usedNonce), [], { value: deposit });
+    await ctx.auction.connect(signer).commit(buildCommitHash(priceTickIndex, qtyWei, usedNonce), [], { value: deposit });
 
-    return { nonce: usedNonce, deposit, commitIndex: nextIndex };
+    return { nonce: usedNonce, deposit, commitIndex: nextIndex, qty: qtyWei };
 }
 
 async function revealBid(
@@ -96,10 +99,10 @@ describe("DutchAuction – 13_refund_and_withdrawals", function () {
 
             await advanceToCommitStart(ctx);
             const qty = 50n;
-            const { nonce, deposit } = await commitBid(ctx, alice, { priceTickIndex: 0n, qty });
+            const { nonce, deposit, qty: qtyWei } = await commitBid(ctx, alice, { priceTickIndex: 0n, qty });
 
             await time.increaseTo(ctx.commitEndTime + 1n);
-            await revealBid(ctx, alice, { priceTickIndex: 0n, qty, nonce, commitIndex: 0 });
+            await revealBid(ctx, alice, { priceTickIndex: 0n, qty: qtyWei, nonce, commitIndex: 0 });
 
             await finalizeAuction(ctx);
             expect(await auction.successful()).to.equal(false);
@@ -121,7 +124,7 @@ describe("DutchAuction – 13_refund_and_withdrawals", function () {
             const unrevealed = await commitBid(ctx, alice, { priceTickIndex: 0n, qty: 20n });
 
             await time.increaseTo(ctx.commitEndTime + 1n);
-            await revealBid(ctx, alice, { priceTickIndex: 0n, qty: 30n, nonce: revealed.nonce, commitIndex: revealed.commitIndex });
+            await revealBid(ctx, alice, { priceTickIndex: 0n, qty: revealed.qty, nonce: revealed.nonce, commitIndex: revealed.commitIndex });
 
             await finalizeAuction(ctx);
 
@@ -143,7 +146,7 @@ describe("DutchAuction – 13_refund_and_withdrawals", function () {
             await time.increaseTo(ctx.commitEndTime + 1n);
             await revealBid(ctx, alice, {
                 priceTickIndex: 0n,
-                qty: 30n,
+                qty: revealed.qty,
                 nonce: revealed.nonce,
                 commitIndex: revealed.commitIndex
             });
@@ -160,9 +163,9 @@ describe("DutchAuction – 13_refund_and_withdrawals", function () {
             const { auction, alice } = ctx;
 
             await advanceToCommitStart(ctx);
-            const { nonce } = await commitBid(ctx, alice, { priceTickIndex: 0n, qty: 10n });
+            const { nonce, qty: qtyWei } = await commitBid(ctx, alice, { priceTickIndex: 0n, qty: 10n });
             await time.increaseTo(ctx.commitEndTime + 1n);
-            await revealBid(ctx, alice, { priceTickIndex: 0n, qty: 10n, nonce, commitIndex: 0 });
+            await revealBid(ctx, alice, { priceTickIndex: 0n, qty: qtyWei, nonce, commitIndex: 0 });
 
             await expect(auction.connect(alice).refundUnsuccessful()).to.be.revertedWithCustomError(auction, "AuctionNotFinalized");
         });
@@ -173,9 +176,9 @@ describe("DutchAuction – 13_refund_and_withdrawals", function () {
 
             await advanceToCommitStart(ctx);
             const qty = 80n;
-            const { nonce } = await commitBid(ctx, alice, { priceTickIndex: 2n, qty });
+            const { nonce, qty: qtyWei } = await commitBid(ctx, alice, { priceTickIndex: 2n, qty });
             await time.increaseTo(ctx.commitEndTime + 1n);
-            await revealBid(ctx, alice, { priceTickIndex: 2n, qty, nonce, commitIndex: 0 });
+            await revealBid(ctx, alice, { priceTickIndex: 2n, qty: qtyWei, nonce, commitIndex: 0 });
 
             await finalizeAuction(ctx);
             expect(await auction.successful()).to.equal(true);
@@ -188,9 +191,9 @@ describe("DutchAuction – 13_refund_and_withdrawals", function () {
             const { auction, alice } = ctx;
 
             await advanceToCommitStart(ctx);
-            const { nonce } = await commitBid(ctx, alice, { priceTickIndex: 0n, qty: 25n });
+            const { nonce, qty: qtyWei } = await commitBid(ctx, alice, { priceTickIndex: 0n, qty: 25n });
             await time.increaseTo(ctx.commitEndTime + 1n);
-            await revealBid(ctx, alice, { priceTickIndex: 0n, qty: 25n, nonce, commitIndex: 0 });
+            await revealBid(ctx, alice, { priceTickIndex: 0n, qty: qtyWei, nonce, commitIndex: 0 });
 
             await finalizeAuction(ctx);
             await auction.connect(alice).refundUnsuccessful();
@@ -236,7 +239,7 @@ describe("DutchAuction – 13_refund_and_withdrawals", function () {
             await time.increaseTo(ctx.commitEndTime + 1n);
             await revealBid(ctx, alice, {
                 priceTickIndex: 0n,
-                qty: 60n,
+                qty: winning.qty,
                 nonce: winning.nonce,
                 commitIndex: winning.commitIndex
             });
@@ -265,7 +268,7 @@ describe("DutchAuction – 13_refund_and_withdrawals", function () {
             await time.increaseTo(ctx.commitEndTime + 1n);
             await revealBid(ctx, alice, {
                 priceTickIndex: 0n,
-                qty: 50n,
+                qty: winning.qty,
                 nonce: winning.nonce,
                 commitIndex: winning.commitIndex
             });
@@ -292,7 +295,7 @@ describe("DutchAuction – 13_refund_and_withdrawals", function () {
             await time.increaseTo(ctx.commitEndTime + 1n);
             await revealBid(ctx, alice, {
                 priceTickIndex: 0n,
-                qty: 45n,
+                qty: revealed.qty,
                 nonce: revealed.nonce,
                 commitIndex: revealed.commitIndex
             });
@@ -342,9 +345,9 @@ describe("DutchAuction – 13_refund_and_withdrawals", function () {
 
             await advanceToCommitStart(ctx);
             const qty = 80n;
-            const { nonce } = await commitBid(ctx, alice, { priceTickIndex: 2n, qty });
+            const { nonce, qty: qtyWei } = await commitBid(ctx, alice, { priceTickIndex: 2n, qty });
             await time.increaseTo(ctx.commitEndTime + 1n);
-            await revealBid(ctx, alice, { priceTickIndex: 2n, qty, nonce, commitIndex: 0 });
+            await revealBid(ctx, alice, { priceTickIndex: 2n, qty: qtyWei, nonce, commitIndex: 0 });
 
             await finalizeAuction(ctx);
             await auction.connect(deployer).transferOwnership(await deployer.getAddress());
@@ -407,9 +410,9 @@ describe("DutchAuction – 13_refund_and_withdrawals", function () {
             );
 
             await advanceToCommitStart(ctx);
-            const { nonce } = await commitBid(ctx, alice, { priceTickIndex: 0n, qty: 40n });
+            const { nonce, qty: qtyWei } = await commitBid(ctx, alice, { priceTickIndex: 0n, qty: 40n });
             await time.increaseTo(ctx.commitEndTime + 1n);
-            await revealBid(ctx, alice, { priceTickIndex: 0n, qty: 40n, nonce, commitIndex: 0 });
+            await revealBid(ctx, alice, { priceTickIndex: 0n, qty: qtyWei, nonce, commitIndex: 0 });
 
             await finalizeAuction(ctx);
 
@@ -424,9 +427,9 @@ describe("DutchAuction – 13_refund_and_withdrawals", function () {
             } = failureCtx;
 
             await advanceToCommitStart(failureCtx);
-            const failNonce = (await commitBid(failureCtx, failedAlice, { priceTickIndex: 0n, qty: 10n })).nonce;
+            const failCommit = await commitBid(failureCtx, failedAlice, { priceTickIndex: 0n, qty: 10n });
             await time.increaseTo(failureCtx.commitEndTime + 1n);
-            await revealBid(failureCtx, failedAlice, { priceTickIndex: 0n, qty: 10n, nonce: failNonce, commitIndex: 0 });
+            await revealBid(failureCtx, failedAlice, { priceTickIndex: 0n, qty: failCommit.qty, nonce: failCommit.nonce, commitIndex: 0 });
             await finalizeAuction(failureCtx);
 
             await expect(

@@ -14,6 +14,11 @@ const provider = ethers.provider;
 
 const toBytes32 = (value: bigint) => ethers.zeroPadValue(ethers.toBeHex(value), 32);
 
+// Helper to convert whole number to wei
+function toWei(qty: bigint): bigint {
+    return qty * 10n**18n;
+}
+
 let priceTicksSlotCache: bigint | null = null;
 let perAddressCapSlotCache: bigint | null = null;
 
@@ -89,19 +94,20 @@ describe("DutchAuction – 04_reveal", function () {
 
         await time.increaseTo(commitEndTime + 1n);
 
-        await expect(auction.connect(alice).reveal(0, 80n, bid.nonce, 0))
+        // bid.qty is now in wei, use it directly
+        await expect(auction.connect(alice).reveal(0, bid.qty, bid.nonce, 0))
             .to.emit(auction, "BidRevealed")
-            .withArgs(await alice.getAddress(), 0, 0, 80n, ctx.config.earlyBonusPct);
+            .withArgs(await alice.getAddress(), 0, 0, bid.qty, ctx.config.earlyBonusPct);
 
         const commitRecord = await auction.commits(await alice.getAddress(), 0);
         expect(commitRecord.revealed).to.equal(true);
         expect(commitRecord.withdrawn).to.equal(false);
 
-        expect(await auction.revealedQty(await alice.getAddress())).to.equal(80n);
+        expect(await auction.revealedQty(await alice.getAddress())).to.equal(bid.qty);
         expect(await auction.revealedDeposit(await alice.getAddress())).to.equal(bid.deposit);
         expect(await auction.totalDepositsRevealed()).to.equal(bid.deposit);
-        expect(await auction.totalQtyRevealed()).to.equal(80n);
-        expect(await auction.priceBucketTotals(0)).to.equal(80n);
+        expect(await auction.totalQtyRevealed()).to.equal(bid.qty);
+        expect(await auction.priceBucketTotals(0)).to.equal(bid.qty);
 
         const revealedBid = await auction.revealedBids(await alice.getAddress(), 0);
         expect(revealedBid.bonusPct).to.equal(ctx.config.earlyBonusPct);
@@ -118,7 +124,7 @@ describe("DutchAuction – 04_reveal", function () {
         const auction = await auctionFactory.deploy(await token.getAddress(), manager.address);
         await auction.waitForDeployment();
 
-        await expect(auction.connect(manager).reveal(0, 1n, ethers.ZeroHash, 0)).to.be.revertedWithCustomError(
+        await expect(auction.connect(manager).reveal(0, toWei(1n), ethers.ZeroHash, 0)).to.be.revertedWithCustomError(
             auction,
             "AuctionNotInitialized"
         );
@@ -131,7 +137,7 @@ describe("DutchAuction – 04_reveal", function () {
         await time.increaseTo(startTime + 1n);
         const bid = await commitBid(ctx, { signer: alice, priceTickIndex: 0n, qty: 50n });
 
-        await expect(auction.connect(alice).reveal(0, 50n, bid.nonce, 0)).to.be.revertedWithCustomError(
+        await expect(auction.connect(alice).reveal(0, bid.qty, bid.nonce, 0)).to.be.revertedWithCustomError(
             auction,
             "RevealPhaseClosed"
         );
@@ -147,7 +153,7 @@ describe("DutchAuction – 04_reveal", function () {
         await time.increaseTo(commitEndTime + 1n);
         await time.increaseTo(revealEndTime + 2n);
 
-        await expect(auction.connect(alice).reveal(0, 50n, bid.nonce, 0)).to.be.revertedWithCustomError(
+        await expect(auction.connect(alice).reveal(0, bid.qty, bid.nonce, 0)).to.be.revertedWithCustomError(
             auction,
             "RevealPhaseClosed"
         );
@@ -161,7 +167,7 @@ describe("DutchAuction – 04_reveal", function () {
         const bid = await commitBid(ctx, { signer: alice, priceTickIndex: 0n, qty: 10n });
         await time.increaseTo(commitEndTime + 1n);
 
-        await expect(auction.connect(alice).reveal(0, 10n, bid.nonce, 1)).to.be.revertedWithPanic(0x32);
+        await expect(auction.connect(alice).reveal(0, bid.qty, bid.nonce, 1)).to.be.revertedWithPanic(0x32);
     });
 
     it("should revert if commit already revealed", async function () {
@@ -172,8 +178,8 @@ describe("DutchAuction – 04_reveal", function () {
         const bid = await commitBid(ctx, { signer: alice, priceTickIndex: 0n, qty: 20n });
         await time.increaseTo(commitEndTime + 1n);
 
-        await auction.connect(alice).reveal(0, 20n, bid.nonce, 0);
-        await expect(auction.connect(alice).reveal(0, 20n, bid.nonce, 0)).to.be.revertedWithCustomError(
+        await auction.connect(alice).reveal(0, bid.qty, bid.nonce, 0);
+        await expect(auction.connect(alice).reveal(0, bid.qty, bid.nonce, 0)).to.be.revertedWithCustomError(
             auction,
             "AlreadyRevealed"
         );
@@ -188,7 +194,7 @@ describe("DutchAuction – 04_reveal", function () {
         await time.increaseTo(commitEndTime + 1n);
 
         const invalidIndex = await auction.priceTicksLength();
-        await expect(auction.connect(alice).reveal(invalidIndex, 20n, bid.nonce, 0)).to.be.revertedWithCustomError(
+        await expect(auction.connect(alice).reveal(invalidIndex, bid.qty, bid.nonce, 0)).to.be.revertedWithCustomError(
             auction,
             "InvalidCommit"
         );
@@ -216,7 +222,9 @@ describe("DutchAuction – 04_reveal", function () {
         const bid = await commitBid(ctx, { signer: alice, priceTickIndex: 0n, qty: 10n });
         await time.increaseTo(commitEndTime + 1n);
 
-        await expect(auction.connect(alice).reveal(0, 10n, randomNonce(), 0)).to.be.revertedWithCustomError(
+        // Use wrong qty (different wei value) to trigger hash mismatch
+        const wrongQtyWei = toWei(20n); // Different from bid.qty
+        await expect(auction.connect(alice).reveal(0, wrongQtyWei, randomNonce(), 0)).to.be.revertedWithCustomError(
             auction,
             "InvalidCommit"
         );
@@ -230,12 +238,13 @@ describe("DutchAuction – 04_reveal", function () {
         const qty = 50n;
         const bid = await commitBid(ctx, { signer: alice, priceTickIndex: 0n, qty });
 
-        const reducedCap = qty - 1n;
+        // perAddressCap must be in wei
+        const reducedCap = bid.qty - toWei(1n);
         await setPerAddressCap(auction, reducedCap);
 
         await time.increaseTo(commitEndTime + 1n);
 
-        await expect(auction.connect(alice).reveal(0, qty, bid.nonce, 0)).to.be.revertedWithCustomError(
+        await expect(auction.connect(alice).reveal(0, bid.qty, bid.nonce, 0)).to.be.revertedWithCustomError(
             auction,
             "CapExceeded"
         );
@@ -254,7 +263,7 @@ describe("DutchAuction – 04_reveal", function () {
 
         await time.increaseTo(commitEndTime + 1n);
 
-        await expect(auction.connect(alice).reveal(0, qty, bid.nonce, 0)).to.be.revertedWithCustomError(
+        await expect(auction.connect(alice).reveal(0, bid.qty, bid.nonce, 0)).to.be.revertedWithCustomError(
             auction,
             "DepositMismatch"
         );
@@ -269,7 +278,7 @@ describe("DutchAuction – 04_reveal", function () {
         const bid = await commitBid(ctx, { signer: alice, priceTickIndex: 0n, qty });
 
         await time.increaseTo(commitEndTime + 1n);
-        await auction.connect(alice).reveal(0, qty, bid.nonce, 0);
+        await auction.connect(alice).reveal(0, bid.qty, bid.nonce, 0);
 
         const revealed = await auction.revealedBids(await alice.getAddress(), 0);
         expect(revealed.bonusPct).to.equal(config.earlyBonusPct);
@@ -277,9 +286,9 @@ describe("DutchAuction – 04_reveal", function () {
 
     it("should prorate bonus when reserve insufficient", async function () {
         const overrides = {
-            bonusReserve: 3n,
-            tokensForSale: 100n,
-            perAddressCap: 100n
+            bonusReserve: ethers.parseUnits("3", 18),
+            tokensForSale: ethers.parseUnits("100", 18),
+            perAddressCap: ethers.parseUnits("100", 18)
         };
         const ctx = await loadFixture(fixtureWithOverrides(overrides));
         await time.increaseTo(ctx.startTime + 1n);
@@ -289,9 +298,10 @@ describe("DutchAuction – 04_reveal", function () {
         const bid = await commitBid(ctx, { signer: alice, priceTickIndex: 0n, qty });
 
         await time.increaseTo(commitEndTime + 1n);
-        await auction.connect(alice).reveal(0, qty, bid.nonce, 0);
+        await auction.connect(alice).reveal(0, bid.qty, bid.nonce, 0);
 
-        const expectedBonusPct = (overrides.bonusReserve * BPS_DENOMINATOR) / qty;
+        // bonusReserve is in wei, qty is in wei, so calculation is correct
+        const expectedBonusPct = (overrides.bonusReserve * BPS_DENOMINATOR) / bid.qty;
         const revealed = await auction.revealedBids(await alice.getAddress(), 0);
         expect(revealed.bonusPct).to.equal(expectedBonusPct);
     });
@@ -299,9 +309,8 @@ describe("DutchAuction – 04_reveal", function () {
     it("should set bonusPct to zero when reserve depleted", async function () {
         const overrides = {
             bonusReserve: 0n,
-            bonusReserveRemaining: 0n,
-            tokensForSale: 100n,
-            perAddressCap: 100n
+            tokensForSale: ethers.parseUnits("100", 18),
+            perAddressCap: ethers.parseUnits("100", 18)
         };
         const ctx = await loadFixture(fixtureWithOverrides(overrides));
         await time.increaseTo(ctx.startTime + 1n);
@@ -311,7 +320,7 @@ describe("DutchAuction – 04_reveal", function () {
         const bid = await commitBid(ctx, { signer: alice, priceTickIndex: 0n, qty });
 
         await time.increaseTo(commitEndTime + 1n);
-        await auction.connect(alice).reveal(0, qty, bid.nonce, 0);
+        await auction.connect(alice).reveal(0, bid.qty, bid.nonce, 0);
 
         const revealed = await auction.revealedBids(await alice.getAddress(), 0);
         expect(revealed.bonusPct).to.equal(0n);

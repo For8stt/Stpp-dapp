@@ -44,7 +44,9 @@ library PriceTickLib {
                 data.clearingTickIndex = len - 1;
                 data.clearingPrice = priceTicks[len - 1];
             }
-            data.totalRaised = data.tokensSold * data.clearingPrice;
+            // tokensSold is in wei, clearingPrice is in wei (ETH per token)
+            // totalRaised in wei (ETH) = (tokensSold * clearingPrice) / 1e18
+            data.totalRaised = (data.tokensSold * data.clearingPrice) / 1e18;
             return data;
         }
 
@@ -55,6 +57,8 @@ library PriceTickLib {
         uint256 remaining = tokensForSale - data.filledAboveClearing;
         data.proRataNumerator = remaining;
         data.proRataDenominator = data.totalAtClearingTick;
-        data.totalRaised = data.tokensSold * data.clearingPrice;
+        // tokensSold is in wei, clearingPrice is in wei (ETH per token)
+        // totalRaised in wei (ETH) = (tokensSold * clearingPrice) / 1e18
+        data.totalRaised = (data.tokensSold * data.clearingPrice) / 1e18;
     }
 }

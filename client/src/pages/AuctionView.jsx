@@ -13,6 +13,10 @@ import RevealForm from "../components/auction/RevealForm";
 import PriceBucketPanel from "../components/auction/PriceBucketPanel";
 import AllocationPanel from "../components/auction/AllocationPanel";
 import FinalizedPanel from "../components/auction/FinalizedPanel";
+import FinalAllocationPanel from "../components/auction/FinalAllocationPanel";
+import ClaimPanel from "../components/auction/ClaimPanel";
+import FailedAuctionRefundPanel from "../components/auction/FailedAuctionRefundPanel";
+import UnrevealedCommitsPanel from "../components/auction/UnrevealedCommitsPanel";
 import EventsPanel from "../components/auction/EventsPanel";
 import DeveloperTimeControls from "../components/common/DeveloperTimeControls";
 
@@ -33,6 +37,7 @@ import { ensureProvider, setTargetChainIdHex } from "../services/web3/provider";
 import { generateCommitHash, parseMerkleProof, calculateDeposit } from "../utils/commitUtils";
 import { REFRESH_INTERVAL_MS, PHASES, DEFAULT_LBP_CONFIG } from "../constants/auction";
 import { deepEqual } from "../utils/objectUtils";
+import { handleTxError } from "../utils/txErrorHandler";
 
 
 const AuctionView = () => {
@@ -53,7 +58,7 @@ const AuctionView = () => {
     loading: auctionDataLoading,
     error: auctionDataError,
     refetch: refetchAuctionData,
-  } = useAuctionData(auctionContract);
+  } = useAuctionData(auctionContract, managerContract, auctionAddress);
 
   const prevAuctionDataRef = useRef(null);
   const auctionData = useMemo(() => {
@@ -237,7 +242,13 @@ const AuctionView = () => {
   const handleCommit = useCallback(async () => {
     if (!auctionContract || !auctionData) return;
 
-    const qty = BigInt(commitForm.quantity || "0");
+    let qty;
+    if (typeof commitForm.quantity === "string") {
+      qty = ethers.parseUnits(commitForm.quantity, 18);
+    } else {
+      qty = BigInt(commitForm.quantity || "0");
+    }
+    
     if (qty <= 0n) {
       throw new Error("Quantity must be greater than zero");
     }
@@ -247,7 +258,7 @@ const AuctionView = () => {
     }
 
     const referencePrice = auctionData.priceTicks[0];
-    const depositValue = calculateDeposit(commitForm.quantity, referencePrice);
+    const depositValue = calculateDeposit(commitForm.quantity, referencePrice, 18);
 
     if (depositValue === 0n) {
       throw new Error("Unable to compute deposit. Check price ticks and quantity.");
@@ -260,7 +271,7 @@ const AuctionView = () => {
           : ethers.id(commitForm.nonce))
       : ethers.ZeroHash;
 
-    const commitHash = generateCommitHash(priceTickIndex, qty, nonce);
+    const commitHash = generateCommitHash(priceTickIndex, commitForm.quantity, nonce, 18);
     if (!commitHash) {
       throw new Error("Failed to generate commit hash");
     }
@@ -285,9 +296,18 @@ const AuctionView = () => {
   }, [auctionContract, auctionData, commitForm, tx, handleRefresh]);
 
   const handleReveal = useCallback(async () => {
-    if (!auctionContract) return;
+    if (!auctionContract || !auctionData) return;
 
-    const qty = BigInt(revealForm.quantity || "0");
+    let qty;
+    if (typeof revealForm.quantity === "string") {
+      qty = ethers.parseUnits(revealForm.quantity, 18);
+    } else if (typeof revealForm.quantity === "number") {
+      // Convert number to string first to handle decimals
+      qty = ethers.parseUnits(revealForm.quantity.toString(), 18);
+    } else {
+      qty = BigInt(revealForm.quantity || "0");
+    }
+    
     if (qty <= 0n) {
       throw new Error("Quantity must be greater than zero");
     }
@@ -400,13 +420,91 @@ const AuctionView = () => {
   }, [managerContract, auctionAddress, currentTime, tx, refetchAuctionData, refetchEvents]);
 
   const handleDemandCheck = useCallback(async () => {
-    if (!managerContract || !auctionAddress) return;
+    if (!managerContract || !auctionAddress || !auctionContract || !auctionData) {
+      handleTxError(new Error("Missing required contracts or data"));
+      return;
+    }
+
+    try {
+      const upkeepControllerAddr = await managerContract.upkeepController();
+      if (!upkeepControllerAddr || upkeepControllerAddr === ethers.ZeroAddress) {
+        handleTxError(new Error("UpkeepController not configured"));
+        return;
+      }
+
+      const allAbis = await import("../abi/allAbis.json");
+      const { ensureProvider } = await import("../services/web3/provider");
+      const provider = ensureProvider();
+      const { Contract } = await import("ethers");
+      const upkeepControllerAbi = allAbis.UpkeepController || [];
+      if (upkeepControllerAbi.length === 0) {
+        handleTxError(new Error("UpkeepController ABI not found"));
+        return;
+      }
+
+      const upkeepController = new Contract(upkeepControllerAddr, upkeepControllerAbi, provider);
+      const isRegistered = await upkeepController.isRegistered(auctionAddress);
+      if (!isRegistered) {
+        handleTxError(new Error("Auction is not registered in UpkeepController. Please register it first."));
+        return;
+      }
+
+      const alreadyTriggered = await upkeepController.demandCheckTriggered(auctionAddress);
+      if (alreadyTriggered) {
+        handleTxError(new Error("Demand check has already been triggered for this auction"));
+        return;
+      }
+
+      const demandCheckTime = await upkeepController.demandCheckTime(auctionAddress);
+      if (demandCheckTime === 0n) {
+        handleTxError(new Error("Demand check time is not set for this auction"));
+        return;
+      }
+
+      const currentTimeBigInt = BigInt(currentTime);
+      if (currentTimeBigInt < demandCheckTime) {
+        const timeUntil = demandCheckTime - currentTimeBigInt;
+        const timeUntilNumber = Number(timeUntil);
+        const hours = Math.floor(timeUntilNumber / 3600);
+        const minutes = Math.floor((timeUntilNumber % 3600) / 60);
+        handleTxError(new Error(`Demand check time has not been reached yet. Time remaining: ${hours}h ${minutes}m`));
+        return;
+      }
+
+      const commitEndTimeBigInt = BigInt(auctionData.commitEndTime);
+      if (currentTimeBigInt >= commitEndTimeBigInt) {
+        handleTxError(new Error("Commit phase has already ended. Cannot trigger demand check."));
+        return;
+      }
+
+      if (auctionData.dynamicAdjustmentCount > 0) {
+        handleTxError(new Error("Auction has already been adjusted. Dynamic reserve adjustment can only be triggered once."));
+        return;
+      }
+
+      const totalDepositCommitted = auctionData.totalDepositCommitted || 0n;
+      const thresholdLow = auctionData.thresholdLow || 0n;
+      if (thresholdLow > 0n && totalDepositCommitted >= thresholdLow) {
+        handleTxError(new Error(`Current deposits (${ethers.formatEther(totalDepositCommitted)} ETH) are above the threshold (${ethers.formatEther(thresholdLow)} ETH). Demand check will not trigger adjustment.`));
+        return;
+      }
+
+      const DEMAND_CHECK_GRACE = 30 * 60; // 30 minutes in seconds
+      if (currentTimeBigInt > demandCheckTime + BigInt(DEMAND_CHECK_GRACE)) {
+        handleTxError(new Error("Demand check grace period (30 minutes) has expired. Cannot trigger demand check."));
+        return;
+      }
+    } catch (preCheckError) {
+      console.error("Pre-check error:", preCheckError);
+      handleTxError(new Error(`Pre-check failed: ${preCheckError.message || "Unknown error"}`));
+      return;
+    }
 
     await tx.execute(
       async () => {
         const signer = await ensureSigner();
         const managerWithSigner = managerContract.connect(signer);
-        return await managerWithSigner.handleDemandCheck(auctionAddress);
+        return await managerWithSigner.checkAndAdjustAuction(auctionAddress);
       },
       {
         pendingMessage: "Triggering demand check…",
@@ -417,7 +515,208 @@ const AuctionView = () => {
         },
       }
     );
-  }, [managerContract, auctionAddress, tx, refetchAuctionData, refetchEvents]);
+  }, [managerContract, auctionAddress, auctionContract, auctionData, currentTime, tx, refetchAuctionData, refetchEvents]);
+
+  const handleClaim = useCallback(async () => {
+    if (!auctionContract || !auctionData || !userData) return;
+
+    try {
+      const allocation = userData.allocation;
+      if (!allocation || !allocation.computed) {
+      } else {
+        const totalTokens = (allocation.totalQty || 0n) + (allocation.bonusQty || 0n);
+        const refundAmount = allocation.paymentDue && userData.revealedDeposit
+          ? (userData.revealedDeposit > allocation.paymentDue ? userData.revealedDeposit - allocation.paymentDue : 0n)
+          : 0n;
+        const vestingStart = Number(auctionData.vestingStart || 0);
+        const vestingDuration = Number(auctionData.vestingDuration || 0);
+        const now = currentTime || Math.floor(Date.now() / 1000);
+        
+        let unlockedBps = 0n;
+        if (vestingDuration === 0) {
+          unlockedBps = 10000n;
+        } else if (now >= vestingStart + vestingDuration) {
+          unlockedBps = 10000n;
+        }
+        
+        const unlocked = (totalTokens * unlockedBps) / 10000n;
+        const tokensClaimed = BigInt(userData.tokensClaimed || 0);
+        const claimableTokens = unlocked > tokensClaimed ? unlocked - tokensClaimed : 0n;
+        
+        const refundAlreadyClaimed = userData.refundedAmount && refundAmount > 0n
+          ? BigInt(userData.refundedAmount) >= refundAmount
+          : false;
+        const hasUnclaimedTokens = totalTokens > 0n && tokensClaimed < totalTokens;
+        if (claimableTokens === 0n && (refundAmount === 0n || refundAlreadyClaimed) && !hasUnclaimedTokens) {
+          console.warn("Pre-flight check: No tokens unlocked and no refund available, but allowing claim attempt anyway");
+        }
+      }
+    } catch (preflightError) {
+      console.warn("Pre-flight check warning:", preflightError);
+    }
+
+    try {
+      await tx.execute(
+        async () => {
+          const signer = await ensureSigner();
+          const auctionWithSigner = auctionContract.connect(signer);
+          return await auctionWithSigner.claim();
+        },
+        {
+          pendingMessage: "Claiming tokens and refunds…",
+          successMessage: "Claim successful!",
+          errorMessage: "Claim failed",
+          onSuccess: async () => {
+            await handleRefresh();
+          },
+        }
+      );
+    } catch (err) {
+      let errorMessage = err?.message || "Claim failed";
+      if (err?.reason) {
+        errorMessage = err.reason;
+      } else if (err?.data?.message) {
+        errorMessage = err.data.message;
+      } else if (err?.error?.message) {
+        errorMessage = err.error.message;
+      }
+      const vestingStart = Number(auctionData.vestingStart || 0);
+      const vestingDuration = Number(auctionData.vestingDuration || 0);
+      const vestingEnd = vestingStart + vestingDuration;
+      const now = currentTime || Math.floor(Date.now() / 1000);
+      const vestingEndDate = vestingEnd > 0 ? new Date(vestingEnd * 1000).toLocaleString() : "N/A";
+      const timeRemaining = vestingEnd > now ? vestingEnd - now : 0;
+      let blockchainTime = null;
+      try {
+        const { ensureProvider } = await import("../services/web3/provider");
+        const provider = ensureProvider();
+        if (provider) {
+          const block = await provider.getBlock("latest");
+          if (block?.timestamp) {
+            blockchainTime = Number(block.timestamp);
+          }
+        }
+      } catch (blockchainTimeError) {
+      }
+      
+      if (errorMessage.includes("NothingToClaim") || errorMessage.includes("nothing to claim")) {
+        if (vestingEnd > 0 && now < vestingEnd) {
+          const hoursRemaining = Math.floor(timeRemaining / 3600);
+          const daysRemaining = Math.floor(hoursRemaining / 24);
+          const blockchainTimeInfo = blockchainTime ? ` (Blockchain time: ${new Date(blockchainTime * 1000).toLocaleString()})` : "";
+          errorMessage = `Nothing to claim at this time. ` +
+            `Tokens are locked until vesting completes (cliff vesting - all tokens unlock at once when vesting ends). ` +
+            `Vesting ends: ${vestingEndDate} ` +
+            `(${daysRemaining > 0 ? `${daysRemaining} day${daysRemaining > 1 ? 's' : ''} ` : ''}${hoursRemaining % 24} hour${(hoursRemaining % 24) !== 1 ? 's' : ''} remaining).${blockchainTimeInfo} ` +
+            `If you have a refund, it may have already been claimed.`;
+        } else {
+          const blockchainTimeInfo = blockchainTime 
+            ? ` Blockchain time: ${new Date(blockchainTime * 1000).toLocaleString()}. ` +
+              (blockchainTime >= vestingEnd 
+                ? "Vesting has ended on blockchain - if claim still fails, there may be no tokens or refunds to claim."
+                : `Vesting ends in ${Math.floor((vestingEnd - blockchainTime) / 3600)} hours.`)
+            : "";
+          errorMessage = "Nothing to claim at this time. " +
+            "Tokens are locked until vesting completes (cliff vesting - all tokens unlock at once when vesting ends). " +
+            `Vesting ends: ${vestingEndDate}.${blockchainTimeInfo} ` +
+            "If you have a refund, it may have already been claimed. " +
+            "If vesting has ended, the blockchain time may differ from your local time - try again in a few minutes.";
+        }
+      } else if (errorMessage.includes("AuctionNotFinalized") || errorMessage.includes("not finalized")) {
+        errorMessage = "Auction is not finalized yet.";
+      } else if (errorMessage.includes("missing revert data") || err?.code === "CALL_EXCEPTION") {
+        if (vestingEnd > 0 && now < vestingEnd) {
+          const hoursRemaining = Math.floor(timeRemaining / 3600);
+          const daysRemaining = Math.floor(hoursRemaining / 24);
+          const blockchainTimeInfo = blockchainTime ? ` (Blockchain time: ${new Date(blockchainTime * 1000).toLocaleString()})` : "";
+          errorMessage = "Claim transaction failed. " +
+            `Tokens are still locked. Vesting ends: ${vestingEndDate} ` +
+            `(${daysRemaining > 0 ? `${daysRemaining} day${daysRemaining > 1 ? 's' : ''} ` : ''}${hoursRemaining % 24} hour${(hoursRemaining % 24) !== 1 ? 's' : ''} remaining).${blockchainTimeInfo} ` +
+            "Cliff vesting - tokens unlock all at once when vesting completes.";
+        } else {
+          const blockchainTimeInfo = blockchainTime 
+            ? ` Blockchain time: ${new Date(blockchainTime * 1000).toLocaleString()}. ` +
+              (blockchainTime >= vestingEnd 
+                ? "Vesting has ended on blockchain - if claim still fails, there may be no tokens or refunds to claim."
+                : `Vesting ends in ${Math.floor((vestingEnd - blockchainTime) / 3600)} hours.`)
+            : "";
+          errorMessage = "Claim transaction failed. " +
+            `This usually means: 1) No tokens are unlocked yet (vesting ends: ${vestingEndDate}), ` +
+            `2) Refunds have already been claimed, or 3) No allocation available.${blockchainTimeInfo} ` +
+            "If vesting has ended, the blockchain time may differ from your local time - try again in a few minutes.";
+        }
+      }
+      
+      console.error("Claim error details:", {
+        error: err,
+        auctionData: {
+          finalized: auctionData.finalized,
+          successful: auctionData.successful,
+          vestingStart: auctionData.vestingStart,
+          vestingDuration: auctionData.vestingDuration,
+          vestingEnd,
+          currentTime: now,
+          blockchainTime,
+          timeRemaining,
+          vestingEndDate,
+        },
+        userData: {
+          allocation: userData.allocation,
+          tokensClaimed: userData.tokensClaimed,
+          refundedAmount: userData.refundedAmount,
+        }
+      });
+      const { toast } = await import("react-toastify");
+      toast.error(errorMessage, {
+        position: "bottom-right",
+        autoClose: 10000, // Show for 10 seconds to allow reading
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+      });
+    }
+  }, [auctionContract, auctionData, userData, currentTime, tx, handleRefresh]);
+
+  const handleRefundUnsuccessful = useCallback(async () => {
+    if (!auctionContract) return;
+
+    await tx.execute(
+      async () => {
+        const signer = await ensureSigner();
+        const auctionWithSigner = auctionContract.connect(signer);
+        return await auctionWithSigner.refundUnsuccessful();
+      },
+      {
+        pendingMessage: "Processing refund…",
+        successMessage: "Refund successful!",
+        errorMessage: "Refund failed",
+        onSuccess: async () => {
+          await handleRefresh();
+        },
+      }
+    );
+  }, [auctionContract, tx, handleRefresh]);
+
+  const handleWithdrawUnrevealed = useCallback(async (commitIndex) => {
+    if (!auctionContract) return;
+
+    await tx.execute(
+      async () => {
+        const signer = await ensureSigner();
+        const auctionWithSigner = auctionContract.connect(signer);
+        return await auctionWithSigner.withdrawUnrevealed(commitIndex);
+      },
+      {
+        pendingMessage: "Withdrawing unrevealed commit…",
+        successMessage: "Withdrawal successful!",
+        errorMessage: "Withdrawal failed",
+        onSuccess: async () => {
+          await handleRefresh();
+        },
+      }
+    );
+  }, [auctionContract, tx, handleRefresh]);
 
   const auctionDataRef = useRef(auctionData);
   useEffect(() => {
@@ -488,7 +787,7 @@ const AuctionView = () => {
 
       <AuctionTimeline auctionData={auctionData} phase={phase} />
 
-      <ReservePanel auctionData={auctionData} onDemandCheck={handleDemandCheck} />
+      <ReservePanel auctionData={auctionData} onDemandCheck={handleDemandCheck} isOwner={isOwner} />
 
       {/* Commit & Reveal Forms */}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
@@ -526,14 +825,49 @@ const AuctionView = () => {
           clearingPrice={auctionData.clearingPrice}
           clearingTickIndex={auctionData.clearingTickIndex}
           totalDepositCommitted={auctionData.totalDepositCommitted}
+          totalDepositsRevealed={auctionData.totalDepositsRevealed}
           softCap={auctionData.softCap}
           phase={phase}
+          initialCommitEndTime={auctionData.initialCommitEndTime}
+          demandCheckTime={auctionData.demandCheckTime}
         />
       )}
 
       <PriceBucketPanel auctionData={auctionData} priceBuckets={auctionData.priceBuckets || []} />
 
       {!auctionData.finalized && <AllocationPanel userData={userData} />}
+
+      {auctionData.finalized && <FinalAllocationPanel auctionData={auctionData} userData={userData} />}
+
+      {auctionData.finalized && auctionData.successful && (
+        <ClaimPanel
+          auctionContract={auctionContract}
+          auctionData={auctionData}
+          userData={userData}
+          onClaim={handleClaim}
+          txState={tx.state}
+        />
+      )}
+
+      {auctionData.finalized && !auctionData.successful && (
+        <FailedAuctionRefundPanel
+          auctionContract={auctionContract}
+          auctionData={auctionData}
+          userData={userData}
+          onRefund={handleRefundUnsuccessful}
+          txState={tx.state}
+        />
+      )}
+
+      {auctionData.finalized && (
+        <UnrevealedCommitsPanel
+          auctionContract={auctionContract}
+          auctionData={auctionData}
+          userCommits={userData?.commits || []}
+          onWithdraw={handleWithdrawUnrevealed}
+          txState={tx.state}
+        />
+      )}
 
       {phase === PHASES.FINALIZED && !auctionData.finalized && (
         <div className="rounded-2xl border border-[rgba(245,158,11,0.4)] bg-gradient-to-br from-[rgba(245,158,11,0.1)] to-[rgba(217,119,6,0.1)] p-6 shadow-[0_10px_30px_rgba(245,158,11,0.2),inset_0_1px_0_rgba(255,255,255,0.05)]">

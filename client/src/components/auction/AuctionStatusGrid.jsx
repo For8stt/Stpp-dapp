@@ -1,5 +1,5 @@
 import React from "react";
-import { formatEth, formatToken } from "../../utils/auctionUtils";
+import { formatEth, formatToken, formatTokenUnits } from "../../utils/auctionUtils";
 
 const AuctionStatusGrid = React.memo(({ auctionData }) => {
   if (!auctionData) return null;
@@ -16,7 +16,7 @@ const AuctionStatusGrid = React.memo(({ auctionData }) => {
       </div>
       <div className="rounded-2xl border border-[rgba(255,255,255,0.1)] bg-[rgba(15,23,42,0.6)] p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-[rgba(99,102,241,0.3)] hover:bg-[rgba(15,23,42,0.8)]">
         <p className="mb-2 text-sm uppercase tracking-wider text-[rgba(255,255,255,0.7)]">Total Revealed Qty</p>
-        <p className="font-mono text-2xl font-bold text-white">{formatToken(auctionData.totalQtyRevealed)}</p>
+        <p className="font-mono text-2xl font-bold text-white">{formatTokenUnits(auctionData.totalQtyRevealed)}</p>
       </div>
       <div className="rounded-2xl border border-[rgba(255,255,255,0.1)] bg-[rgba(15,23,42,0.6)] p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-[rgba(99,102,241,0.3)] hover:bg-[rgba(15,23,42,0.8)]">
         <p className="mb-2 text-sm uppercase tracking-wider text-[rgba(255,255,255,0.7)]">Total Revealed Deposit</p>
@@ -28,9 +28,9 @@ const AuctionStatusGrid = React.memo(({ auctionData }) => {
       </div>
       <div className="rounded-2xl border border-[rgba(255,255,255,0.1)] bg-[rgba(15,23,42,0.6)] p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-[rgba(99,102,241,0.3)] hover:bg-[rgba(15,23,42,0.8)]">
         <p className="mb-2 text-sm uppercase tracking-wider text-[rgba(255,255,255,0.7)]">Soft Cap</p>
-        <p className={`font-mono text-2xl font-bold ${auctionData.totalDepositCommitted >= auctionData.softCap ? 'text-[rgb(110,231,183)]' : 'text-white'}`}>
+        <p className={`font-mono text-2xl font-bold ${auctionData.totalDepositsRevealed >= auctionData.softCap ? 'text-[rgb(110,231,183)]' : 'text-white'}`}>
           {formatEth(auctionData.softCap)}
-          {auctionData.totalDepositCommitted >= auctionData.softCap && (
+          {auctionData.totalDepositsRevealed >= auctionData.softCap && (
             <span className="ml-2">Reached</span>
           )}
         </p>
@@ -43,7 +43,7 @@ const AuctionStatusGrid = React.memo(({ auctionData }) => {
           </div>
           <div className="rounded-2xl border border-[rgba(255,255,255,0.1)] bg-[rgba(15,23,42,0.6)] p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-[rgba(99,102,241,0.3)] hover:bg-[rgba(15,23,42,0.8)]">
             <p className="mb-2 text-sm uppercase tracking-wider text-[rgba(255,255,255,0.7)]">Tokens Sold</p>
-            <p className="font-mono text-2xl font-bold text-white">{formatToken(auctionData.tokensSold)}</p>
+            <p className="font-mono text-2xl font-bold text-white">{formatTokenUnits(auctionData.tokensSold)}</p>
           </div>
           <div className="rounded-2xl border border-[rgba(255,255,255,0.1)] bg-[rgba(15,23,42,0.6)] p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-[rgba(99,102,241,0.3)] hover:bg-[rgba(15,23,42,0.8)]">
             <p className="mb-2 text-sm uppercase tracking-wider text-[rgba(255,255,255,0.7)]">Total Raised</p>

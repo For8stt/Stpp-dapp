@@ -59,16 +59,16 @@ async function baseReentrancyFixture(overrides: { softCap: bigint; tokensForSale
         ethers.parseUnits("0.001", 18)
     ];
 
-    const tokensForSale = overrides.tokensForSale ?? 60n;
+    const tokensForSale = overrides.tokensForSale ?? ethers.parseUnits("60", 18);
 
     const config = {
         startTime,
         commitDuration,
         revealDuration,
-        perAddressCap: 200n,
+        perAddressCap: ethers.parseUnits("200", 18),
         softCap: overrides.softCap,
         tokensForSale,
-        bonusReserve: 20n,
+        bonusReserve: ethers.parseUnits("20", 18),
         earlyBonusWindow: 300n,
         earlyBonusPct: 500n,
         nonRevealPenaltyBps: 100n,
@@ -86,7 +86,8 @@ async function baseReentrancyFixture(overrides: { softCap: bigint; tokensForSale
     };
 
     await attacker.initializeAuction(config);
-    await token.transfer(await auction.getAddress(), tokensForSale + config.bonusReserve + 10n);
+    // All values are in wei now
+    await token.transfer(await auction.getAddress(), tokensForSale + config.bonusReserve + ethers.parseUnits("10", 18));
 
     const commitEndTime = startTime + commitDuration;
     const revealEndTime = commitEndTime + revealDuration;
@@ -108,11 +109,11 @@ async function baseReentrancyFixture(overrides: { softCap: bigint; tokensForSale
 }
 
 async function successfulReentrancyFixture(): Promise<ReentrancyFixture> {
-    return baseReentrancyFixture({ softCap: ethers.parseEther("0.02"), tokensForSale: 60n });
+    return baseReentrancyFixture({ softCap: ethers.parseEther("0.02"), tokensForSale: ethers.parseUnits("60", 18) });
 }
 
 async function unsuccessfulReentrancyFixture(): Promise<ReentrancyFixture> {
-    return baseReentrancyFixture({ softCap: ethers.parseEther("10"), tokensForSale: 60n });
+    return baseReentrancyFixture({ softCap: ethers.parseEther("10"), tokensForSale: ethers.parseUnits("60", 18) });
 }
 
 describe("DutchAuction – 11_security_reentrancy", function () {
@@ -130,10 +131,14 @@ describe("DutchAuction – 11_security_reentrancy", function () {
     async function prepareSuccessfulAuction(ctx: ReentrancyFixture, qty: bigint = 60n, priceTickIndex: bigint = 2n) {
         await time.increaseTo(ctx.startTime + 1n);
         const nonce = randomNonce();
-        const commitHash = buildCommitHash(priceTickIndex, qty, nonce);
-        await ctx.attacker.commitBid(commitHash, [], { value: qty * ctx.priceTicks[0] });
+        // Convert qty to wei
+        const qtyWei = qty < 10n**18n ? qty * 10n**18n : qty;
+        const commitHash = buildCommitHash(priceTickIndex, qtyWei, nonce);
+        // deposit in wei (ETH) = (qtyWei * priceTicks[0]) / 1e18
+        const deposit = (qtyWei * ctx.priceTicks[0]) / 10n**18n;
+        await ctx.attacker.commitBid(commitHash, [], { value: deposit });
         await time.increaseTo(ctx.commitEndTime + 1n);
-        await ctx.attacker.revealBid(Number(priceTickIndex), qty, nonce, 0);
+        await ctx.attacker.revealBid(Number(priceTickIndex), qtyWei, nonce, 0);
         await time.increaseTo(ctx.revealEndTime + 1n);
         await ctx.attacker.finalizeAuction();
         expect(await ctx.auction.successful()).to.equal(true);
@@ -144,25 +149,29 @@ describe("DutchAuction – 11_security_reentrancy", function () {
         await time.increaseTo(ctx.startTime + 1n);
 
         const nonceRevealed = randomNonce();
-        const revealedQty = 30n;
-        await ctx.attacker.commitBid(buildCommitHash(0n, revealedQty, nonceRevealed), [], {
-            value: revealedQty * ctx.priceTicks[0]
+        const revealedQtyWhole = 30n;
+        const revealedQtyWei = revealedQtyWhole * 10n**18n;
+        const revealedDeposit = (revealedQtyWei * ctx.priceTicks[0]) / 10n**18n;
+        await ctx.attacker.commitBid(buildCommitHash(0n, revealedQtyWei, nonceRevealed), [], {
+            value: revealedDeposit
         });
 
         const nonceHidden = randomNonce();
-        const hiddenQty = 20n;
-        await ctx.attacker.commitBid(buildCommitHash(0n, hiddenQty, nonceHidden), [], {
-            value: hiddenQty * ctx.priceTicks[0]
+        const hiddenQtyWhole = 20n;
+        const hiddenQtyWei = hiddenQtyWhole * 10n**18n;
+        const hiddenDeposit = (hiddenQtyWei * ctx.priceTicks[0]) / 10n**18n;
+        await ctx.attacker.commitBid(buildCommitHash(0n, hiddenQtyWei, nonceHidden), [], {
+            value: hiddenDeposit
         });
 
         await time.increaseTo(ctx.commitEndTime + 1n);
-        await ctx.attacker.revealBid(0, revealedQty, nonceRevealed, 0);
+        await ctx.attacker.revealBid(0, revealedQtyWei, nonceRevealed, 0);
 
         await time.increaseTo(ctx.revealEndTime + 1n);
         await ctx.attacker.finalizeAuction();
         expect(await ctx.auction.successful()).to.equal(false);
 
-        return { nonceRevealed, revealedQty, nonceHidden, hiddenQty };
+        return { nonceRevealed, revealedQty: revealedQtyWei, nonceHidden, hiddenQty: hiddenQtyWei };
     }
 
     it("should prevent reentrancy on commit using reentrant attacker contract", async function () {
@@ -226,15 +235,17 @@ describe("DutchAuction – 11_security_reentrancy", function () {
         await time.increaseTo(ctx.startTime + 1n);
         const revealedNonce = randomNonce();
         const unrevealedNonce = randomNonce();
-        const qty = 20n;
+        const qtyWhole = 20n;
+        const qtyWei = qtyWhole * 10n**18n;
+        const deposit = (qtyWei * ctx.priceTicks[0]) / 10n**18n;
 
-        await ctx.attacker.commitBid(buildCommitHash(0n, qty, revealedNonce), [], { value: qty * ctx.priceTicks[0] });
-        await ctx.attacker.commitBid(buildCommitHash(0n, qty, unrevealedNonce), [], {
-            value: qty * ctx.priceTicks[0]
+        await ctx.attacker.commitBid(buildCommitHash(0n, qtyWei, revealedNonce), [], { value: deposit });
+        await ctx.attacker.commitBid(buildCommitHash(0n, qtyWei, unrevealedNonce), [], {
+            value: deposit
         });
 
         await time.increaseTo(ctx.commitEndTime + 1n);
-        await ctx.attacker.revealBid(0, qty, revealedNonce, 0);
+        await ctx.attacker.revealBid(0, qtyWei, revealedNonce, 0);
 
         await time.increaseTo(ctx.revealEndTime + 1n);
         await ctx.attacker.finalizeAuction();
@@ -271,13 +282,15 @@ describe("DutchAuction – 11_security_reentrancy", function () {
 
         await time.increaseTo(ctx.startTime + 1n);
         const nonce = randomNonce();
-        const qty = 40n;
-        await ctx.attacker.commitBid(buildCommitHash(0n, qty, nonce), [], { value: qty * ctx.priceTicks[0] });
+        const qtyWhole = 40n;
+        const qtyWei = qtyWhole * 10n**18n;
+        const deposit = (qtyWei * ctx.priceTicks[0]) / 10n**18n;
+        await ctx.attacker.commitBid(buildCommitHash(0n, qtyWei, nonce), [], { value: deposit });
         const unrevealedNonce = randomNonce();
-        await ctx.attacker.commitBid(buildCommitHash(0n, qty, unrevealedNonce), [], { value: qty * ctx.priceTicks[0] });
+        await ctx.attacker.commitBid(buildCommitHash(0n, qtyWei, unrevealedNonce), [], { value: deposit });
 
         await time.increaseTo(ctx.commitEndTime + 1n);
-        await ctx.attacker.revealBid(0, qty, nonce, 0);
+        await ctx.attacker.revealBid(0, qtyWei, nonce, 0);
 
         await time.increaseTo(ctx.revealEndTime + 1n);
         await ctx.attacker.finalizeAuction();

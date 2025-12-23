@@ -11,8 +11,8 @@ describe("Scenario – soft cap failure and refunds", function () {
     async function failingAuctionFixture() {
         const overrides = {
             softCap: ethers.parseEther("50"),
-            tokensForSale: 150n,
-            perAddressCap: 150n,
+            tokensForSale: ethers.parseUnits("150", 18),
+            perAddressCap: ethers.parseUnits("150", 18),
             bonusReserve: 0n
         };
         return fixtureWithOverrides(overrides)();
@@ -24,27 +24,30 @@ describe("Scenario – soft cap failure and refunds", function () {
 
         await time.increaseTo(startTime + 1n);
 
-        const qtyAlice = 60n;
-        const qtyBob = 40n;
-        const qtyRejector = 20n;
+        const qtyAliceWhole = 60n;
+        const qtyBobWhole = 40n;
+        const qtyRejectorWhole = 20n;
+        const qtyAliceWei = qtyAliceWhole * 10n**18n;
+        const qtyBobWei = qtyBobWhole * 10n**18n;
+        const qtyRejectorWei = qtyRejectorWhole * 10n**18n;
         const nonceAlice = randomNonce();
         const nonceBob = randomNonce();
         const nonceRejector = randomNonce();
 
-        const depositAlice = qtyAlice * priceTicks[0];
-        const depositBob = qtyBob * priceTicks[0];
-        const depositRejector = qtyRejector * priceTicks[0];
+        const depositAlice = (qtyAliceWei * priceTicks[0]) / 10n**18n;
+        const depositBob = (qtyBobWei * priceTicks[0]) / 10n**18n;
+        const depositRejector = (qtyRejectorWei * priceTicks[0]) / 10n**18n;
 
-        await auction.connect(alice).commit(buildCommitHash(0n, qtyAlice, nonceAlice), [], { value: depositAlice });
-        await auction.connect(bob).commit(buildCommitHash(0n, qtyBob, nonceBob), [], { value: depositBob });
+        await auction.connect(alice).commit(buildCommitHash(0n, qtyAliceWei, nonceAlice), [], { value: depositAlice });
+        await auction.connect(bob).commit(buildCommitHash(0n, qtyBobWei, nonceBob), [], { value: depositBob });
 
         const rejectorFactory = await ethers.getContractFactory("RefundRejector");
         const rejector = await rejectorFactory.deploy(await auction.getAddress());
         await rejector.waitForDeployment();
-        await rejector.commitBid(buildCommitHash(0n, qtyRejector, nonceRejector), { value: depositRejector });
+        await rejector.commitBid(buildCommitHash(0n, qtyRejectorWei, nonceRejector), { value: depositRejector });
 
         await time.increaseTo(commitEndTime + 1n);
-        await auction.connect(alice).reveal(0, qtyAlice, nonceAlice, 0);
+        await auction.connect(alice).reveal(0, qtyAliceWei, nonceAlice, 0);
         // Bob and refund rejector intentionally leave commits unrevealed.
 
         await time.increaseTo(revealEndTime + 1n);

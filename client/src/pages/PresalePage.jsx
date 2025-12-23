@@ -5,6 +5,8 @@ import { ethers } from "ethers";
 import AuctionControls from "../components/presale/AuctionControls";
 import loadContract from "../services/web3/loadContract";
 import { handleTxError, showTxSuccess, showTxInfo } from "../utils/txErrorHandler";
+import { useAuctionData } from "../hooks/useAuctionData";
+import { useTime } from "../time";
 
 const toDateInput = (secondsFromNow = 0) =>
   new Date((Math.floor(Date.now() / 1000) + secondsFromNow) * 1000).toISOString().slice(0, 16);
@@ -30,7 +32,7 @@ const defaultLbpConfig = {
   poolEndWeightToken: "20",
   poolSwapFee: "0.003",
   vestingCliffDuration: "0",
-  vestingFinalDuration: "2592000",
+  vestingFinalDuration: "2592000", // 30 days for LBP (30 * 24 * 60 * 60 = 2592000 seconds)
   vestingCliffPercentBP: "0",
 };
 
@@ -61,6 +63,39 @@ const PresalePage = ({ account }) => {
   const [auctionForm, setAuctionForm] = useState(defaultAuctionForm);
   const [creatingAuction, setCreatingAuction] = useState(false);
   const [lbpConfig, setLbpConfig] = useState(defaultLbpConfig);
+
+  const [auctionContract, setAuctionContract] = useState(null);
+
+  useEffect(() => {
+    const loadAuctionContract = async () => {
+      if (!info?.auction || !managerContract) {
+        setAuctionContract(null);
+        return;
+      }
+      try {
+        const allAbis = await import("../abi/allAbis.json");
+        const { ensureProvider } = await import("../services/web3/provider");
+        const provider = ensureProvider();
+        const auctionAbi = allAbis.DutchAuction || [];
+        if (auctionAbi.length > 0) {
+          const { Contract } = await import("ethers");
+          const contract = new Contract(info.auction, auctionAbi, provider);
+          setAuctionContract(contract);
+        }
+      } catch (err) {
+        console.warn("Failed to load auction contract:", err);
+        setAuctionContract(null);
+      }
+    };
+    loadAuctionContract();
+  }, [info?.auction, managerContract]);
+  
+  const {
+    data: auctionData,
+    refetch: refetchAuctionData,
+  } = useAuctionData(auctionContract, managerContract, info?.auction);
+
+  const { currentTime } = useTime();
 
   const refreshInfo = useCallback(async () => {
     if (!address) {
@@ -196,7 +231,7 @@ const PresalePage = ({ account }) => {
         minCommitDuration: 600,
         demandCheckTime: startTime + 900,
         vestingStart: startTime + 86400,
-        vestingDuration: 2_592_000,
+        vestingDuration: 10800, // 3 hours (3 * 60 * 60 = 10800 seconds)
         merkleRoot: auctionForm.merkleRoot || ethers.ZeroHash,
         priceTicks: auctionForm.priceTicks
           .split(",")
@@ -223,7 +258,7 @@ const PresalePage = ({ account }) => {
     }
   };
 
-  const runAction = async (label, action, preCheckAction = null) => {
+  const runAction = async (label, action, preCheckAction = null, isAccelerateAuction = false) => {
     if (!managerContract || !info?.auction) return;
     try {
       if (preCheckAction) {
@@ -269,20 +304,36 @@ const PresalePage = ({ account }) => {
         console.log("Transaction hash:", err.transaction.hash);
       }
 
-      if (errorMessage.includes("RevealPhaseClosed") || errorMessage.includes("reveal")) {
-        errorMessage = "Reveal phase has not ended yet. Wait for the reveal phase to complete before finalizing.";
-      } else if (errorMessage.includes("AuctionNotFinalized") || errorMessage.includes("not finalized")) {
-        errorMessage = "Auction must be finalized before launching LBP.";
-      } else if (errorMessage.includes("LbpAlreadyLaunched") || errorMessage.includes("already launched")) {
-        errorMessage = "LBP has already been launched for this auction.";
-      } else if (errorMessage.includes("InvalidLbpTimes") || errorMessage.includes("startTime") || errorMessage.includes("endTime")) {
-        errorMessage = "Invalid LBP time configuration. Start time must be before end time.";
-      } else if (errorMessage.includes("InvalidVestingDurations") || errorMessage.includes("vesting")) {
-        errorMessage = "Invalid vesting configuration. Check vestingCliffDuration and vestingFinalDuration.";
-      } else if (errorMessage.includes("CliffPercentTooHigh")) {
-        errorMessage = "vestingCliffPercentBP must be <= 10000 (100%).";
-      } else if (errorMessage.includes("missing revert data")) {
-        errorMessage = `Transaction failed. This might be due to: 1) _deploySecureLBP() failing, 2) auction.launchLbp() failing, 3) Invalid LBP config parameters, or 4) RPC issue. Check Hardhat console for more details.`;
+      if (isAccelerateAuction) {
+        if (errorMessage.includes("CommitPhaseComplete") || errorMessage.includes("commit phase")) {
+          errorMessage = "Commit phase has already ended. Cannot accelerate auction.";
+        } else if (errorMessage.includes("dynamicAdjustmentCount") || errorMessage.includes("already adjusted") || errorMessage.includes("CommitPhaseComplete")) {
+          errorMessage = "Auction has already been adjusted. Dynamic reserve adjustment can only be triggered once.";
+        } else if (errorMessage.includes("AuctionNotInitialized") || errorMessage.includes("not initialized")) {
+          errorMessage = "Auction is not initialized yet.";
+        } else if (errorMessage.includes("ConditionsNotMet") || errorMessage.includes("conditions not met")) {
+          errorMessage = "Conditions for acceleration are not met. Check that demand check time has passed and demand is below threshold.";
+        } else if (errorMessage.includes("totalDepositCommitted") || errorMessage.includes("thresholdLow")) {
+          errorMessage = "Demand is above the threshold. Auction will not shorten if participation is sufficient.";
+        } else if (errorMessage.includes("missing revert data")) {
+          errorMessage = "Transaction failed. Possible reasons: 1) Demand is above threshold, 2) Auction already adjusted, 3) Commit phase ended, or 4) RPC issue. Check console for details.";
+        }
+      } else {
+        if (errorMessage.includes("RevealPhaseClosed") || errorMessage.includes("reveal")) {
+          errorMessage = "Reveal phase has not ended yet. Wait for the reveal phase to complete before finalizing.";
+        } else if (errorMessage.includes("AuctionNotFinalized") || errorMessage.includes("not finalized")) {
+          errorMessage = "Auction must be finalized before launching LBP.";
+        } else if (errorMessage.includes("LbpAlreadyLaunched") || errorMessage.includes("already launched")) {
+          errorMessage = "LBP has already been launched for this auction.";
+        } else if (errorMessage.includes("InvalidLbpTimes") || errorMessage.includes("startTime") || errorMessage.includes("endTime")) {
+          errorMessage = "Invalid LBP time configuration. Start time must be before end time.";
+        } else if (errorMessage.includes("InvalidVestingDurations") || errorMessage.includes("vesting")) {
+          errorMessage = "Invalid vesting configuration. Check vestingCliffDuration and vestingFinalDuration.";
+        } else if (errorMessage.includes("CliffPercentTooHigh")) {
+          errorMessage = "vestingCliffPercentBP must be <= 10000 (100%).";
+        } else if (errorMessage.includes("missing revert data")) {
+          errorMessage = `Transaction failed. This might be due to: 1) _deploySecureLBP() failing, 2) auction.launchLbp() failing, 3) Invalid LBP config parameters, or 4) RPC issue. Check Hardhat console for more details.`;
+        }
       }
       
       handleTxError(err, errorMessage);
@@ -331,6 +382,140 @@ const PresalePage = ({ account }) => {
     };
 
     runAction("Finalize auction", () => managerContract.finalizeAuction(info.auction), preCheck);
+  };
+
+  const handleAccelerateAuction = async () => {
+    if (!managerContract || !info?.auction) return;
+
+    if (info.finalized) {
+      handleTxError(new Error("Auction is already finalized"));
+      return;
+    }
+
+    if (!auctionData) {
+      handleTxError(new Error("Auction data not loaded. Please wait..."));
+      return;
+    }
+
+    const demandCheckTime = auctionData.demandCheckTime || 0;
+    const commitEndTime = auctionData.commitEndTime || 0;
+
+    if (currentTime < demandCheckTime) {
+      const timeUntilCheck = demandCheckTime - currentTime;
+      const hours = Math.floor(timeUntilCheck / 3600);
+      const minutes = Math.floor((timeUntilCheck % 3600) / 60);
+      handleTxError(new Error(`Demand check time has not been reached yet. Time remaining: ${hours}h ${minutes}m`));
+      return;
+    }
+
+    if (currentTime >= commitEndTime) {
+      handleTxError(new Error("Commit phase has already ended. Cannot accelerate auction."));
+      return;
+    }
+
+    const totalDepositCommitted = auctionData.totalDepositCommitted || 0n;
+    const thresholdLow = auctionData.thresholdLow || 0n;
+    const isLowDemand = thresholdLow > 0n ? totalDepositCommitted < thresholdLow : false;
+    const dynamicAdjustmentCount = auctionData.dynamicAdjustmentCount || 0;
+
+    if (dynamicAdjustmentCount > 0) {
+      handleTxError(new Error("Auction has already been adjusted. Dynamic reserve adjustment can only be triggered once."));
+      return;
+    }
+
+    if (!isLowDemand && thresholdLow > 0n) {
+      const confirmMessage = `Current deposits (${ethers.formatEther(totalDepositCommitted)} ETH) are above the threshold (${ethers.formatEther(thresholdLow)} ETH). The auction will NOT shorten if demand is sufficient. Continue anyway?`;
+      if (!window.confirm(confirmMessage)) {
+        return;
+      }
+    } else if (thresholdLow === 0n) {
+      handleTxError(new Error("Threshold low is set to 0. Cannot determine if demand is low. Please configure thresholdLow in auction parameters."));
+      return;
+    }
+
+    const preCheck = async () => {
+      try {
+        if (auctionContract) {
+          const currentCommitEnd = Number(await auctionContract.commitEndTime());
+          const initialCommitEnd = Number(await auctionContract.initialCommitEndTime());
+          const dynamicAdjustmentCount = Number(await auctionContract.dynamicAdjustmentCount());
+          const totalDeposit = await auctionContract.totalDepositCommitted();
+          const threshold = await auctionContract.thresholdLow();
+          
+          console.log('[Accelerate Auction] Pre-check state:', {
+            currentCommitEnd: new Date(currentCommitEnd * 1000).toLocaleString(),
+            initialCommitEnd: new Date(initialCommitEnd * 1000).toLocaleString(),
+            dynamicAdjustmentCount,
+            totalDeposit: ethers.formatEther(totalDeposit),
+            threshold: ethers.formatEther(threshold),
+            isLowDemand: totalDeposit < threshold,
+            canShorten: currentCommitEnd < initialCommitEnd
+          });
+          
+          if (dynamicAdjustmentCount > 0) {
+            throw new Error("Auction has already been adjusted. Dynamic reserve adjustment can only be triggered once.");
+          }
+          if (totalDeposit >= threshold && threshold > 0n) {
+            throw new Error(`Demand is above threshold (${ethers.formatEther(totalDeposit)} ETH >= ${ethers.formatEther(threshold)} ETH). Auction will not shorten.`);
+          }
+        }
+        await managerContract.checkAndAdjustAuction.staticCall(info.auction);
+      } catch (staticErr) {
+        if (staticErr?.message?.includes("already adjusted") || 
+            staticErr?.message?.includes("Demand is above threshold")) {
+          throw staticErr;
+        }
+        console.warn("Pre-check failed, but will attempt transaction:", staticErr);
+      }
+    };
+
+    runAction(
+      "Accelerate auction",
+      () => managerContract.checkAndAdjustAuction(info.auction),
+      preCheck,
+      true // isAccelerateAuction flag
+    ).then(async () => {
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      await refetchAuctionData();
+      await refreshInfo();
+      if (auctionData) {
+        const oldCommitEndTime = auctionData.commitEndTime;
+        const oldInitialCommitEndTime = auctionData.initialCommitEndTime;
+        if (auctionContract) {
+          try {
+            const newCommitEndTime = Number(await auctionContract.commitEndTime());
+            const newInitialCommitEndTime = Number(await auctionContract.initialCommitEndTime());
+            const dynamicAdjustmentCount = Number(await auctionContract.dynamicAdjustmentCount());
+            
+            console.log('[Accelerate Auction] Status check:', {
+              oldCommitEndTime: new Date(oldCommitEndTime * 1000).toLocaleString(),
+              newCommitEndTime: new Date(newCommitEndTime * 1000).toLocaleString(),
+              oldInitialCommitEndTime: new Date(oldInitialCommitEndTime * 1000).toLocaleString(),
+              newInitialCommitEndTime: new Date(newInitialCommitEndTime * 1000).toLocaleString(),
+              dynamicAdjustmentCount,
+              wasShortened: newCommitEndTime < newInitialCommitEndTime,
+              timeDifference: newInitialCommitEndTime - newCommitEndTime
+            });
+            
+            if (dynamicAdjustmentCount > 0 && newCommitEndTime < newInitialCommitEndTime) {
+              showTxSuccess("Auction timeline successfully shortened due to low demand.", { autoClose: 5000 });
+            } else if (dynamicAdjustmentCount > 0) {
+              const timeDiff = newInitialCommitEndTime - newCommitEndTime;
+              if (timeDiff === 0) {
+                showTxInfo("Dynamic adjustment executed, but commit end time could not be shortened further (minimum duration reached or insufficient reduction).", { autoClose: 8000 });
+              } else {
+                showTxInfo("Dynamic adjustment executed. Check auction view for updated timeline.", { autoClose: 5000 });
+              }
+            }
+          } catch (err) {
+            console.warn("Could not verify auction shortening:", err);
+            showTxSuccess("Accelerate auction transaction completed. Refreshing data...", { autoClose: 3000 });
+          }
+        }
+      }
+    }).catch((err) => {
+      console.error("Accelerate auction error:", err);
+    });
   };
 
   const handleLaunchLbp = async () => {
@@ -743,9 +928,12 @@ const PresalePage = ({ account }) => {
               onLaunchLbp={handleLaunchLbp}
               onFinalizeLbp={handleFinalizeLbp}
               onUnwind={handleUnwind}
+              onAccelerateAuction={handleAccelerateAuction}
               lbpConfig={lbpConfig}
               onLbpConfigChange={handleLbpConfigChange}
               disabled={!info?.auction}
+              auctionData={auctionData}
+              currentTime={currentTime}
             />
           </div>
 

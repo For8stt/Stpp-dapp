@@ -9,8 +9,8 @@ async function launchReadyFixture() {
     const tokenRecipient = signers[5];
 
     const ctx = await fixtureWithOverrides({
-        tokensForSale: 200n,
-        perAddressCap: 200n,
+        tokensForSale: ethers.parseUnits("200", 18),
+        perAddressCap: ethers.parseUnits("200", 18),
         bonusReserve: 0n,
         softCap: ethers.parseEther("0.05"),
         lbpStableShareBps: 1_500n,
@@ -21,14 +21,17 @@ async function launchReadyFixture() {
     const { auction, alice, startTime, commitEndTime, revealEndTime, priceTicks } = ctx;
     await time.increaseTo(startTime + 1n);
 
-    const qty = 120n;
+    const qtyWhole = 120n;
+    const qtyWei = qtyWhole * 10n**18n;
     const nonce = randomNonce();
+    // deposit in wei (ETH) = (qtyWei * priceTicks[0]) / 1e18
+    const deposit = (qtyWei * priceTicks[0]) / 10n**18n;
     await auction
         .connect(alice)
-        .commit(buildCommitHash(0n, qty, nonce), [], { value: qty * priceTicks[0] });
+        .commit(buildCommitHash(0n, qtyWei, nonce), [], { value: deposit });
 
     await time.increaseTo(commitEndTime + 1n);
-    await auction.connect(alice).reveal(0, qty, nonce, 0);
+    await auction.connect(alice).reveal(0, qtyWei, nonce, 0);
 
     await time.increaseTo(revealEndTime + 1n);
     await auction.connect(ctx.deployer).finalize();
@@ -53,8 +56,8 @@ async function unfinalizedFixture() {
     const tokenRecipient = signers[5];
 
     const ctx = await fixtureWithOverrides({
-        tokensForSale: 150n,
-        perAddressCap: 150n,
+        tokensForSale: ethers.parseUnits("150", 18),
+        perAddressCap: ethers.parseUnits("150", 18),
         bonusReserve: 0n,
         softCap: 0n,
         lbpStableShareBps: 1_000n,
@@ -65,12 +68,14 @@ async function unfinalizedFixture() {
     const { auction, alice, startTime, priceTicks } = ctx;
     await time.increaseTo(startTime + 1n);
     const nonce = randomNonce();
-    const qty = 100n;
+    const qtyWhole = 100n;
+    const qtyWei = qtyWhole * 10n**18n;
+    const deposit = (qtyWei * priceTicks[0]) / 10n**18n;
     await auction
         .connect(alice)
-        .commit(buildCommitHash(0n, qty, nonce), [], { value: qty * priceTicks[0] });
+        .commit(buildCommitHash(0n, qtyWei, nonce), [], { value: deposit });
 
-    return { ...ctx, nonce, qty };
+    return { ...ctx, nonce, qty: qtyWei };
 }
 
 async function unsuccessfulFixture() {
@@ -80,8 +85,8 @@ async function unsuccessfulFixture() {
 
     const ctx = await fixtureWithOverrides({
         softCap: ethers.parseEther("10"),
-        tokensForSale: 150n,
-        perAddressCap: 150n,
+        tokensForSale: ethers.parseUnits("150", 18),
+        perAddressCap: ethers.parseUnits("150", 18),
         bonusReserve: 0n,
         lbpStableShareBps: 1_000n,
         lbpTokenRecipient: await tokenRecipient.getAddress(),
@@ -103,8 +108,8 @@ async function soldOutFixture() {
     const tokenRecipient = signers[5];
 
     const ctx = await fixtureWithOverrides({
-        tokensForSale: 120n,
-        perAddressCap: 120n,
+        tokensForSale: ethers.parseUnits("120", 18),
+        perAddressCap: ethers.parseUnits("120", 18),
         softCap: 0n,
         bonusReserve: 0n,
         lbpStableShareBps: 500n,
@@ -116,13 +121,15 @@ async function soldOutFixture() {
 
     await time.increaseTo(startTime + 1n);
     const nonce = randomNonce();
-    const qty = config.tokensForSale;
+    // config.tokensForSale is now in wei
+    const qtyWei = config.tokensForSale;
+    const deposit = (qtyWei * priceTicks[0]) / 10n**18n;
     await auction
         .connect(alice)
-        .commit(buildCommitHash(0n, qty, nonce), [], { value: qty * priceTicks[0] });
+        .commit(buildCommitHash(0n, qtyWei, nonce), [], { value: deposit });
 
     await time.increaseTo(commitEndTime + 1n);
-    await auction.connect(alice).reveal(0, qty, nonce, 0);
+    await auction.connect(alice).reveal(0, qtyWei, nonce, 0);
 
     await time.increaseTo(revealEndTime + 1n);
     await auction.connect(ctx.deployer).finalize();
@@ -133,8 +140,8 @@ async function soldOutFixture() {
 
 async function zeroTokenRecipientFixture() {
     const ctx = await fixtureWithOverrides({
-        tokensForSale: 100n,
-        perAddressCap: 100n,
+        tokensForSale: ethers.parseUnits("100", 18),
+        perAddressCap: ethers.parseUnits("100", 18),
         softCap: ethers.parseEther("0.05"),
         bonusReserve: 0n,
         lbpStableShareBps: 1_000n,
@@ -146,13 +153,15 @@ async function zeroTokenRecipientFixture() {
 
     await time.increaseTo(startTime + 1n);
     const nonce = randomNonce();
-    const qty = 60n;
+    const qtyWhole = 60n;
+    const qtyWei = qtyWhole * 10n**18n;
+    const deposit = (qtyWei * priceTicks[0]) / 10n**18n;
     await auction
         .connect(alice)
-        .commit(buildCommitHash(0n, qty, nonce), [], { value: qty * priceTicks[0] });
+        .commit(buildCommitHash(0n, qtyWei, nonce), [], { value: deposit });
 
     await time.increaseTo(commitEndTime + 1n);
-    await auction.connect(alice).reveal(0, qty, nonce, 0);
+    await auction.connect(alice).reveal(0, qtyWei, nonce, 0);
 
     await time.increaseTo(revealEndTime + 1n);
     await auction.connect(ctx.deployer).finalize();
@@ -267,8 +276,8 @@ describe("DutchAuction – 07_launch_lbp", function () {
 
         it("should revert if lbpStableRecipient is zero when ETH needs to be sent", async function () {
             const ctx = await fixtureWithOverrides({
-                tokensForSale: 180n,
-                perAddressCap: 180n,
+                tokensForSale: ethers.parseUnits("180", 18),
+                perAddressCap: ethers.parseUnits("180", 18),
                 softCap: ethers.parseEther("0.05"),
                 bonusReserve: 0n,
                 lbpStableShareBps: 2_000n,
@@ -280,13 +289,15 @@ describe("DutchAuction – 07_launch_lbp", function () {
 
             await time.increaseTo(startTime + 1n);
             const nonce = randomNonce();
-            const qty = 100n;
+            const qtyWhole = 100n;
+            const qtyWei = qtyWhole * 10n**18n;
+            const deposit = (qtyWei * priceTicks[0]) / 10n**18n;
             await auction
                 .connect(alice)
-                .commit(buildCommitHash(0n, qty, nonce), [], { value: qty * priceTicks[0] });
+                .commit(buildCommitHash(0n, qtyWei, nonce), [], { value: deposit });
 
             await time.increaseTo(commitEndTime + 1n);
-            await auction.connect(alice).reveal(0, qty, nonce, 0);
+            await auction.connect(alice).reveal(0, qtyWei, nonce, 0);
 
             await time.increaseTo(revealEndTime + 1n);
             await auction.connect(ctx.deployer).finalize();

@@ -30,13 +30,16 @@ async function commitBid(
     const address = await bidder.getAddress();
     const commitIndex = await auction.commitsCount(address);
     const nonce = randomNonce();
-    const deposit = qty * priceTicks[0];
+    // Convert qty to wei if it's a whole number
+    const qtyWei = qty < 10n**18n ? qty * 10n**18n : qty;
+    // deposit in wei (ETH) = (qtyWei * priceTicks[0]) / 1e18
+    const deposit = (qtyWei * priceTicks[0]) / 10n**18n;
 
     await auction
         .connect(bidder)
-        .commit(buildCommitHash(priceTickIndex, qty, nonce), [], { value: deposit });
+        .commit(buildCommitHash(priceTickIndex, qtyWei, nonce), [], { value: deposit });
 
-    return { nonce, deposit, commitIndex: Number(commitIndex) };
+    return { nonce, deposit, commitIndex: Number(commitIndex), qty: qtyWei };
 }
 
 async function finalizeSuccessfulAuction(ctx: AuctionFixture, params: BidParams = {}) {
@@ -47,19 +50,20 @@ async function finalizeSuccessfulAuction(ctx: AuctionFixture, params: BidParams 
     const { auction, startTime, commitEndTime, revealEndTime } = ctx;
 
     await time.increaseTo(startTime + 1n);
-    const { nonce, deposit, commitIndex } = await commitBid(ctx, {
+    const { nonce, deposit, commitIndex, qty: qtyWei } = await commitBid(ctx, {
         signer,
         qty,
         priceTickIndex
     });
 
     await time.increaseTo(commitEndTime + 1n);
-    await auction.connect(signer).reveal(priceTickIndex, qty, nonce, commitIndex);
+    // Use qty in wei from commitBid result
+    await auction.connect(signer).reveal(priceTickIndex, qtyWei, nonce, commitIndex);
 
     await time.increaseTo(revealEndTime + 1n);
     await auction.connect(ctx.deployer).finalize();
 
-    return { signer, qty, priceTickIndex, nonce, deposit };
+    return { signer, qty: qtyWei, priceTickIndex, nonce, deposit };
 }
 
 describe("DutchAuction – 08_claim", function () {
@@ -108,19 +112,22 @@ describe("DutchAuction – 08_claim", function () {
             const ctx = await loadFixture(
                 fixtureWithOverrides({
                     vestingDuration: 0n,
-                    tokensForSale: 60n,
-                    perAddressCap: 60n,
+                    tokensForSale: ethers.parseUnits("60", 18),
+                    perAddressCap: ethers.parseUnits("60", 18),
                     softCap: 0n
                 })
             );
             const { auction, alice, priceTicks } = ctx;
 
-            const qty = 60n;
-            await finalizeSuccessfulAuction(ctx, { qty, priceTickIndex: 2n });
+            const qtyWhole = 60n;
+            const { qty: qtyWei } = await finalizeSuccessfulAuction(ctx, { qty: qtyWhole, priceTickIndex: 2n });
 
             const clearingPrice = await auction.clearingPrice();
-            const deposit = qty * priceTicks[0];
-            const expectedRefund = deposit - qty * clearingPrice;
+            // qtyWei is in wei, deposit = (qtyWei * priceTicks[0]) / 1e18
+            const deposit = (qtyWei * priceTicks[0]) / 10n**18n;
+            // paymentDue = (allocatedQty * clearingPrice) / 1e18, allocatedQty = qtyWei
+            const paymentDue = (qtyWei * clearingPrice) / 10n**18n;
+            const expectedRefund = deposit - paymentDue;
 
             const aliceAddress = await alice.getAddress();
             const balanceBefore = await ethers.provider.getBalance(aliceAddress);
@@ -135,18 +142,20 @@ describe("DutchAuction – 08_claim", function () {
         it("should emit BonusAllocated if bonus tokens are included in claim", async function () {
             const ctx = await loadFixture(
                 fixtureWithOverrides({
-                    bonusReserve: 50n,
+                    bonusReserve: ethers.parseUnits("50", 18),
                     earlyBonusPct: 1_000n,
-                    tokensForSale: 20n,
-                    perAddressCap: 20n,
+                    tokensForSale: ethers.parseUnits("20", 18),
+                    perAddressCap: ethers.parseUnits("20", 18),
                     vestingDuration: 0n,
                     softCap: 0n
                 })
             );
             const { auction, alice } = ctx;
 
-            const { qty } = await finalizeSuccessfulAuction(ctx, { qty: ctx.config.tokensForSale });
-            const expectedBonus = (qty * ctx.config.earlyBonusPct) / BPS_DENOMINATOR;
+            // ctx.config.tokensForSale is now in wei
+            const { qty: qtyWei } = await finalizeSuccessfulAuction(ctx, { qty: ctx.config.tokensForSale });
+            // bonus = (qtyWei * earlyBonusPct) / BPS_DENOMINATOR (both in wei)
+            const expectedBonus = (qtyWei * ctx.config.earlyBonusPct) / BPS_DENOMINATOR;
 
             await expect(auction.connect(alice).claim())
                 .to.emit(auction, "BonusAllocated")
@@ -157,8 +166,8 @@ describe("DutchAuction – 08_claim", function () {
             const ctx = await loadFixture(
                 fixtureWithOverrides({
                     vestingDuration: 0n,
-                    tokensForSale: 90n,
-                    perAddressCap: 90n,
+                    tokensForSale: ethers.parseUnits("90", 18),
+                    perAddressCap: ethers.parseUnits("90", 18),
                     softCap: 0n
                 })
             );
@@ -183,8 +192,8 @@ describe("DutchAuction – 08_claim", function () {
                 fixtureWithOverrides({
                     vestingStart: now + 5_000n,
                     vestingDuration: 1_200n,
-                    tokensForSale: 80n,
-                    perAddressCap: 80n,
+                    tokensForSale: ethers.parseUnits("80", 18),
+                    perAddressCap: ethers.parseUnits("80", 18),
                     softCap: 0n
                 })
             );
@@ -201,7 +210,9 @@ describe("DutchAuction – 08_claim", function () {
             }
 
             const clearingPrice = await auction.clearingPrice();
-            const expectedRefund = deposit - qty * clearingPrice;
+            // qty is in wei, paymentDue = (qty * clearingPrice) / 1e18
+            const paymentDue = (qty * clearingPrice) / 10n**18n;
+            const expectedRefund = deposit - paymentDue;
 
             const balanceBefore = await ethers.provider.getBalance(aliceAddress);
             const tx1 = await auction.connect(alice).claim();
@@ -230,13 +241,15 @@ describe("DutchAuction – 08_claim", function () {
 
             await time.increaseTo(startTime + 1n);
             const nonce = randomNonce();
-            const qty = 40n;
+            const qtyWhole = 40n;
+            const qtyWei = qtyWhole * 10n**18n;
+            const deposit = (qtyWei * priceTicks[0]) / 10n**18n;
             await auction
                 .connect(alice)
-                .commit(buildCommitHash(0n, qty, nonce), [], { value: qty * priceTicks[0] });
+                .commit(buildCommitHash(0n, qtyWei, nonce), [], { value: deposit });
 
             await time.increaseTo(commitEndTime + 1n);
-            await auction.connect(alice).reveal(0, qty, nonce, 0);
+            await auction.connect(alice).reveal(0, qtyWei, nonce, 0);
 
             await expect(auction.connect(alice).claim()).to.be.revertedWithCustomError(auction, "AuctionNotFinalized");
         });
@@ -245,21 +258,23 @@ describe("DutchAuction – 08_claim", function () {
             const ctx = await loadFixture(
                 fixtureWithOverrides({
                     softCap: ethers.parseEther("100"),
-                    tokensForSale: 50n,
-                    perAddressCap: 50n
+                    tokensForSale: ethers.parseUnits("50", 18),
+                    perAddressCap: ethers.parseUnits("50", 18)
                 })
             );
             const { auction, alice, startTime, commitEndTime, revealEndTime, priceTicks } = ctx;
 
             await time.increaseTo(startTime + 1n);
             const nonce = randomNonce();
-            const qty = 50n;
+            const qtyWhole = 50n;
+            const qtyWei = qtyWhole * 10n**18n;
+            const deposit = (qtyWei * priceTicks[0]) / 10n**18n;
             await auction
                 .connect(alice)
-                .commit(buildCommitHash(0n, qty, nonce), [], { value: qty * priceTicks[0] });
+                .commit(buildCommitHash(0n, qtyWei, nonce), [], { value: deposit });
 
             await time.increaseTo(commitEndTime + 1n);
-            await auction.connect(alice).reveal(0, qty, nonce, 0);
+            await auction.connect(alice).reveal(0, qtyWei, nonce, 0);
 
             await time.increaseTo(revealEndTime + 1n);
             await auction.connect(ctx.deployer).finalize();
@@ -279,19 +294,23 @@ describe("DutchAuction – 08_claim", function () {
 
             await time.increaseTo(startTime + 1n);
             const nonce = randomNonce();
-            const qty = 30n;
+            const qtyWhole = 30n;
+            const qtyWei = qtyWhole * 10n**18n;
+            const deposit = (qtyWei * priceTicks[0]) / 10n**18n;
             await auction
                 .connect(alice)
-                .commit(buildCommitHash(0n, qty, nonce), [], { value: qty * priceTicks[0] });
+                .commit(buildCommitHash(0n, qtyWei, nonce), [], { value: deposit });
 
             const bobNonce = randomNonce();
-            const bobQty = 40n;
+            const bobQtyWhole = 40n;
+            const bobQtyWei = bobQtyWhole * 10n**18n;
+            const bobDeposit = (bobQtyWei * priceTicks[0]) / 10n**18n;
             await auction
                 .connect(bob)
-                .commit(buildCommitHash(0n, bobQty, bobNonce), [], { value: bobQty * priceTicks[0] });
+                .commit(buildCommitHash(0n, bobQtyWei, bobNonce), [], { value: bobDeposit });
 
             await time.increaseTo(commitEndTime + 1n);
-            await auction.connect(bob).reveal(0, bobQty, bobNonce, 0);
+            await auction.connect(bob).reveal(0, bobQtyWei, bobNonce, 0);
 
             await time.increaseTo(revealEndTime + 1n);
             await auction.connect(ctx.deployer).finalize();
@@ -319,8 +338,8 @@ describe("DutchAuction – 08_claim", function () {
                 fixtureWithOverrides({
                     vestingStart: now + 10_000n,
                     vestingDuration: 3_600n,
-                    tokensForSale: 40n,
-                    perAddressCap: 40n,
+                    tokensForSale: ethers.parseUnits("40", 18),
+                    perAddressCap: ethers.parseUnits("40", 18),
                     softCap: 0n
                 })
             );

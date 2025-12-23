@@ -1,6 +1,7 @@
 import React, { useMemo, useCallback } from "react";
 import { ethers } from "ethers";
-import { formatEth, formatToken } from "../../utils/auctionUtils";
+import { formatEth, formatToken, formatTokenUnits } from "../../utils/auctionUtils";
+import { generateCommitHash, calculateDeposit } from "../../utils/commitUtils";
 import { useAccount } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 
@@ -13,35 +14,18 @@ const CommitForm = ({
   txState 
 }) => {
   const { isConnected } = useAccount();
-  const generateCommitHash = useCallback(() => {
-    try {
-      const qty = BigInt(form.quantity || "0");
-      const priceTickIndex = BigInt(form.priceTickIndex || "0");
-      const nonce = form.nonce
-        ? (form.nonce.startsWith("0x") && form.nonce.length === 66
-            ? form.nonce
-            : ethers.id(form.nonce))
-        : ethers.ZeroHash;
-      
-      const abiCoder = ethers.AbiCoder.defaultAbiCoder();
-      const commitHash = ethers.keccak256(
-        abiCoder.encode(["uint256", "uint256", "bytes32"], [priceTickIndex, qty, nonce])
-      );
-      
-      return commitHash;
-    } catch (err) {
-      return null;
-    }
+  
+  const commitHashPreview = useMemo(() => {
+    if (!form.quantity) return null;
+    const priceTickIndex = BigInt(form.priceTickIndex || "0");
+    return generateCommitHash(priceTickIndex, form.quantity, form.nonce, 18);
   }, [form.quantity, form.priceTickIndex, form.nonce]);
-
-  const commitHashPreview = useMemo(() => generateCommitHash(), [generateCommitHash]);
   
   const ethRequired = useMemo(() => {
     if (!form.quantity || !auctionData?.priceTicks?.[0]) return "0";
     try {
-      const qty = BigInt(form.quantity);
-      const price = auctionData.priceTicks[0];
-      return formatEth(qty * price);
+      const deposit = calculateDeposit(form.quantity, auctionData.priceTicks[0], 18);
+      return formatEth(deposit);
     } catch {
       return "0";
     }
@@ -54,13 +38,14 @@ const CommitForm = ({
       <p className="mb-6 text-2xl font-bold text-white">Commit Bid</p>
       <div>
         <div className="mb-5">
-          <label className="mb-2 block text-sm font-medium text-[rgba(255,255,255,0.8)]">Quantity (whole units)</label>
+          <label className="mb-2 block text-sm font-medium text-[rgba(255,255,255,0.8)]">Quantity (tokens, supports decimals like 1.5)</label>
           <input
             className="w-full rounded-xl border border-[rgba(255,255,255,0.1)] bg-[rgba(15,23,42,0.8)] px-4 py-3 text-base text-white transition-all duration-300 focus:border-[rgba(99,102,241,0.5)] focus:bg-[rgba(15,23,42,0.95)] focus:outline-none"
-            type="number"
+            type="text"
+            inputMode="decimal"
             value={form.quantity}
             onChange={(e) => setForm({ ...form, quantity: e.target.value })}
-            placeholder="1000"
+            placeholder="1.5"
           />
         </div>
         <div className="mb-5">
@@ -112,8 +97,23 @@ const CommitForm = ({
         {userData && (
           <div className="mb-4 rounded-xl border border-[rgba(255,255,255,0.1)] bg-[rgba(15,23,42,0.8)] p-4">
             <p className="mb-2 text-sm text-[rgba(255,255,255,0.7)]">Your Commits:</p>
-            <p className="mb-1 text-sm text-[rgba(255,255,255,0.8)]">Committed Qty: {formatToken(userData.committedQty)}</p>
-            <p className="text-sm text-[rgba(255,255,255,0.8)]">Committed Deposit: {formatEth(userData.committedQty * (auctionData.priceTicks[0] || 0n))} ETH</p>
+            <p className="mb-1 text-sm text-[rgba(255,255,255,0.8)]">Committed Qty: {formatTokenUnits(userData.committedQty, 18)}</p>
+            <p className="mb-1 text-sm text-[rgba(255,255,255,0.8)]">Committed Deposit: {formatEth((userData.committedQty || 0n) * (auctionData.priceTicks[0] || 0n) / ethers.parseUnits("1", 18))} ETH</p>
+            {auctionData.perAddressCap && (
+              <>
+                <div className="my-2 h-px bg-[rgba(255,255,255,0.1)]" />
+                <p className="mb-1 text-sm font-semibold text-[rgba(255,255,255,0.9)]">Per-Address Cap:</p>
+                <p className="mb-1 text-sm text-[rgba(255,255,255,0.8)]">
+                  Used: {formatTokenUnits(userData.committedQty, 18)} / {formatToken(auctionData.perAddressCap, 18)}
+                </p>
+                <p className="text-xs text-[rgba(255,255,255,0.7)]">
+                  Remaining: {formatToken((auctionData.perAddressCap || 0n) - (userData.committedQty || 0n), 18)}
+                </p>
+                {(userData.committedQty || 0n) >= (auctionData.perAddressCap || 0n) && (
+                  <p className="mt-2 text-xs font-semibold text-[rgb(239,68,68)]">⚠️ Cap reached</p>
+                )}
+              </>
+            )}
           </div>
         )}
         {!isConnected ? (

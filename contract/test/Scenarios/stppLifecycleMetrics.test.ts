@@ -273,7 +273,8 @@ async function deployStppSystem(): Promise<SimulationContext> {
     const revealDuration = BigInt(config.auction.revealDuration);
     const demandCheckTime = startTime + 300n;
 
-    const priceTicks = config.auction.priceTicks.map((tick) => BigInt(tick));
+    // priceTicks from config are in ETH, convert to wei
+    const priceTicks = config.auction.priceTicks.map((tick) => ethers.parseEther(tick.toString()));
 
     const whitelist = buildMerkleWhitelist(participants.map((p) => p.address));
 
@@ -348,18 +349,27 @@ async function simulateDutchAuction(
         const priceTick = ctx.priceTicks[Math.min(priceIndex, ctx.priceTicks.length - 1)];
         const basePrice = ctx.priceTicks[0];
 
+        // maxBidEth is in wei (ETH), basePrice is in wei, so maxQty is unitless
         const maxQty = meta.maxBidEth / basePrice;
         if (maxQty <= 0n) continue;
 
         const bidFraction = 0.2 + randomFraction(localSeed, "bidFraction") * 0.8;
-        let qty = (maxQty * BigInt(Math.floor(bidFraction * 1000))) / 1000n;
-        if (qty == 0n) qty = 1n;
+        let qtyWhole = (maxQty * BigInt(Math.floor(bidFraction * 1000))) / 1000n;
+        if (qtyWhole == 0n) qtyWhole = 1n;
+        // Convert to wei for contract
+        let qty = qtyWhole * 10n**18n;
+        // Cap qty to perAddressCap to avoid CapExceeded error
+        const perAddressCap = await ctx.auction.perAddressCap();
+        if (qty > perAddressCap) {
+            qty = perAddressCap;
+        }
         const nonce = ethers.hexlify(ethers.randomBytes(32));
         const commitHash = ethers.keccak256(
             ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256", "bytes32"], [priceIndex, qty, nonce])
         );
 
-        const deposit = qty * basePrice;
+        // qty is in wei, deposit = (qty * basePrice) / 1e18
+        const deposit = (qty * basePrice) / 10n**18n;
         if (deposit === 0n) continue;
 
         await ctx.auction
