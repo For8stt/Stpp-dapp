@@ -1,15 +1,81 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import { Contract, ethers } from "ethers";
+import { BrowserProvider } from "ethers";
+import allAbis from "../../abi/allAbis.json";
+import { useTime } from "../../time/useTime";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
 const PresaleCard = ({ presale }) => {
+  const { currentTime } = useTime();
+  const [vestingCompleted, setVestingCompleted] = useState(false);
+
   const shortenAddress = (address) => {
     if (!address) return "—";
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
   };
 
+  useEffect(() => {
+    const checkVestingCompleted = async () => {
+      if (!presale.lbp || presale.lbp === ZERO_ADDRESS || !presale.lbpFinalized) {
+        setVestingCompleted(false);
+        return;
+      }
+
+      try {
+        if (typeof window === "undefined" || !window.ethereum) {
+          return;
+        }
+
+        const provider = new BrowserProvider(window.ethereum);
+        const secureLBPAbi = Array.isArray(allAbis.SecureLBP) 
+          ? allAbis.SecureLBP 
+          : (allAbis.SecureLBP?.abi || allAbis.SecureLBP);
+        
+        if (!secureLBPAbi || secureLBPAbi.length === 0) {
+          return;
+        }
+
+        const secureLBPContract = new Contract(presale.lbp, secureLBPAbi, provider);
+        
+        const [vestingConfigured, vestingStart, vestingFinalDuration] = await Promise.all([
+          secureLBPContract.vestingConfigured().catch(() => false),
+          secureLBPContract.vestingStart().catch(() => 0n),
+          secureLBPContract.vestingFinalDuration().catch(() => 0n),
+        ]);
+
+        if (vestingConfigured && vestingStart > 0n && vestingFinalDuration > 0n) {
+          const finalTime = Number(vestingStart) + Number(vestingFinalDuration);
+          const isCompleted = currentTime >= finalTime;
+          setVestingCompleted(isCompleted);
+        } else {
+          setVestingCompleted(false);
+        }
+      } catch (error) {
+        console.warn("Failed to check vesting completion:", error);
+        setVestingCompleted(false);
+      }
+    };
+
+    checkVestingCompleted();
+  }, [presale.lbp, presale.lbpFinalized, currentTime]);
+
   const statusConfig = {
+    completed: {
+      bgClass: 'bg-[rgba(107,114,128,0.15)]',
+      borderClass: 'border-[rgba(107,114,128,0.3)]',
+      textClass: 'text-[#d1d5db]',
+      icon: '●',
+      text: 'Completed'
+    },
+    vesting: {
+      bgClass: 'bg-[rgba(249,115,22,0.15)]',
+      borderClass: 'border-[rgba(249,115,22,0.3)]',
+      textClass: 'text-[#fed7aa]',
+      icon: '●',
+      text: 'Vesting'
+    },
     lbp: {
       bgClass: "bg-[rgba(59,130,246,0.15)]",
       borderClass: "border-[rgba(59,130,246,0.3)]",
@@ -34,7 +100,11 @@ const PresaleCard = ({ presale }) => {
   };
 
   const hasLBP = presale.lbp && presale.lbp !== ZERO_ADDRESS;
-  const currentStatus = presale.finalized
+  const currentStatus = vestingCompleted
+    ? statusConfig.completed
+    : presale.lbpFinalized
+      ? statusConfig.vesting
+      : presale.finalized
     ? hasLBP
       ? statusConfig.lbp
       : statusConfig.finalized

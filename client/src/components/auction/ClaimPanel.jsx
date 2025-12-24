@@ -1,8 +1,10 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { formatEth, formatToken, formatTokenUnits } from "../../utils/auctionUtils";
 import { useAccount } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useTime } from "../../time";
+import { loadBonusAllocation } from "../../utils/bonusAllocations";
+import { safeContractCall } from "../../utils/contractUtils";
 
 const BPS_DENOMINATOR = 10000n;
 
@@ -11,10 +13,92 @@ const ClaimPanel = ({
   auctionData, 
   userData, 
   onClaim, 
-  txState 
+  txState,
+  auctionAddress
 }) => {
-  const { isConnected } = useAccount();
+  const { isConnected, address: account } = useAccount();
   const { currentTime } = useTime();
+  const [userBonusFromFile, setUserBonusFromFile] = useState(null);
+  const [loadingBonusFromFile, setLoadingBonusFromFile] = useState(false);
+  const [isEarlyParticipant, setIsEarlyParticipant] = useState(null);
+  const [earlyCheckLoading, setEarlyCheckLoading] = useState(false);
+  
+  const bonusMerkleRootSet = auctionData?.bonusMerkleRoot && 
+    auctionData.bonusMerkleRoot !== "0x0000000000000000000000000000000000000000000000000000000000000000";
+  useEffect(() => {
+    const checkEarlyParticipant = async () => {
+      if (!auctionContract || !account) {
+        setIsEarlyParticipant(null);
+        return;
+      }
+      
+      setEarlyCheckLoading(true);
+      try {
+        const isEarly = await safeContractCall(
+          () => auctionContract.isEarlyParticipant(account),
+          false
+        );
+        setIsEarlyParticipant(isEarly);
+        console.log('[ClaimPanel] Early participant check:', {
+          account,
+          isEarly,
+          auctionAddress
+        });
+      } catch (err) {
+        console.warn('[ClaimPanel] Error checking early participant:', err);
+        setIsEarlyParticipant(null);
+      } finally {
+        setEarlyCheckLoading(false);
+      }
+    };
+    
+    checkEarlyParticipant();
+  }, [auctionContract, account, auctionAddress]);
+  
+  useEffect(() => {
+    const loadBonus = async () => {
+      if (!bonusMerkleRootSet || !auctionAddress || !account || userData?.bonusClaimed) {
+        setUserBonusFromFile(null);
+        return;
+      }
+      
+      setLoadingBonusFromFile(true);
+      try {
+        console.log('[ClaimPanel] Loading bonus allocation:', {
+          auctionAddress: auctionAddress.toLowerCase(),
+          userAddress: account.toLowerCase(),
+          filePath: `/bonus-allocations/${auctionAddress.toLowerCase()}.json`
+        });
+        
+        const bonusAlloc = await loadBonusAllocation(auctionAddress, account);
+        
+        console.log('[ClaimPanel] Bonus allocation result:', {
+          found: !!bonusAlloc,
+          bonusQty: bonusAlloc?.bonusQty,
+          hasProof: !!bonusAlloc?.merkleProof,
+          proofLength: bonusAlloc?.merkleProof?.length,
+          isEarlyParticipant,
+          bonusMerkleRootSet
+        });
+        
+        if (bonusAlloc) {
+          setUserBonusFromFile({
+            bonusQty: BigInt(bonusAlloc.bonusQty),
+            merkleProof: bonusAlloc.merkleProof
+          });
+        } else {
+          setUserBonusFromFile(null);
+        }
+      } catch (err) {
+        console.warn('[ClaimPanel] Error loading bonus from file:', err);
+        setUserBonusFromFile(null);
+      } finally {
+        setLoadingBonusFromFile(false);
+      }
+    };
+    
+    loadBonus();
+  }, [bonusMerkleRootSet, auctionAddress, account, userData?.bonusClaimed, isEarlyParticipant]);
 
   const allocation = userData?.allocation;
   const vestingDebug = useMemo(() => {
@@ -103,6 +187,8 @@ const ClaimPanel = ({
     return refunded >= (refundAmount - 1n);
   }, [userData?.refundedAmount, refundAmount]);
 
+  // Bonus allocation is read from contract only (allocation.bonusQty)
+
   if (!auctionData || !auctionData.finalized || !auctionData.successful) {
     return null;
   }
@@ -145,6 +231,7 @@ const ClaimPanel = ({
     : Math.floor(Date.now() / 1000);
   const mightBeVestingComplete = vestingEnd !== null && currentTimeForCheck >= (vestingEnd - 3600);
   const hasUnclaimedTokens = totalTokens > 0n && (userData?.tokensClaimed || 0n) < totalTokens;
+  
   const hasClaimable = claimableInfo.claimableTokens > 0n || 
     (refundAmount > 0n && !refundAlreadyClaimed) ||
     (hasUnclaimedTokens && vestingEnd !== null); // Allow if vesting end is set and user has unclaimed tokens
@@ -158,10 +245,22 @@ const ClaimPanel = ({
           <p className="text-sm uppercase tracking-wider text-[rgba(255,255,255,0.7)]">Allocated Tokens</p>
           <p className="font-mono text-2xl font-bold text-white">{formatTokenUnits(allocation.totalQty || 0n)}</p>
         </div>
-        {allocation.bonusQty > 0n && (
+        {/* Show bonus info if Merkle root is set or if user already has bonus allocated */}
+        {(bonusMerkleRootSet || allocation.bonusQty > 0n) && (
           <div className="flex flex-col gap-2">
-            <p className="text-sm uppercase tracking-wider text-[rgba(255,255,255,0.7)]">Bonus Tokens</p>
-            <p className="font-mono text-2xl font-bold text-[rgb(251,191,36)]">{formatTokenUnits(allocation.bonusQty)}</p>
+            <p className="text-sm uppercase tracking-wider text-[rgba(255,255,255,0.7)]">
+              Bonus Tokens
+              {bonusMerkleRootSet && allocation.bonusQty === 0n && (
+                <span className="ml-2 text-xs text-[rgba(255,255,255,0.5)]">(via Merkle proof)</span>
+              )}
+            </p>
+            <p className="font-mono text-2xl font-bold text-[rgb(251,191,36)]">
+              {allocation.bonusQty > 0n 
+                ? formatTokenUnits(allocation.bonusQty)
+                : bonusMerkleRootSet 
+                  ? "Available" 
+                  : "0"}
+            </p>
           </div>
         )}
         <div className="flex flex-col gap-2">
@@ -328,6 +427,133 @@ const ClaimPanel = ({
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Show info about bonus Merkle root status */}
+      {auctionData?.bonusReserve > 0n && (
+        <div className="mb-4 rounded-xl border border-[rgba(251,191,36,0.3)] bg-[rgba(251,191,36,0.1)] p-4">
+          <p className="mb-2 text-sm font-semibold text-[rgb(251,191,36)]">🎁 Early Incentives</p>
+          {userData?.bonusClaimed ? (
+            <div>
+              <p className="text-sm text-[rgba(255,255,255,0.8)] mb-2">
+                ✅ Your bonus tokens have already been claimed and are included in your total allocation.
+              </p>
+              {allocation?.bonusQty > 0n && (
+                <p className="text-sm font-semibold text-[rgb(251,191,36)]">
+                  Bonus Tokens Claimed: {formatTokenUnits(allocation.bonusQty)}
+                </p>
+              )}
+            </div>
+          ) : bonusMerkleRootSet ? (
+            <div>
+              <p className="text-sm text-[rgba(255,255,255,0.8)] mb-3">
+                Bonus Merkle root is set. If you're an early participant, your bonus will be verified and included when you claim.
+              </p>
+              
+              {/* Your Allocation Breakdown - Only when root is set */}
+              {account && (
+                <div className="mt-4 rounded-lg border border-[rgba(59,130,246,0.3)] bg-[rgba(59,130,246,0.05)] p-4">
+                  <p className="mb-3 text-sm font-semibold text-[rgb(59,130,246)]">Your Token Allocation</p>
+                  
+                  {loadingBonusFromFile ? (
+                    <p className="text-xs text-[rgba(255,255,255,0.6)]">Loading allocation data...</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {/* Guaranteed Base Allocation */}
+                      <div className="rounded-lg border border-[rgba(34,197,94,0.3)] bg-[rgba(34,197,94,0.05)] p-3">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-[rgba(255,255,255,0.8)]">Guaranteed Base Allocation:</span>
+                          <span className="text-lg font-bold text-[rgb(34,197,94)]">
+                            {allocation?.computed === false
+                              ? "Not computed yet"
+                              : allocation?.totalQty !== undefined
+                                ? formatTokenUnits(allocation.totalQty)
+                                : "0"}
+                          </span>
+                        </div>
+                        {allocation?.computed === false && (
+                          <p className="text-xs text-[rgba(255,255,255,0.5)] mt-1 italic">
+                            Will be computed when you claim
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Additional Bonus */}
+                      {userBonusFromFile && userBonusFromFile.bonusQty > 0n ? (
+                        <div className="rounded-lg border border-[rgba(251,191,36,0.4)] bg-[rgba(251,191,36,0.15)] p-3">
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm text-[rgba(255,255,255,0.8)]">Additional Bonus (guaranteed):</span>
+                            <span className="text-lg font-bold text-[rgb(251,191,36)]">
+                              {formatTokenUnits(userBonusFromFile.bonusQty)}
+                            </span>
+                          </div>
+                        </div>
+                      ) : userBonusFromFile === null && !loadingBonusFromFile ? (
+                        <div className="rounded-lg border border-[rgba(100,116,139,0.3)] bg-[rgba(100,116,139,0.05)] p-3">
+                          <div className="space-y-2">
+                            <div className="flex justify-between items-center">
+                              <span className="text-sm text-[rgba(255,255,255,0.7)]">Additional Bonus:</span>
+                              <span className="text-sm text-[rgba(255,255,255,0.5)]">Not found in allocation file</span>
+                            </div>
+                            {earlyCheckLoading ? (
+                              <p className="text-xs text-[rgba(255,255,255,0.5)] italic">Checking early participant status...</p>
+                            ) : isEarlyParticipant === true ? (
+                              <div className="mt-2 rounded border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.1)] p-2">
+                                <p className="text-xs text-[rgb(239,68,68)] font-semibold">⚠️ Status Check:</p>
+                                <p className="text-xs text-[rgba(255,255,255,0.8)] mt-1">
+                                  ✅ You ARE registered as an early participant on the contract
+                                </p>
+                                <p className="text-xs text-[rgba(255,255,255,0.6)] mt-1">
+                                  However, your address was not found in the bonus-allocations.json file.
+                                </p>
+                                <p className="text-xs text-[rgba(255,255,255,0.6)] mt-1">
+                                  Possible reasons:
+                                </p>
+                                <ul className="text-xs text-[rgba(255,255,255,0.6)] mt-1 ml-4 list-disc">
+                                  <li>Bonus computation script hasn't been run yet</li>
+                                  <li>Your base allocation is 0 (no tokens allocated)</li>
+                                  <li>File path mismatch (check console for exact path)</li>
+                                </ul>
+                              </div>
+                            ) : isEarlyParticipant === false ? (
+                              <div className="mt-2 rounded border border-[rgba(100,116,139,0.3)] bg-[rgba(100,116,139,0.1)] p-2">
+                                <p className="text-xs text-[rgba(255,255,255,0.7)]">
+                                  ℹ️ You are not registered as an early participant on the contract.
+                                </p>
+                                <p className="text-xs text-[rgba(255,255,255,0.5)] mt-1">
+                                  This means your commit was made after the early bonus window closed.
+                                </p>
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {/* Total Claimable */}
+                      {allocation?.totalQty !== undefined && userBonusFromFile && userBonusFromFile.bonusQty > 0n && (
+                        <div className="mt-3 rounded-lg border-2 border-[rgba(59,130,246,0.5)] bg-[rgba(59,130,246,0.1)] p-4">
+                          <div className="flex justify-between items-center">
+                            <span className="text-base font-semibold text-[rgb(59,130,246)]">Total You Will Receive:</span>
+                            <span className="text-2xl font-bold text-[rgb(59,130,246)]">
+                              {formatTokenUnits(allocation.totalQty + userBonusFromFile.bonusQty)}
+                            </span>
+                          </div>
+                          <p className="text-xs text-[rgba(255,255,255,0.6)] mt-2">
+                            = {formatTokenUnits(allocation.totalQty)} (base) + {formatTokenUnits(userBonusFromFile.bonusQty)} (bonus)
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="text-sm text-[rgba(255,255,255,0.8)]">
+              Bonus Merkle root not set yet. You can still claim your base allocation. Bonus tokens will be available once the owner sets the Merkle root.
+            </p>
+          )}
         </div>
       )}
 

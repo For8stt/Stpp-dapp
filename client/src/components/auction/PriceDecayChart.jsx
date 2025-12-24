@@ -47,7 +47,9 @@ const PriceDecayChart = ({
   softCap,
   phase,
   initialCommitEndTime,
-  demandCheckTime
+  demandCheckTime,
+  earlyBonusWindow,
+  earlyBonusPct
 }) => {
   const startPrice = useMemo(() => {
     return priceTicks && priceTicks.length > 0 ? Number(priceTicks[0]) : 0;
@@ -351,6 +353,70 @@ const PriceDecayChart = ({
               />
             </>
           )}
+
+          {/* Early Bonus Window Overlay */}
+          {(() => {
+            if (!earlyBonusWindow || earlyBonusWindow <= 0 || !startTime) return null;
+            
+            const svgWidth = 1200;
+            const svgHeight = 400;
+            const paddingTop = 40;
+            const paddingBottom = 60;
+            const chartHeight = svgHeight - paddingTop - paddingBottom;
+            const paddingLeft = 50;
+            const chartWidth = svgWidth - paddingLeft - 50;
+            const effectiveTimeRange = isShortened ? originalTimeRange : timeRange;
+            const effectiveRevealEnd = isShortened ? originalRevealEndTime : revealEndTime;
+            
+            const earlyBonusEndTime = startTime + earlyBonusWindow;
+            if (earlyBonusEndTime > effectiveRevealEnd) return null;
+            
+            const earlyBonusStartProgress = 0; // Always starts at auction start
+            const earlyBonusEndProgress = Math.min((earlyBonusEndTime - startTime) / effectiveTimeRange, 1);
+            
+            const earlyBonusStartX = paddingLeft;
+            const earlyBonusEndX = paddingLeft + (earlyBonusEndProgress * chartWidth);
+            const earlyBonusWidth = earlyBonusEndX - earlyBonusStartX;
+            
+            return (
+              <g key="early-bonus-window">
+                {/* Semi-transparent overlay */}
+                <rect
+                  x={earlyBonusStartX}
+                  y={paddingTop}
+                  width={earlyBonusWidth}
+                  height={chartHeight}
+                  fill="rgb(251, 191, 36)"
+                  opacity="0.15"
+                />
+                {/* Border */}
+                <rect
+                  x={earlyBonusStartX}
+                  y={paddingTop}
+                  width={earlyBonusWidth}
+                  height={chartHeight}
+                  fill="none"
+                  stroke="rgb(251, 191, 36)"
+                  strokeWidth="2"
+                  strokeDasharray="8,4"
+                  opacity="0.6"
+                />
+                {/* Label */}
+                <text
+                  x={earlyBonusStartX + earlyBonusWidth / 2}
+                  y={paddingTop + 20}
+                  textAnchor="middle"
+                  fill="rgb(251, 191, 36)"
+                  fontSize="12"
+                  fontWeight="bold"
+                  opacity="0.9"
+                >
+                  Early Incentives Window
+                  {earlyBonusPct > 0n && ` (${Number(earlyBonusPct) / 100}%)`}
+                </text>
+              </g>
+            );
+          })()}
 
           {/* Demand checkpoint marker - rendered AFTER blue line */}
           {(() => {

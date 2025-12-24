@@ -10,7 +10,8 @@
     "test:dutchauction": "npx hardhat test test/DutchAuction/CommitRevealFlow.test.ts test/DutchAuction/ExtendedBehaviors.test.ts",
     "test:presalemanager": "npx hardhat test test/PresaleManager/PresaleManagerManager.test.ts",
     "deploy:test-token": "npx hardhat run scripts/deployTestToken.ts --network localhost",
-    "deploy:all": "npx hardhat run scripts/deployAll.ts --network localhost"
+    "deploy:all": "npx hardhat run scripts/deployAll.ts --network localhost",
+    "bonus:compute": "npx hardhat run scripts/computeAndCopyBonusAllocations.ts --network localhost"
   },
   "keywords": [],
   "author": "",

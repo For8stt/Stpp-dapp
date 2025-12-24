@@ -43,6 +43,7 @@ const AllPresales = () => {
         lbp: info && info[2] && info[2] !== ethers.ZeroAddress ? info[2] : "",
         vesting: info ? info[3] : "",
         finalized: info ? info[4] : false,
+        lbpFinalized: info && info.length > 6 ? info[6] : false,
       };
     } catch (error) {
       console.warn("Failed to load manager info", error);
@@ -87,7 +88,6 @@ const AllPresales = () => {
     } catch (factoryError) {
       console.error("Factory error:", factoryError);
 
-      // Check if this is a network/contract issue
       if (factoryError?.code === 'CALL_EXCEPTION') {
         setError("Contracts not found. Please redeploy contracts to the current network.");
       } else if (factoryError?.message?.includes('missing revert data')) {

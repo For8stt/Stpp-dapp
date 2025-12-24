@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
+import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 import "../../interfaces/IAuction.sol";
 import "../../libraries/CommitLib.sol";
 import "../../libraries/PriceTickLib.sol";
@@ -40,7 +41,8 @@ contract DutchAuction is IAuction, Ownable, ReentrancyGuard, DutchAuctionEvents,
         address bidder;
         uint32 priceTickIndex;
         uint224 qty;
-        uint32 bonusPct;
+        uint32 bonusPct; // DEPRECATED: kept for storage compatibility, use isEarly instead
+        bool isEarly; // NEW: marks if bid was committed during early bonus window
         bool allocationComputed;
         uint224 allocatedQty;
     }
@@ -95,6 +97,12 @@ contract DutchAuction is IAuction, Ownable, ReentrancyGuard, DutchAuctionEvents,
     mapping(address => uint256) public committedQty;
     mapping(address => uint256) public revealedQty;
     mapping(address => uint256) public revealedDeposit;
+    
+    // Merkle-based bonus tracking
+    address[] public earlyParticipants; // List of accounts with early bids (for off-chain computation)
+    mapping(address => bool) public isEarlyParticipant; // Quick lookup to avoid duplicates
+    bytes32 public bonusMerkleRoot; // Merkle root of bonus allocations (set after finalize)
+    mapping(address => bool) public bonusClaimed; // Track claimed bonuses to prevent double claims
 
     uint256 public totalDepositCommitted;
     uint256 public totalDepositsRevealed;
@@ -171,6 +179,11 @@ contract DutchAuction is IAuction, Ownable, ReentrancyGuard, DutchAuctionEvents,
     /// @notice Reads how many bids a bidder revealed successfully.
     function revealedBidsCount(address account) external view returns (uint256) {
         return revealedBids[account].length;
+    }
+
+    /// @notice Returns the number of early participants (for off-chain computation).
+    function earlyParticipantsCount() external view returns (uint256) {
+        return earlyParticipants.length;
     }
 
     /// @notice One-time setup for the auction windows, caps, pricing ticks, and vesting details.
@@ -288,18 +301,9 @@ contract DutchAuction is IAuction, Ownable, ReentrancyGuard, DutchAuctionEvents,
 
         if (revealedQty[msg.sender] + qty > perAddressCap) revert CapExceeded();
 
-
-        uint256 bonusPct = 0;
-        if (userCommit.commitTime <= startTime + earlyBonusWindow && earlyBonusPct > 0) {
-            uint256 potentialBonus = (qty * earlyBonusPct) / BPS_DENOMINATOR;
-            if (potentialBonus <= bonusReserveRemaining) {
-                bonusPct = earlyBonusPct;
-            } else if (bonusReserveRemaining > 0) {
-                bonusPct = (bonusReserveRemaining * BPS_DENOMINATOR) / qty;
-            } else {
-                bonusPct = 0;
-            }
-        }
+        // Determine early eligibility based on commit time only
+        // No bonus calculation or reserve deduction happens here
+        bool isEarly = (userCommit.commitTime <= startTime + earlyBonusWindow) && (earlyBonusPct > 0);
 
         userCommit.revealed = true;
 
@@ -308,11 +312,18 @@ contract DutchAuction is IAuction, Ownable, ReentrancyGuard, DutchAuctionEvents,
                 bidder: msg.sender,
                 priceTickIndex: uint32(priceTickIndex),
                 qty: uint224(qty),
-                bonusPct: uint32(bonusPct),
+                bonusPct: 0, // DEPRECATED: no longer used
+                isEarly: isEarly,
                 allocationComputed: false,
                 allocatedQty: 0
             })
         );
+
+        // Track early participants for post-finalize bonus calculation
+        if (isEarly && !isEarlyParticipant[msg.sender]) {
+            earlyParticipants.push(msg.sender);
+            isEarlyParticipant[msg.sender] = true;
+        }
 
         revealedQty[msg.sender] += qty;
         revealedDeposit[msg.sender] += deposit;
@@ -320,7 +331,8 @@ contract DutchAuction is IAuction, Ownable, ReentrancyGuard, DutchAuctionEvents,
         totalQtyRevealed += qty;
         priceBucketTotals[priceTickIndex] += qty;
 
-        emit BidRevealed(msg.sender, commitIndex, priceTickIndex, qty, bonusPct);
+        // Emit with isEarly flag (using bonusPct field for backward compatibility in event)
+        emit BidRevealed(msg.sender, commitIndex, priceTickIndex, qty, isEarly ? earlyBonusPct : 0);
     }
 
     /// @notice Adjusts decay multiplier and commit end time if deposits lag behind expectations.
@@ -374,6 +386,9 @@ contract DutchAuction is IAuction, Ownable, ReentrancyGuard, DutchAuctionEvents,
         uint256 totalPaymentsDue = (tokensSold * clearingPrice) / 1e18;
         ethForTreasury = totalPaymentsDue;
 
+        // Bonuses are computed off-chain and set via setBonusMerkleRoot()
+        // No on-chain iteration over early participants
+
         emit AuctionFinalized(true, clearingPrice, tokensSold, totalRaised);
     }
 
@@ -420,67 +435,58 @@ contract DutchAuction is IAuction, Ownable, ReentrancyGuard, DutchAuctionEvents,
         proRataDenominator = data.proRataDenominator;
     }
 
-    /// @notice Claims vested tokens and outstanding refunds for a winning participant.
-    /// @dev Lazily computes allocation, transfers the vested portion, and returns surplus ETH.
-    function claim() external nonReentrant {
-        if (!finalized) revert AuctionNotFinalized();
-        if (!successful) revert AuctionNotFinalized();
-
-        if (!accountAllocations[msg.sender].computed) {
-            _computeAllocation(msg.sender);
-        }
-        AllocationData storage allocation = accountAllocations[msg.sender];
-
-        uint256 unlocked = VestingMath.cliffOnlyFraction(vestingStart, vestingDuration);
-        uint256 totalTokensDue = allocation.totalQty + allocation.bonusQty;
-        uint256 vestedTokens = (totalTokensDue * unlocked) / BPS_DENOMINATOR;
-
-        uint256 tokensToSend = vestedTokens - tokensClaimed[msg.sender];
-        if (tokensToSend > 0) {
-            tokensClaimed[msg.sender] += tokensToSend;
-            saleToken.safeTransfer(msg.sender, tokensToSend);
-            if (allocation.bonusQty > 0) {
-                uint256 bonusPortion = (tokensToSend * allocation.bonusQty) / (allocation.totalQty + allocation.bonusQty);
-                if (bonusPortion > 0) {
-                    emit BonusAllocated(msg.sender, bonusPortion);
-                }
+    /// @notice Sets the Merkle root for bonus allocations (callable only once by owner, manager, or manager's owner after finalize).
+    /// @dev The Merkle root represents off-chain computed bonus allocations for early participants.
+    /// @param root The Merkle root of bonus allocations (leaf = keccak256(address, bonusQty))
+    function setBonusMerkleRoot(bytes32 root) external {
+        // Allow owner, manager, or owner of manager to set root
+        bool isAuctionOwner = msg.sender == owner();
+        bool isManager = msg.sender == presaleManager;
+        bool isManagerOwner = false;
+        
+        // Check if msg.sender is owner of PresaleManager contract using low-level call
+        // PresaleManager uses Ownable, so owner() is a view function
+        if (!isAuctionOwner && !isManager && presaleManager != address(0)) {
+            (bool success, bytes memory data) = presaleManager.staticcall(
+                abi.encodeWithSignature("owner()")
+            );
+            if (success && data.length >= 32) {
+                address managerOwner = abi.decode(data, (address));
+                isManagerOwner = (managerOwner == msg.sender);
             }
         }
-
-        uint256 refundDue = allocation.paymentDue <= revealedDeposit[msg.sender]
-            ? revealedDeposit[msg.sender] - allocation.paymentDue
-            : 0;
-
-        uint256 alreadyRefunded = refundedAmount[msg.sender];
-        if (refundDue > alreadyRefunded) {
-            uint256 refundValue = refundDue - alreadyRefunded;
-            refundedAmount[msg.sender] = refundDue;
-            (bool sent, ) = payable(msg.sender).call{value: refundValue}("");
-            if (!sent) revert TransferFailed();
-            emit RefundIssued(msg.sender, refundValue);
-        }
-
-        if (tokensToSend == 0 && refundDue == alreadyRefunded) revert NothingToClaim();
+        
+        if (!isAuctionOwner && !isManager && !isManagerOwner) revert NotOwner();
+        if (!finalized) revert AuctionNotFinalized();
+        if (bonusMerkleRoot != bytes32(0)) revert AuctionFinalizedAlready(); // Can only set once
+        if (root == bytes32(0)) revert InvalidCommit(); // Root cannot be zero
+        
+        bonusMerkleRoot = root;
+        emit BonusMerkleRootSet(root);
     }
 
-    /// @dev Calculates filled quantity, bonuses, and payment owed for a bidder, caching results.
-    function _computeAllocation(address account) internal returns (AllocationData memory) {
+    /// @dev Computes base allocation (without bonus) for a participant.
+    /// @notice This is a helper function that computes only the base allocation,
+    /// without any bonus calculations.
+    function _computeBaseAllocation(address account) internal {
         RevealedBid[] storage bids = revealedBids[account];
         uint256 len = bids.length;
-        AllocationData memory allocation;
 
         if (len == 0) {
-            allocation.computed = true;
-            accountAllocations[account] = allocation;
-            return allocation;
+            accountAllocations[account] = AllocationData({
+                totalQty: 0,
+                bonusQty: 0,
+                paymentDue: 0,
+                computed: true
+            });
+            return;
         }
 
         uint256 clearingIdx = clearingTickIndex;
         uint256 remainingAtClearing = proRataNumerator;
         uint256 totalAtClearing = proRataDenominator;
 
-        uint256 allocated;
-        uint256 bonusTotal;
+        uint256 allocated = 0;
 
         for (uint256 i = 0; i < len; i++) {
             RevealedBid storage bid = bids[i];
@@ -507,28 +513,102 @@ contract DutchAuction is IAuction, Ownable, ReentrancyGuard, DutchAuctionEvents,
             }
 
             allocated += bid.allocatedQty;
-            if (bid.bonusPct > 0) {
-                bonusTotal += (bid.allocatedQty * bid.bonusPct) / BPS_DENOMINATOR;
-            }
         }
-
-        if (bonusTotal > bonusReserveRemaining) {
-            bonusTotal = bonusReserveRemaining;
-        }
-        bonusReserveRemaining -= bonusTotal;
 
         // allocated is in wei (token amount), clearingPrice is in wei (ETH per token)
         // paymentDue in wei (ETH) = (allocated * clearingPrice) / 1e18
         uint256 paymentDue = (allocated * clearingPrice) / 1e18;
 
-        allocation = AllocationData({
+        accountAllocations[account] = AllocationData({
             totalQty: allocated,
-            bonusQty: bonusTotal,
+            bonusQty: 0, // Will be set during claim() after Merkle proof verification
             paymentDue: paymentDue,
             computed: true
         });
+    }
 
-        accountAllocations[account] = allocation;
+    /// @notice Claims vested tokens and outstanding refunds for a winning participant.
+    /// @dev Lazily computes allocation, verifies bonus Merkle proof (if provided), transfers tokens, and returns surplus ETH.
+    /// @param bonusQty The bonus token amount (verified via Merkle proof). Pass 0 if no bonus or not an early participant.
+    /// @param merkleProof The Merkle proof for the bonus allocation. Pass empty array if no bonus.
+    function claim(uint256 bonusQty, bytes32[] calldata merkleProof) external nonReentrant {
+        if (!finalized) revert AuctionNotFinalized();
+        if (!successful) revert AuctionNotFinalized();
+
+        if (!accountAllocations[msg.sender].computed) {
+            _computeAllocation(msg.sender);
+        }
+        AllocationData storage allocation = accountAllocations[msg.sender];
+
+        // Verify bonus Merkle proof if bonus is claimed
+        uint256 verifiedBonusQty = 0;
+        if (bonusQty > 0) {
+            if (bonusMerkleRoot == bytes32(0)) revert AuctionNotFinalized();
+            if (bonusClaimed[msg.sender]) revert InvalidCommit(); // Prevent double claims
+            
+            // Compute leaf hash: keccak256(address, bonusQty)
+            bytes32 leaf = keccak256(abi.encodePacked(msg.sender, bonusQty));
+            
+            // Verify Merkle proof
+            if (!MerkleProof.verify(merkleProof, bonusMerkleRoot, leaf)) {
+                revert InvalidCommit(); // Invalid proof
+            }
+            
+            // Ensure bonus doesn't exceed remaining reserve
+            if (bonusQty > bonusReserveRemaining) {
+                revert InvalidCommit(); // Bonus exceeds reserve
+            }
+            
+            verifiedBonusQty = bonusQty;
+            bonusClaimed[msg.sender] = true;
+            bonusReserveRemaining -= verifiedBonusQty;
+            
+            // Update allocation with verified bonus
+            allocation.bonusQty = verifiedBonusQty;
+        }
+
+        uint256 unlocked = VestingMath.cliffOnlyFraction(vestingStart, vestingDuration);
+        uint256 totalTokensDue = allocation.totalQty + verifiedBonusQty;
+        uint256 vestedTokens = (totalTokensDue * unlocked) / BPS_DENOMINATOR;
+
+        uint256 tokensToSend = vestedTokens - tokensClaimed[msg.sender];
+        if (tokensToSend > 0) {
+            tokensClaimed[msg.sender] += tokensToSend;
+            saleToken.safeTransfer(msg.sender, tokensToSend);
+            if (verifiedBonusQty > 0) {
+                uint256 bonusPortion = (tokensToSend * verifiedBonusQty) / (allocation.totalQty + verifiedBonusQty);
+                if (bonusPortion > 0) {
+                    emit BonusAllocated(msg.sender, bonusPortion);
+                }
+            }
+        }
+
+        uint256 refundDue = allocation.paymentDue <= revealedDeposit[msg.sender]
+            ? revealedDeposit[msg.sender] - allocation.paymentDue
+            : 0;
+
+        uint256 alreadyRefunded = refundedAmount[msg.sender];
+        if (refundDue > alreadyRefunded) {
+            uint256 refundValue = refundDue - alreadyRefunded;
+            refundedAmount[msg.sender] = refundDue;
+            (bool sent, ) = payable(msg.sender).call{value: refundValue}("");
+            if (!sent) revert TransferFailed();
+            emit RefundIssued(msg.sender, refundValue);
+        }
+
+        if (tokensToSend == 0 && refundDue == alreadyRefunded) revert NothingToClaim();
+    }
+
+    /// @dev Calculates filled quantity and payment owed for a bidder, caching results.
+    /// @notice Bonus amounts are verified via Merkle proofs during claim(), not computed here.
+    function _computeAllocation(address account) internal returns (AllocationData memory) {
+        // Compute base allocation if not already computed
+        if (!accountAllocations[account].computed) {
+            _computeBaseAllocation(account);
+        }
+
+        AllocationData storage allocation = accountAllocations[account];
+        // bonusQty is set to 0 here and will be updated during claim() after Merkle proof verification
         return allocation;
     }
 

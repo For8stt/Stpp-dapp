@@ -313,7 +313,7 @@ describe("Scenario – Low Uptake Adjustment", function () {
 
         // --- Phase 8: Dutch auction claims after success ---
         const aliceBalanceBefore = await saleToken.balanceOf(alice.address);
-        await expect(auction.connect(alice).claim()).to.emit(saleToken, "Transfer");
+        await expect(auction.connect(alice).claim(0, [])).to.emit(saleToken, "Transfer");
         const aliceBalanceAfter = await saleToken.balanceOf(alice.address);
         expect(aliceBalanceAfter).to.be.gt(aliceBalanceBefore);
     });

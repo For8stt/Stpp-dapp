@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 
 const Section = ({ title, description, children }) => (
   <div className="relative mb-6 overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-[#334155] to-[#1e293b] p-6 shadow-lg transition-all duration-300 hover:border-[rgba(255,255,255,0.25)] hover:shadow-xl">
@@ -10,10 +10,52 @@ const Section = ({ title, description, children }) => (
   </div>
 );
 
-const Input = ({ label, name, value, onChange, type = "text", placeholder, helper }) => (
+const Tooltip = ({ text }) => {
+  const [isVisible, setIsVisible] = useState(false);
+
+  if (!text) return null;
+
+  return (
+    <div className="relative inline-flex items-center">
+      <div
+        className="relative cursor-help ml-1"
+        onMouseEnter={() => setIsVisible(true)}
+        onMouseLeave={() => setIsVisible(false)}
+      >
+        <svg
+          className="h-4 w-4 text-text-muted hover:text-primary transition-colors"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+          />
+        </svg>
+        {isVisible && (
+          <div className="absolute left-1/2 bottom-full mb-2 transform -translate-x-1/2 z-[100] w-72 p-3 text-xs leading-relaxed text-white bg-gray-900 rounded-lg shadow-xl border border-gray-700 pointer-events-none whitespace-normal">
+            <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
+            {text}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const LabelWithTooltip = ({ label, tooltip }) => (
+  <div className="flex items-center gap-2">
+    <span className="text-sm font-semibold text-text">{label}</span>
+    {tooltip && <Tooltip text={tooltip} />}
+  </div>
+);
+
+const Input = ({ label, name, value, onChange, type = "text", placeholder, tooltip }) => (
   <label className="flex flex-col gap-2">
-    <span className="mb-1 text-sm font-semibold text-text">{label}</span>
-    {helper && <span className="text-xs italic text-text-muted">{helper}</span>}
+    <LabelWithTooltip label={label} tooltip={tooltip} />
     <input
       type={type}
       name={name}
@@ -25,10 +67,9 @@ const Input = ({ label, name, value, onChange, type = "text", placeholder, helpe
   </label>
 );
 
-const TextArea = ({ label, name, value, onChange, placeholder, helper }) => (
+const TextArea = ({ label, name, value, onChange, placeholder, tooltip }) => (
   <label className="col-span-full flex flex-col gap-2">
-    <span className="mb-1 text-sm font-semibold text-text">{label}</span>
-    {helper && <span className="text-xs italic text-text-muted">{helper}</span>}
+    <LabelWithTooltip label={label} tooltip={tooltip} />
     <textarea
       name={name}
       value={value}
@@ -54,6 +95,7 @@ const CreatePresaleForm = ({ values, onChange, onSubmit, submitting, disabled })
         value={values.saleToken}
         onChange={onChange}
         placeholder="0x..."
+        tooltip="Address of the ERC20 token being sold in the auction. This is the token you want to sell to participants."
       />
       <Input
         label="Treasury Address"
@@ -61,6 +103,7 @@ const CreatePresaleForm = ({ values, onChange, onSubmit, submitting, disabled })
         value={values.treasury}
         onChange={onChange}
         placeholder="0x..."
+        tooltip="Wallet address that will receive the proceeds (ETH) after the auction ends. Usually this is the project or team address."
       />
       <Input
         label="Tokens for Sale"
@@ -68,7 +111,7 @@ const CreatePresaleForm = ({ values, onChange, onSubmit, submitting, disabled })
         value={values.tokensForSale}
         onChange={onChange}
         placeholder="1_000_000"
-        helper="Human-readable amount; will be converted to 18 decimals."
+        tooltip="Total number of tokens to be sold in the auction. Specified in regular units (will be converted to 18 decimals)."
       />
       <Input
         label="Bonus Reserve"
@@ -76,6 +119,7 @@ const CreatePresaleForm = ({ values, onChange, onSubmit, submitting, disabled })
         value={values.bonusReserve}
         onChange={onChange}
         placeholder="50_000"
+        tooltip="Reserve of tokens for early participant bonuses. These tokens are used to award additional tokens to those who placed bids during the early bonus period."
       />
       <Input
         label="Per Address Cap"
@@ -83,6 +127,7 @@ const CreatePresaleForm = ({ values, onChange, onSubmit, submitting, disabled })
         value={values.perAddressCap}
         onChange={onChange}
         placeholder="10_000"
+        tooltip="Maximum number of tokens that a single address (wallet) can purchase. This limit helps prevent token concentration in few hands."
       />
       <Input
         label="Soft Cap"
@@ -90,6 +135,7 @@ const CreatePresaleForm = ({ values, onChange, onSubmit, submitting, disabled })
         value={values.softCap}
         onChange={onChange}
         placeholder="500_000"
+        tooltip="Minimum fundraising amount in ETH that must be reached for successful auction completion. If the amount doesn't reach this threshold, the auction may be cancelled."
       />
     </Section>
 
@@ -100,6 +146,7 @@ const CreatePresaleForm = ({ values, onChange, onSubmit, submitting, disabled })
         type="datetime-local"
         value={values.startTime}
         onChange={onChange}
+        tooltip="Date and time when the auction starts. From this moment, participants can begin placing bids (commit phase)."
       />
       <Input
         label="Commit duration (seconds)"
@@ -107,6 +154,7 @@ const CreatePresaleForm = ({ values, onChange, onSubmit, submitting, disabled })
         value={values.commitDuration}
         onChange={onChange}
         placeholder="3600"
+        tooltip="Duration of the commit phase (in seconds). During this phase, participants make encrypted bids with ETH deposits. For example, 3600 = 1 hour."
       />
       <Input
         label="Reveal duration (seconds)"
@@ -114,6 +162,7 @@ const CreatePresaleForm = ({ values, onChange, onSubmit, submitting, disabled })
         value={values.revealDuration}
         onChange={onChange}
         placeholder="3600"
+        tooltip="Duration of the reveal phase (in seconds). After the commit phase ends, participants must reveal their bids by showing the price and token quantity. For example, 3600 = 1 hour."
       />
       <Input
         label="Demand check delay (seconds after start)"
@@ -121,6 +170,7 @@ const CreatePresaleForm = ({ values, onChange, onSubmit, submitting, disabled })
         value={values.demandCheckDelay}
         onChange={onChange}
         placeholder="600"
+        tooltip="Time after auction start (in seconds) when demand is checked. If collected deposits are below the threshold (Threshold low), the auction can be accelerated. For example, 600 = 10 minutes."
       />
       <Input
         label="Early bonus window (seconds)"
@@ -128,6 +178,7 @@ const CreatePresaleForm = ({ values, onChange, onSubmit, submitting, disabled })
         value={values.earlyBonusWindow}
         onChange={onChange}
         placeholder="600"
+        tooltip="Time window from auction start (in seconds) during which participants receive a bonus for early participation. Bids placed during this period receive additional tokens from the Bonus Reserve."
       />
       <Input
         label="Early bonus percentage (BPS)"
@@ -135,6 +186,7 @@ const CreatePresaleForm = ({ values, onChange, onSubmit, submitting, disabled })
         value={values.earlyBonusPct}
         onChange={onChange}
         placeholder="500"
+        tooltip="Bonus percentage for early participants in basis points (BPS). 1 BPS = 0.01%. For example, 500 BPS = 5% additional tokens for those who bid during the Early bonus window."
       />
       <Input
         label="Non-reveal penalty (BPS)"
@@ -142,6 +194,7 @@ const CreatePresaleForm = ({ values, onChange, onSubmit, submitting, disabled })
         value={values.nonRevealPenaltyBps}
         onChange={onChange}
         placeholder="0"
+        tooltip="Penalty in basis points (BPS) for participants who committed but did not reveal their bid in the reveal phase. If 0, there is no penalty. For example, 100 BPS = 1% penalty from the deposit."
       />
       <Input
         label="LBP stable share (BPS)"
@@ -149,6 +202,7 @@ const CreatePresaleForm = ({ values, onChange, onSubmit, submitting, disabled })
         value={values.lbpStableShareBps}
         onChange={onChange}
         placeholder="4000"
+        tooltip="Share of stablecoins (e.g., USDC) in the LBP pool after auction completion, expressed in basis points. 4000 BPS = 40% stablecoins, 60% project tokens."
       />
       <Input
         label="Threshold low"
@@ -156,7 +210,7 @@ const CreatePresaleForm = ({ values, onChange, onSubmit, submitting, disabled })
         value={values.thresholdLow}
         onChange={onChange}
         placeholder="100"
-        helper="ETH threshold for low demand; if deposits are below this at demand check time, the auction can be accelerated."
+        tooltip="Low demand threshold in ETH. If collected deposits are below this value at the demand check time (Demand check delay), the auction can be accelerated (commit phase may be shortened)."
       />
       <Input
         label="Max decay multiplier"
@@ -164,6 +218,7 @@ const CreatePresaleForm = ({ values, onChange, onSubmit, submitting, disabled })
         value={values.maxDecayMultiplier}
         onChange={onChange}
         placeholder="1"
+        tooltip="Maximum decay multiplier for auction acceleration. Used in dynamic adjustment when demand is low. A value of 1 means no acceleration."
       />
       <Input
         label="Minimum commit duration"
@@ -171,6 +226,7 @@ const CreatePresaleForm = ({ values, onChange, onSubmit, submitting, disabled })
         value={values.minCommitDuration}
         onChange={onChange}
         placeholder="900"
+        tooltip="Minimum duration of the commit phase in seconds, even if the auction is accelerated due to low demand. This ensures participants have a minimum time to participate. For example, 900 = 15 minutes."
       />
       <Input
         label="Merkle root (optional)"
@@ -178,6 +234,7 @@ const CreatePresaleForm = ({ values, onChange, onSubmit, submitting, disabled })
         value={values.merkleRoot}
         onChange={onChange}
         placeholder="0x0000..."
+        tooltip="Merkle tree root for whitelist. If specified, only addresses from the whitelist can participate in the auction. If left empty (0x0000...), the auction will be public."
       />
       <Input
         label="Vesting start"
@@ -185,6 +242,7 @@ const CreatePresaleForm = ({ values, onChange, onSubmit, submitting, disabled })
         type="datetime-local"
         value={values.vestingStart}
         onChange={onChange}
+        tooltip="Date and time when vesting (gradual token unlock) begins. From this moment, participants start receiving their tokens gradually over the Vesting duration period."
       />
       <Input
         label="Vesting duration (seconds)"
@@ -192,6 +250,7 @@ const CreatePresaleForm = ({ values, onChange, onSubmit, submitting, disabled })
         value={values.vestingDuration}
         onChange={onChange}
         placeholder="10800"
+        tooltip="Vesting duration in seconds - the time period during which tokens will be gradually unlocked for participants. For example, 10800 = 3 hours, 2592000 = 30 days."
       />
       <TextArea
         label="Price ticks (comma separated, ETH units)"
@@ -199,7 +258,7 @@ const CreatePresaleForm = ({ values, onChange, onSubmit, submitting, disabled })
         value={values.priceTicks}
         onChange={onChange}
         placeholder="1,0.9,0.8,0.7"
-        helper="Highest price first. Each value converted to wei."
+        tooltip="Price levels for the Dutch auction, separated by commas. Specify from highest to lowest price. Each value is the price in ETH per token. For example, '1,0.9,0.8' means: start at 1 ETH/token, then 0.9 ETH/token, then 0.8 ETH/token."
       />
     </Section>
 
@@ -210,6 +269,7 @@ const CreatePresaleForm = ({ values, onChange, onSubmit, submitting, disabled })
         type="datetime-local"
         value={values.lbpStart}
         onChange={onChange}
+        tooltip="Date and time when the LBP (Liquidity Bootstrap Pool) starts. LBP is a liquidity pool where remaining tokens after the auction will be sold through an automated market maker with dynamic pricing."
       />
       <Input
         label="LBP end"
@@ -217,6 +277,7 @@ const CreatePresaleForm = ({ values, onChange, onSubmit, submitting, disabled })
         type="datetime-local"
         value={values.lbpEnd}
         onChange={onChange}
+        tooltip="Date and time when the LBP ends. After this moment, the pool stops changing weights and the price stabilizes."
       />
       <Input
         label="Pool start weight %"
@@ -224,6 +285,7 @@ const CreatePresaleForm = ({ values, onChange, onSubmit, submitting, disabled })
         value={values.poolStartWeightToken}
         onChange={onChange}
         placeholder="80"
+        tooltip="Initial weight of project tokens in the LBP pool as a percentage. For example, 80% means that at the start, 80% of the pool value consists of project tokens, and 20% are stablecoins. Over time, the weight decreases to Pool end weight %."
       />
       <Input
         label="Pool end weight %"
@@ -231,6 +293,7 @@ const CreatePresaleForm = ({ values, onChange, onSubmit, submitting, disabled })
         value={values.poolEndWeightToken}
         onChange={onChange}
         placeholder="20"
+        tooltip="Final weight of project tokens in the LBP pool as a percentage. By the end of the LBP, the token weight will decrease from Pool start weight % to this value. For example, 20% means that at the end, 20% of the pool value is project tokens, 80% are stablecoins."
       />
       <Input
         label="Pool swap fee"
@@ -238,7 +301,7 @@ const CreatePresaleForm = ({ values, onChange, onSubmit, submitting, disabled })
         value={values.poolSwapFee}
         onChange={onChange}
         placeholder="0.003"
-        helper="Denominated in ETH (e.g. 0.003 = 0.3%)"
+        tooltip="Swap fee in the LBP pool, expressed in ETH. For example, 0.003 = 0.3% fee per transaction. This fee goes to the liquidity pool."
       />
       <Input
         label="Vesting cliff duration (seconds)"
@@ -246,6 +309,7 @@ const CreatePresaleForm = ({ values, onChange, onSubmit, submitting, disabled })
         value={values.vestingCliffDuration}
         onChange={onChange}
         placeholder="0"
+        tooltip="Duration of the vesting cliff period in seconds. Cliff is a period during which tokens are not unlocked at all. After the cliff ends, linear unlocking begins. If 0, there is no cliff."
       />
       <Input
         label="Vesting final duration (seconds)"
@@ -253,6 +317,7 @@ const CreatePresaleForm = ({ values, onChange, onSubmit, submitting, disabled })
         value={values.vestingFinalDuration}
         onChange={onChange}
         placeholder="2592000"
+        tooltip="Total vesting duration for LBP in seconds. This is the time from vesting start to full unlock of all tokens. For example, 2592000 = 30 days. Tokens unlock linearly during this period after the cliff."
       />
       <Input
         label="Vesting cliff percent (BPS)"
@@ -260,6 +325,7 @@ const CreatePresaleForm = ({ values, onChange, onSubmit, submitting, disabled })
         value={values.vestingCliffPercentBP}
         onChange={onChange}
         placeholder="0"
+        tooltip="Percentage of tokens that unlock immediately after the cliff period ends, expressed in basis points (BPS). The remaining tokens unlock linearly. For example, 1000 BPS = 10% of tokens immediately after cliff."
       />
     </Section>
 

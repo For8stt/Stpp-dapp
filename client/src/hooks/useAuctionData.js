@@ -113,6 +113,9 @@ export const useAuctionData = (auctionContract, managerContract = null, auctionA
         vestingStart,
         vestingDuration,
         initialCommitEndTime,
+        earlyBonusPct,
+        earlyBonusWindow,
+        bonusMerkleRoot,
       ] = await Promise.all([
         safeContractCall(() => auctionContract.startTime(), 0n),
         safeContractCall(() => auctionContract.commitEndTime(), 0n),
@@ -153,6 +156,9 @@ export const useAuctionData = (auctionContract, managerContract = null, auctionA
         safeContractCall(() => auctionContract.vestingStart(), 0n),
         safeContractCall(() => auctionContract.vestingDuration(), 0n),
         safeContractCall(() => auctionContract.initialCommitEndTime(), 0n),
+        safeContractCall(() => auctionContract.earlyBonusPct(), 0n),
+        safeContractCall(() => auctionContract.earlyBonusWindow(), 0n),
+        safeContractCall(() => auctionContract.bonusMerkleRoot(), ethers.ZeroHash),
       ]);
 
       const tickLength = Number(priceTicksLength);
@@ -222,6 +228,10 @@ export const useAuctionData = (auctionContract, managerContract = null, auctionA
         vestingStart: Number(vestingStart),
         vestingDuration: Number(vestingDuration),
         demandCheckTime,
+        earlyBonusPct,
+        earlyBonusWindow: Number(earlyBonusWindow),
+        bonusMerkleRoot: bonusMerkleRoot || ethers.ZeroHash,
+        auctionAddress: auctionAddress || null,
       });
     } catch (err) {
       console.error("Failed to fetch auction data:", err);

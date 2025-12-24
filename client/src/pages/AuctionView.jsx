@@ -31,13 +31,14 @@ import { useChainId } from "wagmi";
 import { useTime } from "../time";
 
 
-import { getPhase, getTimeUntil } from "../utils/auctionUtils";
+import { getPhase, getTimeUntil, formatTokenUnits } from "../utils/auctionUtils";
 import { ensureSigner } from "../services/web3/signer";
 import { ensureProvider, setTargetChainIdHex } from "../services/web3/provider";
 import { generateCommitHash, parseMerkleProof, calculateDeposit } from "../utils/commitUtils";
 import { REFRESH_INTERVAL_MS, PHASES, DEFAULT_LBP_CONFIG } from "../constants/auction";
 import { deepEqual } from "../utils/objectUtils";
 import { handleTxError } from "../utils/txErrorHandler";
+import { loadBonusAllocation } from "../utils/bonusAllocations";
 
 
 const AuctionView = () => {
@@ -302,7 +303,6 @@ const AuctionView = () => {
     if (typeof revealForm.quantity === "string") {
       qty = ethers.parseUnits(revealForm.quantity, 18);
     } else if (typeof revealForm.quantity === "number") {
-      // Convert number to string first to handle decimals
       qty = ethers.parseUnits(revealForm.quantity.toString(), 18);
     } else {
       qty = BigInt(revealForm.quantity || "0");
@@ -518,7 +518,68 @@ const AuctionView = () => {
   }, [managerContract, auctionAddress, auctionContract, auctionData, currentTime, tx, refetchAuctionData, refetchEvents]);
 
   const handleClaim = useCallback(async () => {
-    if (!auctionContract || !auctionData || !userData) return;
+    if (!auctionContract || !auctionData || !userData || !account) return;
+
+    let bonusClaimed = false;
+    let bonusQty = 0n;
+    let merkleProof = [];
+
+    console.log('🚀 [Claim] Starting claim process:', {
+      auctionAddress,
+      userAddress: account,
+      hasAuctionContract: !!auctionContract,
+      hasAuctionData: !!auctionData,
+      bonusMerkleRoot: auctionData?.bonusMerkleRoot,
+      bonusMerkleRootSet: auctionData?.bonusMerkleRoot && auctionData.bonusMerkleRoot !== ethers.ZeroHash
+    });
+
+    try {
+      if (auctionContract && account) {
+        try {
+          bonusClaimed = await auctionContract.bonusClaimed(account);
+          console.log('✅ [Claim] Bonus claim status checked:', {
+            bonusClaimed,
+            userAddress: account
+          });
+        } catch (err) {
+          console.warn('⚠️ [Claim] Could not check bonusClaimed:', err);
+        }
+      }
+
+      if (!bonusClaimed && auctionData?.bonusMerkleRoot && 
+          auctionData.bonusMerkleRoot !== ethers.ZeroHash && 
+          auctionAddress) {
+        console.log('📥 [Claim] Loading bonus allocation from file...');
+        try {
+          const bonusAllocation = await loadBonusAllocation(auctionAddress, account);
+          if (bonusAllocation) {
+            bonusQty = BigInt(bonusAllocation.bonusQty);
+            merkleProof = bonusAllocation.merkleProof || [];
+            console.log('✅ [Claim] Bonus allocation loaded:', {
+              bonusQty: bonusQty.toString(),
+              bonusQtyFormatted: `${Number(bonusQty) / 1e18} tokens`,
+              proofLength: merkleProof.length,
+              willClaimBonus: bonusQty > 0n
+            });
+          } else {
+            console.warn('⚠️ [Claim] No bonus allocation found in file');
+          }
+        } catch (bonusLoadError) {
+          console.warn('⚠️ [Claim] Error loading bonus allocation:', bonusLoadError);
+        }
+      } else if (bonusClaimed) {
+        console.log('ℹ️ [Claim] Bonus already claimed:', {
+          bonusClaimed,
+          currentBonusQty: userData?.allocation?.bonusQty?.toString() || '0'
+        });
+      }
+    } catch (bonusError) {
+      console.error('❌ [Claim] Error loading bonus allocation:', {
+        error: bonusError,
+        message: bonusError?.message,
+        stack: bonusError?.stack
+      });
+    }
 
     try {
       const allocation = userData.allocation;
@@ -560,7 +621,30 @@ const AuctionView = () => {
         async () => {
           const signer = await ensureSigner();
           const auctionWithSigner = auctionContract.connect(signer);
-          return await auctionWithSigner.claim();
+          const bonusMerkleRootSet = auctionData?.bonusMerkleRoot && 
+            auctionData.bonusMerkleRoot !== "0x0000000000000000000000000000000000000000000000000000000000000000" &&
+            auctionData.bonusMerkleRoot !== ethers.ZeroHash;
+
+          console.log('📞 [Claim] Calling claim function:', {
+            bonusQty: bonusQty.toString(),
+            bonusQtyFormatted: `${Number(bonusQty) / 1e18} tokens`,
+            merkleProofLength: merkleProof.length,
+            bonusClaimed,
+            bonusMerkleRootSet,
+            willClaimBonus: bonusQty > 0n && merkleProof.length >= 0 && !bonusClaimed && bonusMerkleRootSet
+          });
+          
+          if (bonusQty > 0n && !bonusClaimed && bonusMerkleRootSet) {
+            console.log('✅ [Claim] Calling claim WITH bonus:', {
+              bonusQty: bonusQty.toString(),
+              bonusQtyFormatted: `${Number(bonusQty) / 1e18} tokens`,
+              proofLength: merkleProof.length
+            });
+            return await auctionWithSigner.claim(bonusQty, merkleProof);
+          } else {
+            console.log('ℹ️ [Claim] Calling claim WITHOUT bonus');
+            return await auctionWithSigner.claim(0, []);
+          }
         },
         {
           pendingMessage: "Claiming tokens and refunds…",
@@ -830,7 +914,48 @@ const AuctionView = () => {
           phase={phase}
           initialCommitEndTime={auctionData.initialCommitEndTime}
           demandCheckTime={auctionData.demandCheckTime}
+          earlyBonusWindow={auctionData.earlyBonusWindow}
+          earlyBonusPct={auctionData.earlyBonusPct}
         />
+      )}
+
+      {/* Early Bonus Info Panel */}
+      {auctionData?.bonusReserve > 0n && auctionData?.earlyBonusPct > 0n && (
+        <div className="mb-8 rounded-2xl border border-[rgba(251,191,36,0.3)] bg-gradient-to-br from-[rgba(251,191,36,0.1)] to-[rgba(217,119,6,0.05)] p-6 shadow-lg">
+          <h3 className="mb-4 text-xl font-bold text-[rgb(251,191,36)]">🎁 Early Incentives</h3>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div>
+              <p className="mb-1 text-sm text-[rgba(255,255,255,0.7)]">Bonus Percentage</p>
+              <p className="text-2xl font-bold text-[rgb(251,191,36)]">
+                {(Number(auctionData.earlyBonusPct) / 100).toFixed(2)}%
+              </p>
+            </div>
+            <div>
+              <p className="mb-1 text-sm text-[rgba(255,255,255,0.7)]">Bonus Pool</p>
+              <p className="text-2xl font-bold text-white">
+                {formatTokenUnits(auctionData.bonusReserve)}
+              </p>
+            </div>
+            <div>
+              <p className="mb-1 text-sm text-[rgba(255,255,255,0.7)]">Early Window</p>
+              <p className="text-2xl font-bold text-white">
+                {auctionData.earlyBonusWindow ? Math.floor(Number(auctionData.earlyBonusWindow) / 60) : 0} min
+              </p>
+            </div>
+          </div>
+          {auctionData.startTime && auctionData.earlyBonusWindow && (
+            <div className="mt-4 rounded-xl border border-[rgba(251,191,36,0.2)] bg-[rgba(251,191,36,0.05)] p-4">
+              <p className="text-sm text-[rgba(255,255,255,0.8)]">
+                <strong>Early Bonus Window:</strong> Participants who commit within the first{" "}
+                {Math.floor(Number(auctionData.earlyBonusWindow) / 60)} minutes after auction start
+                {auctionData.startTime && (
+                  <> (until {new Date((Number(auctionData.startTime) + Number(auctionData.earlyBonusWindow)) * 1000).toLocaleString()})</>
+                )}
+                {" "}are eligible for bonus tokens. Bonuses are distributed proportionally after finalization.
+              </p>
+            </div>
+          )}
+        </div>
       )}
 
       <PriceBucketPanel auctionData={auctionData} priceBuckets={auctionData.priceBuckets || []} />
@@ -842,10 +967,12 @@ const AuctionView = () => {
       {auctionData.finalized && auctionData.successful && (
         <ClaimPanel
           auctionContract={auctionContract}
+          auctionAddress={auctionAddress}
           auctionData={auctionData}
           userData={userData}
           onClaim={handleClaim}
           txState={tx.state}
+          auctionAddress={auctionAddress}
         />
       )}
 

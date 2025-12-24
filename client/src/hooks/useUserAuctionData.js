@@ -27,6 +27,7 @@ export const useUserAuctionData = (auctionContract, account, isFinalized) => {
         revealedBidsCount,
         refundedAmount,
         tokensClaimed,
+        bonusClaimed,
       ] = await Promise.all([
         safeContractCall(() => auctionContract.committedQty(account), 0n),
         safeContractCall(() => auctionContract.revealedQty(account), 0n),
@@ -51,6 +52,7 @@ export const useUserAuctionData = (auctionContract, account, isFinalized) => {
         ),
         safeContractCall(() => auctionContract.refundedAmount(account), 0n),
         safeContractCall(() => auctionContract.tokensClaimed(account), 0n),
+        safeContractCall(() => auctionContract.bonusClaimed(account), false),
       ]);
 
       let allocation = null;
@@ -104,6 +106,7 @@ export const useUserAuctionData = (auctionContract, account, isFinalized) => {
         revealedBidsCount: Number(revealedBidsCount),
         refundedAmount,
         tokensClaimed,
+        bonusClaimed,
         allocation,
         commits,
       });

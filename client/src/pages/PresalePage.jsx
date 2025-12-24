@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { ethers } from "ethers";
 
 import AuctionControls from "../components/presale/AuctionControls";
+import BonusMerkleManager from "../components/presale/BonusMerkleManager";
 import loadContract from "../services/web3/loadContract";
 import { handleTxError, showTxSuccess, showTxInfo } from "../utils/txErrorHandler";
 import { useAuctionData } from "../hooks/useAuctionData";
@@ -222,8 +223,8 @@ const PresalePage = ({ account }) => {
         softCap: parseEtherValue(auctionForm.softCap),
         tokensForSale: parseEtherValue(auctionForm.tokensForSale),
         bonusReserve: parseEtherValue(auctionForm.bonusReserve),
-        earlyBonusWindow: 0,
-        earlyBonusPct: 0,
+        earlyBonusWindow: Number(auctionForm.earlyBonusWindow || 0),
+        earlyBonusPct: parseBps(auctionForm.earlyBonusPct),
         nonRevealPenaltyBps: 0,
         lbpStableShareBps: 4000,
         thresholdLow: 0,
@@ -936,6 +937,21 @@ const PresalePage = ({ account }) => {
               currentTime={currentTime}
             />
           </div>
+
+          {/* Early Incentives Management (Owner Only) */}
+          {isOwner && auctionContract && info?.auction && (
+            <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-slate-950/90 to-slate-900/85 p-8 shadow-[0_20px_50px_rgba(0,0,0,0.3),0_0_0_1px_rgba(255,255,255,0.05)_inset] backdrop-blur-[20px] transition-all duration-300 hover:border-white/15 hover:shadow-[0_25px_60px_rgba(0,0,0,0.4),0_0_0_1px_rgba(255,255,255,0.08)_inset] sm:p-6 sm:p-5">
+              <BonusMerkleManager
+                auctionContract={auctionContract}
+                auctionAddress={info.auction}
+                auctionData={auctionData}
+                onUpdate={async () => {
+                  await refetchAuctionData();
+                  await refreshInfo();
+                }}
+              />
+            </div>
+          )}
 
           {auctions.length > 0 && (
             <div className="relative rounded-3xl border border-white/10 bg-gradient-to-br from-slate-950/90 to-slate-900/85 p-8 shadow-[0_20px_50px_rgba(0,0,0,0.3),0_0_0_1px_rgba(255,255,255,0.05)_inset] backdrop-blur-[20px] transition-all duration-300 hover:border-white/15 hover:shadow-[0_25px_60px_rgba(0,0,0,0.4),0_0_0_1px_rgba(255,255,255,0.08)_inset] sm:p-6 sm:p-5">

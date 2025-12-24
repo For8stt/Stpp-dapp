@@ -35,4 +35,5 @@ abstract contract DutchAuctionErrors {
     error TransferFailed();
     error InvalidReserveIncrease();
     error BaseAlreadyInitialized();
+    error NotOwner();
 }

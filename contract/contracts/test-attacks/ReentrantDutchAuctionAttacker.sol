@@ -66,9 +66,9 @@ contract ReentrantDutchAuctionAttacker {
         auction.launchLbp();
     }
 
-    function attackClaim(uint8 mode_, bytes calldata payload_, uint256 value_) external onlyOwner {
+    function attackClaim(uint8 mode_, bytes calldata payload_, uint256 value_, uint256 bonusQty, bytes32[] calldata merkleProof) external onlyOwner {
         _prepareAttack(mode_, payload_, value_);
-        auction.claim();
+        auction.claim(bonusQty, merkleProof);
     }
 
     function attackRefund(uint8 mode_, bytes calldata payload_, uint256 value_) external onlyOwner {

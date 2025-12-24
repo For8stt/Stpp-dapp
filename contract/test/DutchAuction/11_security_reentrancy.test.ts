@@ -179,7 +179,7 @@ describe("DutchAuction – 11_security_reentrancy", function () {
         await prepareSuccessfulAuction(ctx);
 
         const payload = ctx.auction.interface.encodeFunctionData("commit", [ethers.ZeroHash, []]);
-        await ctx.attacker.attackClaim(MODE.COMMIT, payload, 0);
+        await ctx.attacker.attackClaim(MODE.COMMIT, payload, 0, 0, []);
 
         expect(await ctx.attacker.lastReenterSuccess()).to.equal(false);
         expect(decodeRevert(await ctx.attacker.lastRevertData())).to.equal(REENTRANCY_ERROR);
@@ -190,7 +190,7 @@ describe("DutchAuction – 11_security_reentrancy", function () {
         await prepareSuccessfulAuction(ctx);
 
         const payload = ctx.auction.interface.encodeFunctionData("reveal", [0, 0, ethers.ZeroHash, 0]);
-        await ctx.attacker.attackClaim(MODE.REVEAL, payload, 0);
+        await ctx.attacker.attackClaim(MODE.REVEAL, payload, 0, 0, []);
 
         expect(await ctx.attacker.lastReenterSuccess()).to.equal(false);
         expect(decodeRevert(await ctx.attacker.lastRevertData())).to.equal(REENTRANCY_ERROR);
@@ -201,7 +201,7 @@ describe("DutchAuction – 11_security_reentrancy", function () {
         await prepareSuccessfulAuction(ctx);
 
         const payload = ctx.auction.interface.encodeFunctionData("finalize", []);
-        await ctx.attacker.attackClaim(MODE.FINALIZE, payload, 0);
+        await ctx.attacker.attackClaim(MODE.FINALIZE, payload, 0, 0, []);
 
         expect(await ctx.attacker.lastReenterSuccess()).to.equal(false);
         expect(decodeRevert(await ctx.attacker.lastRevertData())).to.equal(REENTRANCY_ERROR);
@@ -211,8 +211,8 @@ describe("DutchAuction – 11_security_reentrancy", function () {
         const ctx = await loadFixture(successfulReentrancyFixture);
         await prepareSuccessfulAuction(ctx);
 
-        const payload = ctx.auction.interface.encodeFunctionData("claim", []);
-        await ctx.attacker.attackClaim(MODE.CLAIM, payload, 0);
+        const payload = ctx.auction.interface.encodeFunctionData("claim", [0, []]);
+        await ctx.attacker.attackClaim(MODE.CLAIM, payload, 0, 0, []);
 
         expect(await ctx.attacker.lastReenterSuccess()).to.equal(false);
         expect(decodeRevert(await ctx.attacker.lastRevertData())).to.equal(REENTRANCY_ERROR);
@@ -296,7 +296,7 @@ describe("DutchAuction – 11_security_reentrancy", function () {
         await ctx.attacker.finalizeAuction();
 
         const payload = ctx.auction.interface.encodeFunctionData("withdrawUnrevealed", [1]);
-        await ctx.attacker.attackClaim(MODE.CROSS_FUNCTION, payload, 0);
+        await ctx.attacker.attackClaim(MODE.CROSS_FUNCTION, payload, 0, 0, []);
 
         expect(await ctx.attacker.lastReenterSuccess()).to.equal(false);
         expect(decodeRevert(await ctx.attacker.lastRevertData())).to.equal(REENTRANCY_ERROR);

@@ -255,10 +255,11 @@ describe("Scenario – STPP full lifecycle", function () {
             .withArgs(carol.address, depositCarol - penalty);
 
         // Winning bidder claims auction allocation immediately (no additional vesting configured here).
-        const aliceBonus = (qtyAlice * auctionInput.earlyBonusPct) / BPS;
-        await expect(auction.connect(alice).claim())
+        // Note: With Merkle-based bonuses, bonus would need Merkle root set first
+        // For now, test without bonus (bonusQty = 0)
+        await expect(auction.connect(alice).claim(0, []))
             .to.emit(saleToken, "Transfer")
-            .withArgs(await auction.getAddress(), alice.address, qtyAlice + aliceBonus);
+            .withArgs(await auction.getAddress(), alice.address, qtyAlice);
 
         // --- Transition to LBP ---
         const lbpStart = revealEndTime + 600n;

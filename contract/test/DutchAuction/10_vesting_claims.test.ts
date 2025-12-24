@@ -92,7 +92,7 @@ describe("DutchAuction – 10_vesting_claims", function () {
         await time.increaseTo(commitEndTime + 1n);
         await auction.connect(alice).reveal(0, qtyWei, nonce, 0);
 
-        await expect(auction.connect(alice).claim()).to.be.revertedWithCustomError(auction, "AuctionNotFinalized");
+        await expect(auction.connect(alice).claim(0, [])).to.be.revertedWithCustomError(auction, "AuctionNotFinalized");
     });
 
     it("should revert claim if auction was unsuccessful", async function () {
@@ -119,7 +119,7 @@ describe("DutchAuction – 10_vesting_claims", function () {
         await auction.finalize();
         expect(await auction.successful()).to.equal(false);
 
-        await expect(auction.connect(alice).claim()).to.be.revertedWithCustomError(auction, "AuctionNotFinalized");
+        await expect(auction.connect(alice).claim(0, [])).to.be.revertedWithCustomError(auction, "AuctionNotFinalized");
     });
 
     it("should compute allocation on first claim call", async function () {
@@ -135,7 +135,7 @@ describe("DutchAuction – 10_vesting_claims", function () {
         const before = await auction.accountAllocations(await alice.getAddress());
         expect(before.computed).to.equal(false);
 
-        await auction.connect(alice).claim();
+        await auction.connect(alice).claim(0, []);
 
         const after = await auction.accountAllocations(await alice.getAddress());
         expect(after.computed).to.equal(true);
@@ -152,7 +152,7 @@ describe("DutchAuction – 10_vesting_claims", function () {
 
         const { qty } = await finalizeSuccessfulAuction(ctx);
         const aliceAddress = await alice.getAddress();
-        await auction.connect(alice).claim();
+        await auction.connect(alice).claim(0, []);
 
         const allocation = await auction.accountAllocations(aliceAddress);
         const expectedTotal = allocation.totalQty + allocation.bonusQty;
@@ -171,8 +171,8 @@ describe("DutchAuction – 10_vesting_claims", function () {
         const { auction, alice } = ctx;
 
         await finalizeSuccessfulAuction(ctx);
-        await auction.connect(alice).claim();
-        await expect(auction.connect(alice).claim()).to.be.revertedWithCustomError(auction, "NothingToClaim");
+        await auction.connect(alice).claim(0, []);
+        await expect(auction.connect(alice).claim(0, [])).to.be.revertedWithCustomError(auction, "NothingToClaim");
     });
 
     it("should unlock 0 tokens if vesting has not started (vestingStart > block.timestamp)", async function () {
@@ -187,7 +187,7 @@ describe("DutchAuction – 10_vesting_claims", function () {
 
         await finalizeSuccessfulAuction(ctx);
 
-        await expect(auction.connect(alice).claim()).to.be.revertedWithCustomError(auction, "NothingToClaim");
+        await expect(auction.connect(alice).claim(0, [])).to.be.revertedWithCustomError(auction, "NothingToClaim");
         expect(await auction.tokensClaimed(await alice.getAddress())).to.equal(0n);
     });
 
@@ -201,7 +201,7 @@ describe("DutchAuction – 10_vesting_claims", function () {
 
         const { qty } = await finalizeSuccessfulAuction(ctx);
         const aliceAddress = await alice.getAddress();
-        await auction.connect(alice).claim();
+        await auction.connect(alice).claim(0, []);
 
         const allocation = await auction.accountAllocations(aliceAddress);
         const expectedTotal = allocation.totalQty + allocation.bonusQty;
@@ -222,7 +222,7 @@ describe("DutchAuction – 10_vesting_claims", function () {
         const { qty } = await finalizeSuccessfulAuction(ctx);
         const aliceAddress = await alice.getAddress();
         await time.increaseTo(config.vestingStart + config.vestingDuration + 1n);
-        await auction.connect(alice).claim();
+        await auction.connect(alice).claim(0, []);
 
         const allocation = await auction.accountAllocations(aliceAddress);
         const expectedTotal = allocation.totalQty + allocation.bonusQty;
@@ -253,7 +253,7 @@ describe("DutchAuction – 10_vesting_claims", function () {
         // bonus = (qtyWei * bonusPct) / BPS_DENOMINATOR (both in wei)
         const expectedBonus = (qtyWei * bonusPct) / BPS_DENOMINATOR;
 
-        await expect(auction.connect(alice).claim())
+        await expect(auction.connect(alice).claim(0, []))
             .to.emit(auction, "BonusAllocated")
             .withArgs(await alice.getAddress(), expectedBonus);
     });
@@ -289,7 +289,7 @@ describe("DutchAuction – 10_vesting_claims", function () {
         const expectedRefund = deposit - expectedPayment;
 
         const balanceBefore = await ethers.provider.getBalance(await alice.getAddress());
-        const tx = await auction.connect(alice).claim();
+        const tx = await auction.connect(alice).claim(0, []);
         const receipt = await tx.wait();
         const gasPaid = receipt ? receipt.gasUsed * (tx.gasPrice ?? 0n) : 0n;
         const balanceAfter = await ethers.provider.getBalance(await alice.getAddress());
@@ -318,6 +318,6 @@ describe("DutchAuction – 10_vesting_claims", function () {
         await time.increaseTo(revealEndTime + 1n);
         await auction.finalize();
 
-        await expect(auction.connect(outsider).claim()).to.be.revertedWithCustomError(auction, "NothingToClaim");
+        await expect(auction.connect(outsider).claim(0, [])).to.be.revertedWithCustomError(auction, "NothingToClaim");
     });
 });
