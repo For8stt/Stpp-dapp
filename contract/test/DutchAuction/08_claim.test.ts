@@ -139,12 +139,7 @@ describe("DutchAuction – 08_claim", function () {
             expect(balanceAfter + gasPaid - balanceBefore).to.equal(expectedRefund);
         });
 
-        // TODO: Update this test to use Merkle-based bonuses
-        // This test needs to be rewritten to:
-        // 1. Set bonusMerkleRoot after finalize
-        // 2. Build Merkle tree with bonus allocation
-        // 3. Call claim with correct bonusQty and merkleProof
-        it.skip("should emit BonusAllocated if bonus tokens are included in claim", async function () {
+        it("should emit BonusAllocated if bonus tokens are included in claim", async function () {
             const ctx = await loadFixture(
                 fixtureWithOverrides({
                     bonusReserve: ethers.parseUnits("50", 18),
@@ -155,16 +150,76 @@ describe("DutchAuction – 08_claim", function () {
                     softCap: 0n
                 })
             );
-            const { auction, alice } = ctx;
+            const { auction, alice, deployer } = ctx;
 
             // ctx.config.tokensForSale is now in wei
             const { qty: qtyWei } = await finalizeSuccessfulAuction(ctx, { qty: ctx.config.tokensForSale });
             // bonus = (qtyWei * earlyBonusPct) / BPS_DENOMINATOR (both in wei)
             const expectedBonus = (qtyWei * ctx.config.earlyBonusPct) / BPS_DENOMINATOR;
 
-            await expect(auction.connect(alice).claim(0, []))
+            function computeLeaf(address: string, bonusQty: bigint): string {
+                return ethers.keccak256(ethers.solidityPacked(["address", "uint256"], [address, bonusQty]));
+            }
+
+            function buildMerkleTree(leaves: string[]): { root: string; proofs: Record<string, string[]> } {
+                if (leaves.length === 0) {
+                    return { root: ethers.ZeroHash, proofs: {} };
+                }
+
+                const sortedLeaves = [...leaves].sort((a, b) => {
+                    return BigInt(a) < BigInt(b) ? -1 : BigInt(a) > BigInt(b) ? 1 : 0;
+                });
+
+                const layers: string[][] = [sortedLeaves];
+                while (layers[layers.length - 1].length > 1) {
+                    const current = layers[layers.length - 1];
+                    const next: string[] = [];
+                    
+                    for (let i = 0; i < current.length; i += 2) {
+                        const left = current[i];
+                        const right = i + 1 < current.length ? current[i + 1] : current[i];
+                        const [lo, hi] = BigInt(left) < BigInt(right) ? [left, right] : [right, left];
+                        next.push(ethers.keccak256(ethers.concat([lo, hi])));
+                    }
+                    
+                    layers.push(next);
+                }
+
+                const root = layers[layers.length - 1][0];
+                const proofs: Record<string, string[]> = {};
+
+                for (let leafIndex = 0; leafIndex < sortedLeaves.length; leafIndex++) {
+                    const proof: string[] = [];
+                    let index = leafIndex;
+                    
+                    for (let layerIndex = 0; layerIndex < layers.length - 1; layerIndex++) {
+                        const layer = layers[layerIndex];
+                        const pairIndex = index ^ 1;
+                        
+                        if (pairIndex < layer.length) {
+                            proof.push(layer[pairIndex]);
+                        } else {
+                            proof.push(layer[index]);
+                        }
+                        
+                        index = Math.floor(index / 2);
+                    }
+                    
+                    proofs[sortedLeaves[leafIndex]] = proof;
+                }
+
+                return { root, proofs };
+            }
+
+            const aliceAddress = await alice.getAddress();
+            const leaf = computeLeaf(aliceAddress, expectedBonus);
+            const { root, proofs } = buildMerkleTree([leaf]);
+            const merkleProof = proofs[leaf] || [];
+                        await auction.connect(deployer).setBonusMerkleRoot(root, "");
+
+            await expect(auction.connect(alice).claim(expectedBonus, merkleProof))
                 .to.emit(auction, "BonusAllocated")
-                .withArgs(await alice.getAddress(), expectedBonus);
+                .withArgs(aliceAddress, expectedBonus);
         });
 
         it("should update tokensClaimed and refundedAmount correctly", async function () {

@@ -2549,6 +2549,12 @@
           "internalType": "bytes32",
           "name": "root",
           "type": "bytes32"
+        },
+        {
+          "indexed": false,
+          "internalType": "string",
+          "name": "cid",
+          "type": "string"
         }
       ],
       "name": "BonusMerkleRootSet",
@@ -2733,6 +2739,19 @@
           "internalType": "bool",
           "name": "computed",
           "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "bonusAllocationsCID",
+      "outputs": [
+        {
+          "internalType": "string",
+          "name": "",
+          "type": "string"
         }
       ],
       "stateMutability": "view",
@@ -3710,6 +3729,11 @@
           "internalType": "bytes32",
           "name": "root",
           "type": "bytes32"
+        },
+        {
+          "internalType": "string",
+          "name": "cid",
+          "type": "string"
         }
       ],
       "name": "setBonusMerkleRoot",

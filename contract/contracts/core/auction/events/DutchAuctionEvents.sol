@@ -20,7 +20,7 @@ abstract contract DutchAuctionEvents {
     event AuctionFinalized(bool success, uint256 clearingPrice, uint256 tokensSold, uint256 totalRaised);
     event RefundIssued(address indexed bidder, uint256 amount);
     event BonusAllocated(address indexed bidder, uint256 bonusAmount);
-    event BonusMerkleRootSet(bytes32 indexed root);
+    event BonusMerkleRootSet(bytes32 indexed root, string cid);
     event LBPLaunched(address indexed tokenRecipient, address indexed stableRecipient, uint256 tokenAmount, uint256 stableAmount);
     event VestingUpdated(uint256 vestingStart, uint256 vestingDuration);
 }

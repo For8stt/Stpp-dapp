@@ -102,6 +102,7 @@ contract DutchAuction is IAuction, Ownable, ReentrancyGuard, DutchAuctionEvents,
     address[] public earlyParticipants; // List of accounts with early bids (for off-chain computation)
     mapping(address => bool) public isEarlyParticipant; // Quick lookup to avoid duplicates
     bytes32 public bonusMerkleRoot; // Merkle root of bonus allocations (set after finalize)
+    string public bonusAllocationsCID; // IPFS CID of bonus allocations JSON (set after finalize)
     mapping(address => bool) public bonusClaimed; // Track claimed bonuses to prevent double claims
 
     uint256 public totalDepositCommitted;
@@ -435,10 +436,13 @@ contract DutchAuction is IAuction, Ownable, ReentrancyGuard, DutchAuctionEvents,
         proRataDenominator = data.proRataDenominator;
     }
 
-    /// @notice Sets the Merkle root for bonus allocations (callable only once by owner, manager, or manager's owner after finalize).
+    /// @notice Sets the Merkle root and IPFS CID for bonus allocations (callable only once by owner, manager, or manager's owner after finalize).
     /// @dev The Merkle root represents off-chain computed bonus allocations for early participants.
+    ///      The IPFS CID points to the JSON file containing all bonus allocations and Merkle proofs.
+    ///      Both values are immutable after being set to ensure data integrity.
     /// @param root The Merkle root of bonus allocations (leaf = keccak256(address, bonusQty))
-    function setBonusMerkleRoot(bytes32 root) external {
+    /// @param cid The IPFS Content Identifier (CID) of the bonus allocations JSON file
+    function setBonusMerkleRoot(bytes32 root, string calldata cid) external {
         // Allow owner, manager, or owner of manager to set root
         bool isAuctionOwner = msg.sender == owner();
         bool isManager = msg.sender == presaleManager;
@@ -462,7 +466,8 @@ contract DutchAuction is IAuction, Ownable, ReentrancyGuard, DutchAuctionEvents,
         if (root == bytes32(0)) revert InvalidCommit(); // Root cannot be zero
         
         bonusMerkleRoot = root;
-        emit BonusMerkleRootSet(root);
+        bonusAllocationsCID = cid;
+        emit BonusMerkleRootSet(root, cid);
     }
 
     /// @dev Computes base allocation (without bonus) for a participant.
@@ -568,15 +573,18 @@ contract DutchAuction is IAuction, Ownable, ReentrancyGuard, DutchAuctionEvents,
         }
 
         uint256 unlocked = VestingMath.cliffOnlyFraction(vestingStart, vestingDuration);
-        uint256 totalTokensDue = allocation.totalQty + verifiedBonusQty;
+        // Use allocation.bonusQty if bonus was already claimed, otherwise use verifiedBonusQty
+        // This ensures that if bonus was claimed in a previous transaction, it's still included
+        uint256 effectiveBonusQty = allocation.bonusQty > 0 ? allocation.bonusQty : verifiedBonusQty;
+        uint256 totalTokensDue = allocation.totalQty + effectiveBonusQty;
         uint256 vestedTokens = (totalTokensDue * unlocked) / BPS_DENOMINATOR;
 
         uint256 tokensToSend = vestedTokens - tokensClaimed[msg.sender];
         if (tokensToSend > 0) {
             tokensClaimed[msg.sender] += tokensToSend;
             saleToken.safeTransfer(msg.sender, tokensToSend);
-            if (verifiedBonusQty > 0) {
-                uint256 bonusPortion = (tokensToSend * verifiedBonusQty) / (allocation.totalQty + verifiedBonusQty);
+            if (effectiveBonusQty > 0) {
+                uint256 bonusPortion = (tokensToSend * effectiveBonusQty) / (allocation.totalQty + effectiveBonusQty);
                 if (bonusPortion > 0) {
                     emit BonusAllocated(msg.sender, bonusPortion);
                 }

@@ -3,8 +3,9 @@ import { formatEth, formatToken, formatTokenUnits } from "../../utils/auctionUti
 import { useAccount } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useTime } from "../../time";
-import { loadBonusAllocation } from "../../utils/bonusAllocations";
+import { loadBonusAllocationFromIPFS } from "../../utils/ipfsBonusAllocations";
 import { safeContractCall } from "../../utils/contractUtils";
+import { isValidCID, getIPFSURL } from "../../services/ipfs/ipfsService";
 
 const BPS_DENOMINATOR = 10000n;
 
@@ -25,6 +26,13 @@ const ClaimPanel = ({
   
   const bonusMerkleRootSet = auctionData?.bonusMerkleRoot && 
     auctionData.bonusMerkleRoot !== "0x0000000000000000000000000000000000000000000000000000000000000000";
+  const [ipfsCID, setIpfsCID] = useState(null);
+  useEffect(() => {
+    if (auctionAddress && typeof window !== 'undefined' && window.localStorage) {
+      const storedCID = window.localStorage.getItem(`sttp:bonus-cid:${auctionAddress.toLowerCase()}`);
+      setIpfsCID(storedCID);
+    }
+  }, [auctionAddress]);
   useEffect(() => {
     const checkEarlyParticipant = async () => {
       if (!auctionContract || !account) {
@@ -64,13 +72,39 @@ const ClaimPanel = ({
       
       setLoadingBonusFromFile(true);
       try {
-        console.log('[ClaimPanel] Loading bonus allocation:', {
-          auctionAddress: auctionAddress.toLowerCase(),
-          userAddress: account.toLowerCase(),
-          filePath: `/bonus-allocations/${auctionAddress.toLowerCase()}.json`
-        });
+        const ipfsCID = auctionData?.bonusAllocationsCID || null;
         
-        const bonusAlloc = await loadBonusAllocation(auctionAddress, account);
+        const merkleRoot = auctionData?.bonusMerkleRoot;
+        let bonusAlloc = null;
+        if (ipfsCID && isValidCID(ipfsCID)) {
+          console.log('[ClaimPanel] Loading bonus allocation from IPFS:', {
+            cid: ipfsCID,
+            auctionAddress: auctionAddress.toLowerCase(),
+            userAddress: account.toLowerCase()
+          });
+          
+          try {
+            bonusAlloc = await loadBonusAllocationFromIPFS(
+              ipfsCID,
+              account,
+              auctionAddress,
+              merkleRoot
+            );
+            
+            if (bonusAlloc) {
+              console.log('[ClaimPanel] Bonus allocation loaded from IPFS');
+            } else {
+              console.warn('[ClaimPanel] No bonus allocation found in IPFS');
+            }
+          } catch (ipfsError) {
+            console.warn('[ClaimPanel] Error loading from IPFS:', ipfsError);
+          }
+        }
+        if (!bonusAlloc && ipfsCID) {
+          console.warn('[ClaimPanel] Failed to load bonus allocation from IPFS. CID:', ipfsCID);
+        } else if (!ipfsCID) {
+          console.warn('[ClaimPanel] No IPFS CID available for this auction. Owner should set CID in BonusMerkleManager.');
+        }
         
         console.log('[ClaimPanel] Bonus allocation result:', {
           found: !!bonusAlloc,
@@ -78,7 +112,8 @@ const ClaimPanel = ({
           hasProof: !!bonusAlloc?.merkleProof,
           proofLength: bonusAlloc?.merkleProof?.length,
           isEarlyParticipant,
-          bonusMerkleRootSet
+          bonusMerkleRootSet,
+          source: ipfsCID ? 'IPFS' : 'local file'
         });
         
         if (bonusAlloc) {
@@ -90,7 +125,7 @@ const ClaimPanel = ({
           setUserBonusFromFile(null);
         }
       } catch (err) {
-        console.warn('[ClaimPanel] Error loading bonus from file:', err);
+        console.warn('[ClaimPanel] Error loading bonus allocation:', err);
         setUserBonusFromFile(null);
       } finally {
         setLoadingBonusFromFile(false);
@@ -98,7 +133,7 @@ const ClaimPanel = ({
     };
     
     loadBonus();
-  }, [bonusMerkleRootSet, auctionAddress, account, userData?.bonusClaimed, isEarlyParticipant]);
+  }, [bonusMerkleRootSet, auctionAddress, account, userData?.bonusClaimed, isEarlyParticipant, auctionData?.bonusMerkleRoot]);
 
   const allocation = userData?.allocation;
   const vestingDebug = useMemo(() => {
@@ -434,6 +469,24 @@ const ClaimPanel = ({
       {auctionData?.bonusReserve > 0n && (
         <div className="mb-4 rounded-xl border border-[rgba(251,191,36,0.3)] bg-[rgba(251,191,36,0.1)] p-4">
           <p className="mb-2 text-sm font-semibold text-[rgb(251,191,36)]">🎁 Early Incentives</p>
+          {bonusMerkleRootSet && ipfsCID && isValidCID(ipfsCID) && (
+            <div className="mb-3 rounded-lg border border-[rgba(59,130,246,0.3)] bg-[rgba(59,130,246,0.05)] p-3">
+              <p className="mb-1 text-xs font-semibold text-[rgb(59,130,246)]">📡 Bonus Proofs Source: IPFS</p>
+              <div className="text-xs text-[rgba(255,255,255,0.7)]">
+                <div className="font-mono break-all mb-1">{ipfsCID}</div>
+                {getIPFSURL(ipfsCID) && (
+                  <a
+                    href={getIPFSURL(ipfsCID)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[rgb(59,130,246)] hover:underline"
+                  >
+                    View on IPFS →
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
           {userData?.bonusClaimed ? (
             <div>
               <p className="text-sm text-[rgba(255,255,255,0.8)] mb-2">
@@ -448,7 +501,9 @@ const ClaimPanel = ({
           ) : bonusMerkleRootSet ? (
             <div>
               <p className="text-sm text-[rgba(255,255,255,0.8)] mb-3">
-                Bonus Merkle root is set. If you're an early participant, your bonus will be verified and included when you claim.
+                Bonus Merkle root is set. {ipfsCID && isValidCID(ipfsCID) 
+                  ? "If you're an early participant, your bonus will be verified and included when you claim."
+                  : "⚠️ IPFS CID not yet published. Please wait for the owner to publish bonus allocations before claiming, or you may forfeit your bonus."}
               </p>
               
               {/* Your Allocation Breakdown - Only when root is set */}
@@ -483,18 +538,27 @@ const ClaimPanel = ({
                       {userBonusFromFile && userBonusFromFile.bonusQty > 0n ? (
                         <div className="rounded-lg border border-[rgba(251,191,36,0.4)] bg-[rgba(251,191,36,0.15)] p-3">
                           <div className="flex justify-between items-center">
-                            <span className="text-sm text-[rgba(255,255,255,0.8)]">Additional Bonus (guaranteed):</span>
+                            <span className="text-sm text-[rgba(255,255,255,0.8)]">
+                              Additional Bonus {ipfsCID && isValidCID(ipfsCID) ? "(from IPFS)" : ""}:
+                            </span>
                             <span className="text-lg font-bold text-[rgb(251,191,36)]">
                               {formatTokenUnits(userBonusFromFile.bonusQty)}
                             </span>
                           </div>
+                          {ipfsCID && isValidCID(ipfsCID) && (
+                            <p className="text-xs text-[rgba(255,255,255,0.6)] mt-1">
+                              ✓ Loaded from IPFS
+                            </p>
+                          )}
                         </div>
                       ) : userBonusFromFile === null && !loadingBonusFromFile ? (
                         <div className="rounded-lg border border-[rgba(100,116,139,0.3)] bg-[rgba(100,116,139,0.05)] p-3">
                           <div className="space-y-2">
                             <div className="flex justify-between items-center">
                               <span className="text-sm text-[rgba(255,255,255,0.7)]">Additional Bonus:</span>
-                              <span className="text-sm text-[rgba(255,255,255,0.5)]">Not found in allocation file</span>
+                              <span className="text-sm text-[rgba(255,255,255,0.5)]">
+                                {ipfsCID && isValidCID(ipfsCID) ? "Not found in IPFS allocations" : "Not found"}
+                              </span>
                             </div>
                             {earlyCheckLoading ? (
                               <p className="text-xs text-[rgba(255,255,255,0.5)] italic">Checking early participant status...</p>
@@ -505,7 +569,10 @@ const ClaimPanel = ({
                                   ✅ You ARE registered as an early participant on the contract
                                 </p>
                                 <p className="text-xs text-[rgba(255,255,255,0.6)] mt-1">
-                                  However, your address was not found in the bonus-allocations.json file.
+                                  However, your address was not found in the IPFS allocations.
+                                  {ipfsCID && isValidCID(ipfsCID) && (
+                                    <> CID: {ipfsCID.substring(0, 20)}...</>
+                                  )}
                                 </p>
                                 <p className="text-xs text-[rgba(255,255,255,0.6)] mt-1">
                                   Possible reasons:
@@ -513,7 +580,10 @@ const ClaimPanel = ({
                                 <ul className="text-xs text-[rgba(255,255,255,0.6)] mt-1 ml-4 list-disc">
                                   <li>Bonus computation script hasn't been run yet</li>
                                   <li>Your base allocation is 0 (no tokens allocated)</li>
-                                  <li>File path mismatch (check console for exact path)</li>
+                                  <li>IPFS CID might be incorrect or file not accessible</li>
+                                  {ipfsCID && isValidCID(ipfsCID) && (
+                                    <li>Check IPFS gateway: <a href={getIPFSURL(ipfsCID)} target="_blank" rel="noopener noreferrer" className="text-[rgb(59,130,246)] hover:underline">View on IPFS</a></li>
+                                  )}
                                 </ul>
                               </div>
                             ) : isEarlyParticipant === false ? (

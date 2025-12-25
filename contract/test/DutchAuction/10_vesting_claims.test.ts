@@ -9,6 +9,61 @@ import {
     randomNonce
 } from "./utils/dutchAuctionFixtures";
 
+// Import Merkle tree building functions from computeBonusAllocations script
+function computeLeaf(address: string, bonusQty: bigint): string {
+    return ethers.keccak256(ethers.solidityPacked(["address", "uint256"], [address, bonusQty]));
+}
+
+function buildMerkleTree(leaves: string[]): { root: string; proofs: Record<string, string[]> } {
+    if (leaves.length === 0) {
+        return { root: ethers.ZeroHash, proofs: {} };
+    }
+
+    const sortedLeaves = [...leaves].sort((a, b) => {
+        return BigInt(a) < BigInt(b) ? -1 : BigInt(a) > BigInt(b) ? 1 : 0;
+    });
+
+    const layers: string[][] = [sortedLeaves];
+    while (layers[layers.length - 1].length > 1) {
+        const current = layers[layers.length - 1];
+        const next: string[] = [];
+        
+        for (let i = 0; i < current.length; i += 2) {
+            const left = current[i];
+            const right = i + 1 < current.length ? current[i + 1] : current[i];
+            const [lo, hi] = BigInt(left) < BigInt(right) ? [left, right] : [right, left];
+            next.push(ethers.keccak256(ethers.concat([lo, hi])));
+        }
+        
+        layers.push(next);
+    }
+
+    const root = layers[layers.length - 1][0];
+    const proofs: Record<string, string[]> = {};
+
+    for (let leafIndex = 0; leafIndex < sortedLeaves.length; leafIndex++) {
+        const proof: string[] = [];
+        let index = leafIndex;
+        
+        for (let layerIndex = 0; layerIndex < layers.length - 1; layerIndex++) {
+            const layer = layers[layerIndex];
+            const pairIndex = index ^ 1;
+            
+            if (pairIndex < layer.length) {
+                proof.push(layer[pairIndex]);
+            } else {
+                proof.push(layer[index]);
+            }
+            
+            index = Math.floor(index / 2);
+        }
+        
+        proofs[sortedLeaves[leafIndex]] = proof;
+    }
+
+    return { root, proofs };
+}
+
 type AuctionFixture = Awaited<ReturnType<ReturnType<typeof fixtureWithOverrides>>>;
 
 async function commitBid(
@@ -245,17 +300,26 @@ describe("DutchAuction – 10_vesting_claims", function () {
                 softCap: ethers.parseEther("0.005")
             })
         );
-        const { auction, alice } = ctx;
+        const { auction, alice, deployer } = ctx;
 
         // saleAmount is a whole number, convert to wei
         const saleAmountWei = ethers.parseUnits(saleAmount.toString(), 18);
         const { qty: qtyWei } = await finalizeSuccessfulAuction(ctx, { qty: saleAmountWei });
+        
         // bonus = (qtyWei * bonusPct) / BPS_DENOMINATOR (both in wei)
         const expectedBonus = (qtyWei * bonusPct) / BPS_DENOMINATOR;
+        
+        // Build Merkle tree for bonus allocation
+        const aliceAddress = await alice.getAddress();
+        const leaf = computeLeaf(aliceAddress, expectedBonus);
+        const { root, proofs } = buildMerkleTree([leaf]);
+        const merkleProof = proofs[leaf] || [];
 
-        await expect(auction.connect(alice).claim(0, []))
+        await auction.connect(deployer).setBonusMerkleRoot(root, "");
+
+        await expect(auction.connect(alice).claim(expectedBonus, merkleProof))
             .to.emit(auction, "BonusAllocated")
-            .withArgs(await alice.getAddress(), expectedBonus);
+            .withArgs(aliceAddress, expectedBonus);
     });
 
     it("should send correct ETH refund if user over-deposited", async function () {

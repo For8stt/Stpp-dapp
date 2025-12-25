@@ -1,9 +1,10 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { ethers } from "ethers";
 import { handleTxError, showTxSuccess } from "../../utils/txErrorHandler";
 import { ensureSigner } from "../../services/web3/signer";
 import allAbis from "../../abi/allAbis.json";
 import { formatTokenUnits } from "../../utils/auctionUtils";
+import { isValidCID, getIPFSURL } from "../../services/ipfs/ipfsService";
 
 /**
  * Component for managing bonus Merkle root (owner only)
@@ -13,10 +14,17 @@ import { formatTokenUnits } from "../../utils/auctionUtils";
  */
 const BonusMerkleManager = ({ auctionContract, auctionAddress, auctionData, onUpdate }) => {
   const [merkleRoot, setMerkleRoot] = useState("");
+  const [ipfsCID, setIpfsCID] = useState("");
   const [computing, setComputing] = useState(false);
   const [setting, setSetting] = useState(false);
   const [computedData, setComputedData] = useState(null);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (auctionData?.bonusAllocationsCID) {
+      setIpfsCID(auctionData.bonusAllocationsCID);
+    }
+  }, [auctionData?.bonusAllocationsCID]);
 
   const rootSet = auctionData?.bonusMerkleRoot && 
     auctionData.bonusMerkleRoot !== "0x0000000000000000000000000000000000000000000000000000000000000000";
@@ -35,10 +43,14 @@ const BonusMerkleManager = ({ auctionContract, auctionAddress, auctionData, onUp
       
       const message = `To compute bonus allocations, run the following command in the contract directory:
 
-npx hardhat run scripts/computeBonusAllocations.ts --network <network> ${auctionAddress}
+AUCTION_ADDRESS=${auctionAddress} npx hardhat run scripts/computeBonusAllocations.ts --network <network>
 
-This will generate a bonus-allocations.json file with Merkle root and proofs.
-After the file is generated, you can upload it in Step 2.`;
+This will:
+1. Generate bonus allocations JSON with Merkle root and proofs (uploaded to IPFS)
+2. Upload to IPFS and return a CID
+3. Display the CID in the output
+
+After the script completes, copy the IPFS CID and paste it in Step 2.`;
 
       alert(message);
       
@@ -52,11 +64,11 @@ After the file is generated, you can upload it in Step 2.`;
   }, [auctionAddress]);
 
   const handleLoadFromFile = useCallback(async (event) => {
-    const file = event.target.files[0];
+    const file = event.target.files?.[0];
     if (!file) return;
 
-    setError("");
     setComputing(true);
+    setError("");
 
     try {
       const text = await file.text();
@@ -78,11 +90,15 @@ After the file is generated, you can upload it in Step 2.`;
 
       setComputedData({
         merkleRoot: data.merkleRoot,
+        ipfsCID: data.ipfsCID || null,
         allocationCount,
         totalBonus,
         summary: data.summary || null,
       });
       setMerkleRoot(data.merkleRoot);
+      if (data.ipfsCID) {
+        setIpfsCID(data.ipfsCID);
+      }
     } catch (err) {
       console.error("Error loading file:", err);
       setError(err.message || "Failed to load bonus allocations file");
@@ -171,8 +187,16 @@ After the file is generated, you can upload it in Step 2.`;
       console.log("[BonusMerkleManager] All checks passed, sending transaction...");
       console.log("[BonusMerkleManager] Setting root:", merkleRoot);
 
+      // Get CID from state or file data
+      const cidToSet = ipfsCID || computedData?.ipfsCID || "";
+      if (!cidToSet) {
+        setError("IPFS CID is required. Please ensure the bonus allocations file includes a CID or enter it manually.");
+        setSetting(false);
+        return;
+      }
+
       try {
-        const gasEstimate = await auctionWithSigner.setBonusMerkleRoot.estimateGas(merkleRoot);
+        const gasEstimate = await auctionWithSigner.setBonusMerkleRoot.estimateGas(merkleRoot, cidToSet);
         console.log("[BonusMerkleManager] Gas estimate:", gasEstimate.toString());
       } catch (estimateError) {
         console.error("[BonusMerkleManager] Gas estimation failed:", estimateError);
@@ -189,13 +213,16 @@ After the file is generated, you can upload it in Step 2.`;
         return;
       }
 
-      const tx = await auctionWithSigner.setBonusMerkleRoot(merkleRoot);
-      console.log("[BonusMerkleManager] Transaction sent:", tx.hash);
+      const tx = await auctionWithSigner.setBonusMerkleRoot(merkleRoot, cidToSet);
+      console.log("[BonusMerkleManager] Transaction sent:", tx.hash, { merkleRoot, cid: cidToSet });
       
       await tx.wait();
       console.log("[BonusMerkleManager] Transaction confirmed");
 
-      showTxSuccess("Merkle root set successfully!");
+      showTxSuccess("Merkle root and IPFS CID set successfully!");
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.removeItem(`sttp:bonus-cid:${auctionAddress.toLowerCase()}`);
+      }
       
       if (onUpdate) {
         await onUpdate();
@@ -220,7 +247,7 @@ After the file is generated, you can upload it in Step 2.`;
     } finally {
       setSetting(false);
     }
-  }, [merkleRoot, auctionContract, rootSet, onUpdate]);
+  }, [merkleRoot, ipfsCID, computedData, auctionContract, rootSet, onUpdate, auctionAddress]);
 
   if (!auctionData?.finalized) {
     return null; // Only show after finalization
@@ -247,6 +274,17 @@ After the file is generated, you can upload it in Step 2.`;
             {rootSet && auctionData?.bonusMerkleRoot && (
               <div className="mt-2 break-all font-mono text-xs text-[rgba(255,255,255,0.6)]">
                 {auctionData.bonusMerkleRoot}
+              </div>
+            )}
+            <div className="flex justify-between">
+              <span>IPFS CID Set:</span>
+              <span className={auctionData?.bonusAllocationsCID ? "text-[rgb(34,197,94)]" : "text-[rgb(239,68,68)]"}>
+                {auctionData?.bonusAllocationsCID ? "Yes" : "No"}
+              </span>
+            </div>
+            {auctionData?.bonusAllocationsCID && (
+              <div className="mt-2 break-all font-mono text-xs text-[rgba(255,255,255,0.6)]">
+                {auctionData.bonusAllocationsCID}
               </div>
             )}
             <div className="flex justify-between">
@@ -285,10 +323,11 @@ After the file is generated, you can upload it in Step 2.`;
 
           <div>
             <p className="mb-2 text-sm font-semibold text-[rgba(255,255,255,0.9)]">
-              Step 2: Load Bonus Allocations File
+              Step 2: Load Bonus Allocations File (Optional)
             </p>
             <p className="mb-3 text-xs text-[rgba(255,255,255,0.7)]">
-              Upload the bonus-allocations.json file generated by the script.
+              Optionally upload the bonus allocations JSON file to extract Merkle root and IPFS CID. 
+              The file should already be uploaded to IPFS by the script, but you can verify the CID here.
             </p>
             <input
               type="file"
@@ -305,6 +344,22 @@ After the file is generated, you can upload it in Step 2.`;
               <div className="space-y-1 text-xs text-[rgba(255,255,255,0.8)]">
                 <div>Allocations: {computedData.allocationCount}</div>
                 <div>Total Bonus: {formatTokenUnits(computedData.totalBonus)}</div>
+                {computedData.ipfsCID && (
+                  <div className="mt-2">
+                    <span className="font-semibold">IPFS CID: </span>
+                    <span className="font-mono break-all">{computedData.ipfsCID}</span>
+                    {getIPFSURL(computedData.ipfsCID) && (
+                      <a
+                        href={getIPFSURL(computedData.ipfsCID)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="ml-2 text-[rgb(59,130,246)] hover:underline"
+                      >
+                        View on IPFS
+                      </a>
+                    )}
+                  </div>
+                )}
                 {computedData.summary && (
                   <div className="mt-2 rounded bg-[rgba(0,0,0,0.2)] p-2">
                     <pre className="text-xs">{JSON.stringify(computedData.summary, null, 2)}</pre>
@@ -313,6 +368,42 @@ After the file is generated, you can upload it in Step 2.`;
               </div>
             </div>
           )}
+
+          <div>
+            <p className="mb-2 text-sm font-semibold text-[rgba(255,255,255,0.9)]">
+              Step 2.5: IPFS CID (Optional but Recommended)
+            </p>
+            <p className="mb-3 text-xs text-[rgba(255,255,255,0.7)]">
+              Paste the IPFS CID from the script output. This allows users to fetch proofs from IPFS instead of local files.
+            </p>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={ipfsCID}
+                onChange={(e) => {
+                  const newCID = e.target.value.trim();
+                  setIpfsCID(newCID);
+                }}
+                placeholder="Qm... or bafy..."
+                className="flex-1 rounded-xl border border-[rgba(255,255,255,0.1)] bg-[rgba(15,23,42,0.6)] px-4 py-2 text-sm text-white placeholder-[rgba(255,255,255,0.5)] focus:border-[rgb(59,130,246)] focus:outline-none"
+              />
+              {ipfsCID && isValidCID(ipfsCID) && getIPFSURL(ipfsCID) && (
+                <a
+                  href={getIPFSURL(ipfsCID)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-xl border border-[rgba(59,130,246,0.3)] bg-[rgba(59,130,246,0.1)] px-4 py-2 text-sm font-semibold text-[rgb(59,130,246)] transition-all hover:bg-[rgba(59,130,246,0.2)]"
+                >
+                  View
+                </a>
+              )}
+            </div>
+            {ipfsCID && !isValidCID(ipfsCID) && (
+              <p className="mt-2 text-xs text-[rgb(239,68,68)]">
+                Invalid CID format. CID should start with "Qm" or "bafy"
+              </p>
+            )}
+          </div>
 
           <div>
             <p className="mb-2 text-sm font-semibold text-[rgba(255,255,255,0.9)]">
@@ -343,9 +434,25 @@ After the file is generated, you can upload it in Step 2.`;
 
       {rootSet && (
         <div className="rounded-xl border border-[rgba(34,197,94,0.3)] bg-[rgba(34,197,94,0.1)] p-4">
-          <p className="text-sm font-semibold text-[rgb(34,197,94)]">
-            ✅ Merkle root is set. Early participants can now claim their bonuses.
+          <p className="text-sm font-semibold text-[rgb(34,197,94)] mb-2">
+             Merkle root is set. Early participants can now claim their bonuses.
           </p>
+          {ipfsCID && isValidCID(ipfsCID) && (
+            <div className="mt-2 text-xs text-[rgba(255,255,255,0.8)]">
+              <span className="font-semibold">IPFS CID: </span>
+              <span className="font-mono break-all">{ipfsCID}</span>
+              {getIPFSURL(ipfsCID) && (
+                <a
+                  href={getIPFSURL(ipfsCID)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="ml-2 text-[rgb(59,130,246)] hover:underline"
+                >
+                  View on IPFS
+                </a>
+              )}
+            </div>
+          )}
         </div>
       )}
 

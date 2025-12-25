@@ -110,7 +110,7 @@ describe("DutchAuction – 04_reveal", function () {
         expect(await auction.priceBucketTotals(0)).to.equal(bid.qty);
 
         const revealedBid = await auction.revealedBids(await alice.getAddress(), 0);
-        expect(revealedBid.bonusPct).to.equal(ctx.config.earlyBonusPct);
+        expect(revealedBid.isEarly).to.equal(true);
         expect(revealedBid.priceTickIndex).to.equal(0n);
     });
 
@@ -281,7 +281,7 @@ describe("DutchAuction – 04_reveal", function () {
         await auction.connect(alice).reveal(0, bid.qty, bid.nonce, 0);
 
         const revealed = await auction.revealedBids(await alice.getAddress(), 0);
-        expect(revealed.bonusPct).to.equal(config.earlyBonusPct);
+        expect(revealed.isEarly).to.equal(true);
     });
 
     it("should prorate bonus when reserve insufficient", async function () {
@@ -300,10 +300,9 @@ describe("DutchAuction – 04_reveal", function () {
         await time.increaseTo(commitEndTime + 1n);
         await auction.connect(alice).reveal(0, bid.qty, bid.nonce, 0);
 
-        // bonusReserve is in wei, qty is in wei, so calculation is correct
-        const expectedBonusPct = (overrides.bonusReserve * BPS_DENOMINATOR) / bid.qty;
+
         const revealed = await auction.revealedBids(await alice.getAddress(), 0);
-        expect(revealed.bonusPct).to.equal(expectedBonusPct);
+        expect(revealed.isEarly).to.equal(true);
     });
 
     it("should set bonusPct to zero when reserve depleted", async function () {

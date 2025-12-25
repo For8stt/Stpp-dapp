@@ -11,6 +11,7 @@
 import { ethers } from "hardhat";
 import { writeFileSync } from "fs";
 import { join } from "path";
+import { execSync } from "child_process";
 
 const BPS_DENOMINATOR = 10_000n;
 
@@ -35,6 +36,7 @@ interface BonusOutput {
         scalingFactor: string;
         bonusReserve: string;
     };
+    ipfsCID?: string; // IPFS Content Identifier for allocations JSON
 }
 
 /**
@@ -46,14 +48,11 @@ function buildMerkleTree(leaves: string[]): { root: string; proofs: Record<strin
         return { root: ethers.ZeroHash, proofs: {} };
     }
 
-    // Sort leaves for determinism
     const sortedLeaves = [...leaves].sort((a, b) => {
         return BigInt(a) < BigInt(b) ? -1 : BigInt(a) > BigInt(b) ? 1 : 0;
     });
 
     const layers: string[][] = [sortedLeaves];
-    
-    // Build tree bottom-up
     while (layers[layers.length - 1].length > 1) {
         const current = layers[layers.length - 1];
         const next: string[] = [];
@@ -61,8 +60,6 @@ function buildMerkleTree(leaves: string[]): { root: string; proofs: Record<strin
         for (let i = 0; i < current.length; i += 2) {
             const left = current[i];
             const right = i + 1 < current.length ? current[i + 1] : current[i];
-            
-            // Sort pair for determinism
             const [lo, hi] = BigInt(left) < BigInt(right) ? [left, right] : [right, left];
             next.push(ethers.keccak256(ethers.concat([lo, hi])));
         }
@@ -73,7 +70,6 @@ function buildMerkleTree(leaves: string[]): { root: string; proofs: Record<strin
     const root = layers[layers.length - 1][0];
     const proofs: Record<string, string[]> = {};
 
-    // Generate proofs for each leaf
     for (let leafIndex = 0; leafIndex < sortedLeaves.length; leafIndex++) {
         const proof: string[] = [];
         let index = leafIndex;
@@ -85,7 +81,6 @@ function buildMerkleTree(leaves: string[]): { root: string; proofs: Record<strin
             if (pairIndex < layer.length) {
                 proof.push(layer[pairIndex]);
             } else {
-                // Duplicate if odd number of nodes
                 proof.push(layer[index]);
             }
             
@@ -106,6 +101,114 @@ function computeLeaf(address: string, bonusQty: bigint): string {
 }
 
 /**
+ * Gets IPFS API port (tries common ports)
+ * @returns API port number or null
+ */
+function getIPFSAPIPort(): number | null {
+    const ports = [5001, 5002]; // Common IPFS API ports
+    
+    for (const port of ports) {
+        try {
+            execSync(`curl -s http://127.0.0.1:${port}/api/v0/version`, {
+                encoding: "utf-8",
+                stdio: "ignore",
+                timeout: 2000,
+            });
+            return port;
+        } catch {
+            continue;
+        }
+    }
+    
+    return null;
+}
+
+/**
+ * Checks if IPFS daemon is running (via HTTP API)
+ * @returns true if daemon is accessible
+ */
+function isIPFSDaemonRunning(): boolean {
+    return getIPFSAPIPort() !== null;
+}
+
+/**
+ * Uploads a file to local IPFS using HTTP API or CLI
+ * Tries HTTP API first (more reliable), then falls back to CLI
+ * @param filePath Path to the file to upload
+ * @returns CID (Content Identifier) of the uploaded file, or null if IPFS unavailable
+ */
+async function uploadToIPFS(filePath: string): Promise<string | null> {
+    if (!isIPFSDaemonRunning()) {
+        console.warn("⚠️  IPFS daemon is not running.");
+        console.warn("   Please start it in a separate terminal: npx ipfs daemon");
+        console.warn("   Then run this script again.");
+        console.warn("   Continuing without IPFS upload...");
+        return null;
+    }
+
+    try {
+        const apiPort = getIPFSAPIPort();
+        if (apiPort) {
+            try {
+                console.log(`   Trying HTTP API on port ${apiPort}...`);
+                const curlOutput = execSync(
+                    `curl -s -X POST -F "file=@${filePath}" http://127.0.0.1:${apiPort}/api/v0/add`,
+                    {
+                        encoding: "utf-8",
+                        stdio: ["ignore", "pipe", "pipe"],
+                        timeout: 30000,
+                    }
+                ).trim();
+                const result = JSON.parse(curlOutput);
+                const cid = result.Hash || result.cid;
+                
+                if (cid && (cid.startsWith("Qm") || cid.startsWith("bafy"))) {
+                    return cid;
+                }
+            } catch (httpError: any) {
+                console.log("   HTTP API failed, trying CLI...");
+            }
+        }
+        try {
+            const addOutput = execSync(`npx ipfs add --quiet "${filePath}"`, {
+                encoding: "utf-8",
+                stdio: ["ignore", "pipe", "pipe"],
+                timeout: 30000,
+            }).trim();
+            const cid = addOutput.split(/\s+/)[0];
+            if (cid && cid.length > 0 && (cid.startsWith("Qm") || cid.startsWith("bafy"))) {
+                return cid;
+            }
+        } catch (npxError: any) {
+            try {
+                const addOutput = execSync(`ipfs add --quiet "${filePath}"`, {
+                    encoding: "utf-8",
+                    stdio: ["ignore", "pipe", "pipe"],
+                    timeout: 30000,
+                }).trim();
+                
+                const cid = addOutput.split(/\s+/)[0];
+                if (cid && cid.length > 0 && (cid.startsWith("Qm") || cid.startsWith("bafy"))) {
+                    return cid;
+                }
+            } catch (globalError: any) {
+                throw new Error("All IPFS methods failed");
+            }
+        }
+        
+        throw new Error("Could not extract CID from IPFS output");
+    } catch (error: any) {
+        console.warn("  Warning: Could not upload to IPFS:", error.message);
+        console.warn("   To enable IPFS upload:");
+        console.warn("   1. Start IPFS daemon in a separate terminal: npx ipfs daemon");
+        console.warn("   2. Make sure daemon API is accessible at http://127.0.0.1:5001");
+        console.warn("   3. Then run this script again");
+        console.warn("   Continuing without IPFS upload...");
+        return null;
+    }
+}
+
+/**
  * Main function to compute bonus allocations
  */
 async function computeBonusAllocations(
@@ -114,11 +217,9 @@ async function computeBonusAllocations(
 ): Promise<BonusOutput> {
     console.log(`\n🔍 Computing bonus allocations for auction: ${auctionAddress}\n`);
 
-    // Get auction contract
     const auctionFactory = await ethers.getContractFactory("DutchAuction");
     const auction = auctionFactory.attach(auctionAddress);
 
-    // Read auction configuration
     const earlyBonusPct = await auction.earlyBonusPct();
     const bonusReserve = await auction.bonusReserve();
     const bonusReserveRemaining = await auction.bonusReserveRemaining();
@@ -151,7 +252,6 @@ async function computeBonusAllocations(
         };
     }
 
-    // Get list of early participants
     const earlyParticipantsCount = await auction.earlyParticipantsCount();
     console.log(`👥 Found ${earlyParticipantsCount} early participant(s)\n`);
     
@@ -176,7 +276,6 @@ async function computeBonusAllocations(
         };
     }
 
-    // Get clearing price data needed for allocation computation
     const clearingTickIndex = await auction.clearingTickIndex();
     const clearingPrice = await auction.clearingPrice();
     const tokensSold = await auction.tokensSold();
@@ -185,9 +284,7 @@ async function computeBonusAllocations(
     const proRataNumerator = await auction.proRataNumerator();
     const proRataDenominator = await auction.proRataDenominator();
 
-    // Helper function to compute base allocation (same logic as _computeBaseAllocation)
     const computeBaseAllocation = async (account: string): Promise<bigint> => {
-        // Get revealed bids count
         const revealedBidsCount = await auction.revealedBidsCount(account);
         if (revealedBidsCount === 0n) {
             return 0n;
@@ -195,10 +292,8 @@ async function computeBonusAllocations(
 
         let allocated = 0n;
 
-        // Iterate through revealed bids
         for (let i = 0; i < Number(revealedBidsCount); i++) {
             const bid = await auction.revealedBids(account, i);
-            // Convert to bigint (ethers.js may return as number or bigint)
             const qty = typeof bid.qty === 'bigint' ? bid.qty : BigInt(bid.qty.toString());
             const priceTickIndex = typeof bid.priceTickIndex === 'bigint' ? bid.priceTickIndex : BigInt(bid.priceTickIndex.toString());
             
@@ -224,9 +319,7 @@ async function computeBonusAllocations(
         return allocated;
     };
 
-    // Helper function to compute early allocation (only for bids with isEarly = true)
     const computeEarlyAllocation = async (account: string): Promise<bigint> => {
-        // Get revealed bids count
         const revealedBidsCount = await auction.revealedBidsCount(account);
         if (revealedBidsCount === 0n) {
             return 0n;
@@ -236,16 +329,11 @@ async function computeBonusAllocations(
         let totalBids = 0n;
         let earlyBids = 0n;
 
-        // Iterate through revealed bids and only count those with isEarly = true
         for (let i = 0; i < Number(revealedBidsCount); i++) {
             const bid = await auction.revealedBids(account, i);
             totalBids++;
-            
-            // Convert to bigint (ethers.js may return as number or bigint)
             const qty = typeof bid.qty === 'bigint' ? bid.qty : BigInt(bid.qty.toString());
             const priceTickIndex = typeof bid.priceTickIndex === 'bigint' ? bid.priceTickIndex : BigInt(bid.priceTickIndex.toString());
-            
-            // Check if this bid is early
             const isEarly = bid.isEarly;
             
             console.log(`     Bid ${i}: qty=${ethers.formatEther(qty)}, isEarly=${isEarly}`);
@@ -281,15 +369,12 @@ async function computeBonusAllocations(
         return earlyAllocated;
     };
 
-    // Collect early participants and their allocations
     const allocations: BonusAllocation[] = [];
     let totalRequestedBonus = 0n;
 
     console.log(`📋 Computing allocations for early participants:\n`);
 
     for (const participant of earlyParticipants) {
-        
-        // Compute early allocation (only for bids with isEarly = true)
         console.log(`   Computing early allocation for ${participant}...`);
         const earlyAllocatedQty = await computeEarlyAllocation(participant);
         
@@ -298,7 +383,6 @@ async function computeBonusAllocations(
             continue;
         }
 
-        // Get total allocation for logging purposes
         let totalAllocatedQty: bigint;
         const allocationData = await auction.accountAllocations(participant);
         if (allocationData.computed) {
@@ -307,7 +391,6 @@ async function computeBonusAllocations(
             totalAllocatedQty = await computeBaseAllocation(participant);
         }
 
-        // Calculate requested bonus ONLY on early allocated quantity
         const requestedBonus = (earlyAllocatedQty * earlyBonusPct) / BPS_DENOMINATOR;
         totalRequestedBonus += requestedBonus;
 
@@ -329,7 +412,6 @@ async function computeBonusAllocations(
     console.log(`   Total Requested Bonus: ${ethers.formatEther(totalRequestedBonus)} tokens`);
     console.log(`   Bonus Reserve: ${ethers.formatEther(bonusReserveRemaining)} tokens\n`);
 
-    // Compute global scaling factor
     let scalingFactor = BPS_DENOMINATOR; // 100% = no scaling
     if (totalRequestedBonus > bonusReserveRemaining && totalRequestedBonus > 0n) {
         scalingFactor = (bonusReserveRemaining * BPS_DENOMINATOR) / totalRequestedBonus;
@@ -340,7 +422,6 @@ async function computeBonusAllocations(
         console.log(`✅ No scaling needed - reserve sufficient\n`);
     }
 
-    // Apply scaling and compute final bonuses
     const leaves: string[] = [];
     const outputAllocations: Record<string, { bonusQty: string; merkleProof: string[] }> = {};
 
@@ -348,7 +429,6 @@ async function computeBonusAllocations(
         const finalBonus = (allocation.requestedBonus * scalingFactor) / BPS_DENOMINATOR;
         allocation.finalBonus = finalBonus;
 
-        // Compute leaf hash
         const leaf = computeLeaf(allocation.address, finalBonus);
         leaves.push(leaf);
 
@@ -361,11 +441,9 @@ async function computeBonusAllocations(
         console.log(`     Final Bonus: ${ethers.formatEther(finalBonus)} tokens`);
     }
 
-    // Build Merkle tree
     console.log(`\n🌳 Building Merkle tree...\n`);
     const { root, proofs } = buildMerkleTree(leaves);
 
-    // Attach proofs to allocations
     for (const allocation of allocations) {
         const leaf = computeLeaf(allocation.address, allocation.finalBonus);
         const proof = proofs[leaf];
@@ -398,32 +476,35 @@ async function computeBonusAllocations(
     console.log(`   Total Final Bonus: ${ethers.formatEther(totalFinalBonus)} tokens`);
     console.log(`   Scaling Factor: ${Number(scalingFactor) / 100}%\n`);
 
-    // Write output file
     if (outputPath) {
         writeFileSync(outputPath, JSON.stringify(output, null, 2));
         console.log(`💾 Output written to: ${outputPath}\n`);
+        console.log(`📤 Uploading to IPFS...\n`);
+        const ipfsCID = await uploadToIPFS(outputPath);
+        
+        if (ipfsCID) {
+            output.ipfsCID = ipfsCID;
+            writeFileSync(outputPath, JSON.stringify(output, null, 2));
+            console.log(`✅ Uploaded to IPFS successfully!`);
+            console.log(`   CID: ${ipfsCID}`);
+            console.log(`   IPFS URL: https://ipfs.io/ipfs/${ipfsCID}`);
+            console.log(`   Gateway URL: https://gateway.ipfs.io/ipfs/${ipfsCID}\n`);
+        } else {
+            console.log(`⚠️  IPFS upload skipped (IPFS not available)\n`);
+        }
     }
 
     return output;
 }
 
-// CLI interface
 async function main() {
-    // Hardhat doesn't support -- for passing arguments
-    // Use environment variable or find address in process.argv
     let auctionAddress: string | undefined;
     let outputPath: string | undefined;
-    
-    // First, try environment variable
     auctionAddress = process.env.AUCTION_ADDRESS;
-    
-    // If not in env, try to find in process.argv (after script name)
     if (!auctionAddress) {
         const scriptIndex = process.argv.findIndex(arg => arg.includes('computeBonusAllocations'));
         if (scriptIndex >= 0) {
-            // Get all args after script name
             const remainingArgs = process.argv.slice(scriptIndex + 1);
-            // Filter out hardhat-specific flags and network names
             const filteredArgs = remainingArgs.filter(arg => 
                 !arg.startsWith('--') && 
                 arg !== 'localhost' && 
@@ -466,7 +547,6 @@ async function main() {
     }
 }
 
-// Run if called directly
 if (require.main === module) {
     main().catch((error) => {
         console.error(error);

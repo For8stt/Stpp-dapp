@@ -38,7 +38,7 @@ import { generateCommitHash, parseMerkleProof, calculateDeposit } from "../utils
 import { REFRESH_INTERVAL_MS, PHASES, DEFAULT_LBP_CONFIG } from "../constants/auction";
 import { deepEqual } from "../utils/objectUtils";
 import { handleTxError } from "../utils/txErrorHandler";
-import { loadBonusAllocation } from "../utils/bonusAllocations";
+import { loadBonusAllocationFromIPFS } from "../utils/ipfsBonusAllocations";
 
 
 const AuctionView = () => {
@@ -549,23 +549,53 @@ const AuctionView = () => {
       if (!bonusClaimed && auctionData?.bonusMerkleRoot && 
           auctionData.bonusMerkleRoot !== ethers.ZeroHash && 
           auctionAddress) {
-        console.log('📥 [Claim] Loading bonus allocation from file...');
-        try {
-          const bonusAllocation = await loadBonusAllocation(auctionAddress, account);
-          if (bonusAllocation) {
-            bonusQty = BigInt(bonusAllocation.bonusQty);
-            merkleProof = bonusAllocation.merkleProof || [];
-            console.log('✅ [Claim] Bonus allocation loaded:', {
-              bonusQty: bonusQty.toString(),
-              bonusQtyFormatted: `${Number(bonusQty) / 1e18} tokens`,
-              proofLength: merkleProof.length,
-              willClaimBonus: bonusQty > 0n
-            });
-          } else {
-            console.warn('⚠️ [Claim] No bonus allocation found in file');
+        // Use IPFS only (no local file fallback)
+        const merkleRoot = auctionData.bonusMerkleRoot;
+        let bonusAllocation = null;
+        
+        // Get CID from on-chain data
+        const ipfsCID = auctionData?.bonusAllocationsCID || null;
+        
+        // Load from IPFS if CID is available
+        if (ipfsCID) {
+          console.log('📥 [Claim] Loading bonus allocation from IPFS...', { cid: ipfsCID });
+          try {
+            bonusAllocation = await loadBonusAllocationFromIPFS(
+              ipfsCID,
+              account,
+              auctionAddress,
+              merkleRoot
+            );
+            if (bonusAllocation) {
+              console.log('✅ [Claim] Bonus allocation loaded from IPFS');
+            } else {
+              console.warn('⚠️ [Claim] No bonus allocation found in IPFS for this address');
+            }
+          } catch (ipfsError) {
+            console.error('❌ [Claim] Error loading from IPFS:', ipfsError);
+            // Don't fallback to local file - IPFS is the only source
+            console.warn('⚠️ [Claim] Cannot load bonus allocation from IPFS. Please ensure CID is set correctly.');
           }
-        } catch (bonusLoadError) {
-          console.warn('⚠️ [Claim] Error loading bonus allocation:', bonusLoadError);
+        } else {
+          console.warn('⚠️ [Claim] No IPFS CID found for this auction. Bonus allocation cannot be loaded.');
+          console.warn('   Owner should set the IPFS CID in BonusMerkleManager component.');
+        }
+        
+        if (bonusAllocation) {
+          bonusQty = BigInt(bonusAllocation.bonusQty);
+          merkleProof = bonusAllocation.merkleProof || [];
+          console.log('✅ [Claim] Bonus allocation ready:', {
+            bonusQty: bonusQty.toString(),
+            bonusQtyFormatted: `${Number(bonusQty) / 1e18} tokens`,
+            proofLength: merkleProof.length,
+            willClaimBonus: bonusQty > 0n,
+            source: 'IPFS'
+          });
+        } else {
+          // No bonus allocation available - user can still claim base allocation
+          console.log('ℹ️ [Claim] No bonus allocation available. User can still claim base allocation.');
+          bonusQty = 0n;
+          merkleProof = [];
         }
       } else if (bonusClaimed) {
         console.log('ℹ️ [Claim] Bonus already claimed:', {
@@ -625,24 +655,59 @@ const AuctionView = () => {
             auctionData.bonusMerkleRoot !== "0x0000000000000000000000000000000000000000000000000000000000000000" &&
             auctionData.bonusMerkleRoot !== ethers.ZeroHash;
 
+          // Check current allocation to see if bonus was already included
+          let currentAllocationBonusQty = 0n;
+          try {
+            const currentAllocation = await auctionContract.accountAllocations(account);
+            currentAllocationBonusQty = BigInt(currentAllocation.bonusQty?.toString() || '0');
+            console.log('📊 [Claim] Current allocation on-chain:', {
+              totalQty: currentAllocation.totalQty?.toString() || '0',
+              bonusQty: currentAllocationBonusQty.toString(),
+              paymentDue: currentAllocation.paymentDue?.toString() || '0',
+              computed: currentAllocation.computed
+            });
+          } catch (allocError) {
+            console.warn('⚠️ [Claim] Could not read current allocation:', allocError);
+          }
+
           console.log('📞 [Claim] Calling claim function:', {
             bonusQty: bonusQty.toString(),
             bonusQtyFormatted: `${Number(bonusQty) / 1e18} tokens`,
             merkleProofLength: merkleProof.length,
             bonusClaimed,
+            currentAllocationBonusQty: currentAllocationBonusQty.toString(),
             bonusMerkleRootSet,
-            willClaimBonus: bonusQty > 0n && merkleProof.length >= 0 && !bonusClaimed && bonusMerkleRootSet
+            willClaimBonus: bonusQty > 0n && merkleProof.length >= 0 && !bonusClaimed && bonusMerkleRootSet,
+            bonusAlreadyIncluded: currentAllocationBonusQty > 0n && currentAllocationBonusQty === bonusQty
           });
           
-          if (bonusQty > 0n && !bonusClaimed && bonusMerkleRootSet) {
+          // If bonus is already included in allocation, we don't need to claim it again
+          if (bonusQty > 0n && !bonusClaimed && bonusMerkleRootSet && currentAllocationBonusQty === 0n) {
             console.log('✅ [Claim] Calling claim WITH bonus:', {
               bonusQty: bonusQty.toString(),
               bonusQtyFormatted: `${Number(bonusQty) / 1e18} tokens`,
-              proofLength: merkleProof.length
+              proofLength: merkleProof.length,
+              reason: 'Bonus not yet included in allocation'
             });
             return await auctionWithSigner.claim(bonusQty, merkleProof);
+          } else if (bonusClaimed && currentAllocationBonusQty === 0n) {
+            // Bonus was marked as claimed but not included in allocation - this is an error state
+            console.error('❌ [Claim] ERROR: Bonus marked as claimed but not included in allocation!', {
+              bonusClaimed,
+              currentAllocationBonusQty: currentAllocationBonusQty.toString(),
+              expectedBonusQty: bonusQty.toString()
+            });
+            throw new Error('Bonus was marked as claimed but not included in allocation. This may require manual intervention.');
+          } else if (currentAllocationBonusQty > 0n && currentAllocationBonusQty === bonusQty) {
+            console.log('ℹ️ [Claim] Bonus already included in allocation, claiming base tokens only');
+            return await auctionWithSigner.claim(0, []);
           } else {
-            console.log('ℹ️ [Claim] Calling claim WITHOUT bonus');
+            console.log('ℹ️ [Claim] Calling claim WITHOUT bonus', {
+              reason: bonusClaimed ? 'Bonus already claimed' : 
+                      !bonusMerkleRootSet ? 'Merkle root not set' :
+                      bonusQty === 0n ? 'No bonus allocation found' :
+                      'Unknown reason'
+            });
             return await auctionWithSigner.claim(0, []);
           }
         },
