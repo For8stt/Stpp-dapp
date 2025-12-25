@@ -110,17 +110,60 @@ describe("SecureLBP – 06_finalizeToVesting", function () {
     });
 
     it("should revert if available token balance < totalTokensAllocated", async function () {
-        const { lbp, owner, token } = await loadFixture(deployLbpWithBidsFixture);
+        const { lbp, owner, token, pool } = await loadFixture(deployLbpWithBidsFixture);
         const escrow = await deployEscrow(await token.getAddress(), await lbp.getAddress());
 
         const lbpAddress = await lbp.getAddress();
-        const balance = await token.balanceOf(lbpAddress);
+        const contractBalance = await token.balanceOf(lbpAddress);
+        const poolReserveToken = await pool.reserveToken();
+        const totalTokensAllocated = await lbp.totalTokensAllocated();
 
-        await ethers.provider.send("hardhat_impersonateAccount", [lbpAddress]);
-        const lbpSigner = await ethers.provider.getSigner(lbpAddress);
-        await owner.sendTransaction({ to: lbpAddress, value: ethers.parseEther("1") });
-        await token.connect(lbpSigner).transfer(owner.address, balance);
-        await ethers.provider.send("hardhat_stopImpersonatingAccount", [lbpAddress]);
+        // Remove all tokens from contract
+        if (contractBalance > 0n) {
+            await ethers.provider.send("hardhat_impersonateAccount", [lbpAddress]);
+            const lbpSigner = await ethers.getSigner(lbpAddress);
+            await owner.sendTransaction({ to: lbpAddress, value: ethers.parseEther("1") });
+            await token.connect(lbpSigner).transfer(owner.address, contractBalance);
+            await ethers.provider.send("hardhat_stopImpersonatingAccount", [lbpAddress]);
+        }
+
+        // Remove all tokens from pool by removing all liquidity
+        if (poolReserveToken > 0n) {
+            const lpBalance = await pool.balanceLP(lbpAddress);
+            if (lpBalance > 0n) {
+                await ethers.provider.send("hardhat_impersonateAccount", [lbpAddress]);
+                const lbpSigner = await ethers.getSigner(lbpAddress);
+                await owner.sendTransaction({ to: lbpAddress, value: ethers.parseEther("1") });
+                await pool.connect(lbpSigner).removeLiquidity(lpBalance);
+                await ethers.provider.send("hardhat_stopImpersonatingAccount", [lbpAddress]);
+            }
+        }
+
+        // After removing liquidity, tokens are returned to the contract, so remove them again
+        // We need to remove enough tokens so that total available < totalTokensAllocated
+        let balanceAfterUnwind = await token.balanceOf(lbpAddress);
+        const finalPoolReserve = await pool.reserveToken();
+        const totalAvailable = balanceAfterUnwind + finalPoolReserve;
+        
+        // Calculate how many tokens we need to remove to make total available < totalTokensAllocated
+        if (totalAvailable >= totalTokensAllocated) {
+            // We need to remove at least (totalAvailable - totalTokensAllocated + 1) tokens
+            const tokensToRemove = totalAvailable - totalTokensAllocated + 1n;
+            const tokensToRemoveFromContract = tokensToRemove > balanceAfterUnwind ? balanceAfterUnwind : tokensToRemove;
+            
+            if (tokensToRemoveFromContract > 0n) {
+                await ethers.provider.send("hardhat_impersonateAccount", [lbpAddress]);
+                const lbpSigner = await ethers.getSigner(lbpAddress);
+                await owner.sendTransaction({ to: lbpAddress, value: ethers.parseEther("1") });
+                await token.connect(lbpSigner).transfer(owner.address, tokensToRemoveFromContract);
+                await ethers.provider.send("hardhat_stopImpersonatingAccount", [lbpAddress]);
+            }
+        }
+
+        // Verify that total available is less than allocated
+        const finalContractBalance = await token.balanceOf(lbpAddress);
+        const finalPoolReserveAfter = await pool.reserveToken();
+        expect(finalContractBalance + finalPoolReserveAfter).to.be.lt(totalTokensAllocated);
 
         await expect(
             lbp.connect(owner).finalizeToVesting(await escrow.getAddress())

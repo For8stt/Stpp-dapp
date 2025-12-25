@@ -5,8 +5,9 @@
  * Route: /vesting/:escrowAddress
  */
 import React, { useEffect, useState } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { useParams, useSearchParams, useNavigate } from "react-router-dom";
 import { useAccount as useWagmiAccount } from "wagmi";
+import { Contract, ethers } from "ethers";
 import { useTransaction } from "../hooks/useTransaction";
 import { useVestingData } from "../hooks/useVestingData";
 import { useTime } from "../time";
@@ -14,40 +15,144 @@ import { calculateVestingCurveData, formatToken } from "../components/vesting/ve
 import { useEscrowCheck } from "../components/vesting/useEscrowCheck";
 import { useClaimHandler } from "../components/vesting/useClaimHandler";
 import { useVestingProgress } from "../components/vesting/useVestingProgress";
+import { ensureProvider } from "../services/web3/provider";
+import allAbis from "../abi/allAbis.json";
 import VestingLoading from "../components/vesting/VestingLoading";
 import VestingError from "../components/vesting/VestingError";
 import VestingEmpty from "../components/vesting/VestingEmpty";
 import VestingContent from "../components/vesting/VestingContent";
 
 const VestingView = () => {
-  const { escrowAddress } = useParams();
+  const { escrowAddress: escrowAddressParam } = useParams();
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const expectedLBPAddress = searchParams.get("lbp");
   const lbpAddressParam = searchParams.get("lbpAddress");
   const { address: account } = useWagmiAccount();
   const tx = useTransaction();
   const { currentTime, refreshTime } = useTime();
   
-  const lbpAddressToCheck = lbpAddressParam || expectedLBPAddress;
+  const [actualEscrowAddress, setActualEscrowAddress] = useState(escrowAddressParam);
+  const [actualLBPAddress, setActualLBPAddress] = useState(lbpAddressParam || expectedLBPAddress);
+  const [checkingAddresses, setCheckingAddresses] = useState(true);
+  
+  const lbpAddressToCheck = actualLBPAddress;
+
+  useEffect(() => {
+    let isMounted = true;
+    
+    const detectAndFixAddresses = async () => {
+      if (!escrowAddressParam) return;
+      
+      try {
+        setCheckingAddresses(true);
+        const provider = await ensureProvider();
+        if (!provider) return;
+        const escrowAbi = allAbis.TokenVestingEscrow || [];
+        const secureLBPAbi = allAbis.SecureLBP || [];
+        
+        if (escrowAbi.length === 0 || secureLBPAbi.length === 0) {
+          setCheckingAddresses(false);
+          return;
+        }
+        let isEscrow = false;
+        let lbpFromEscrow = null;
+        try {
+          const escrowContract = new Contract(escrowAddressParam, escrowAbi, provider);
+          const [token, secureLBP] = await Promise.all([
+            escrowContract.token().catch(() => ethers.ZeroAddress),
+            escrowContract.secureLBP().catch(() => ethers.ZeroAddress),
+          ]);
+          if (token !== ethers.ZeroAddress && secureLBP !== ethers.ZeroAddress) {
+            isEscrow = true;
+            lbpFromEscrow = secureLBP;
+          }
+        } catch (err) {
+        }
+        let isLBP = false;
+        let escrowFromLBP = null;
+        try {
+          const lbpContract = new Contract(escrowAddressParam, secureLBPAbi, provider);
+          const [token, vestingEscrow] = await Promise.all([
+            lbpContract.token().catch(() => ethers.ZeroAddress),
+            lbpContract.vestingEscrow().catch(() => ethers.ZeroAddress),
+          ]);
+          if (token !== ethers.ZeroAddress) {
+            isLBP = true;
+            escrowFromLBP = vestingEscrow !== ethers.ZeroAddress ? vestingEscrow : null;
+          }
+        } catch (err) {
+        }
+        
+        if (!isMounted) return;
+        if (isLBP && !isEscrow) {
+          const correctEscrow = escrowFromLBP || (expectedLBPAddress && expectedLBPAddress !== ethers.ZeroAddress ? expectedLBPAddress : null);
+          
+          if (correctEscrow) {
+            navigate(`/vesting/${correctEscrow}?lbp=${escrowAddressParam}`, { replace: true });
+            return;
+          } else if (expectedLBPAddress) {
+            try {
+              const testEscrowContract = new Contract(expectedLBPAddress, escrowAbi, provider);
+              const [token, secureLBP] = await Promise.all([
+                testEscrowContract.token().catch(() => ethers.ZeroAddress),
+                testEscrowContract.secureLBP().catch(() => ethers.ZeroAddress),
+              ]);
+              if (token !== ethers.ZeroAddress && secureLBP !== ethers.ZeroAddress) {
+                navigate(`/vesting/${expectedLBPAddress}?lbp=${escrowAddressParam}`, { replace: true });
+                return;
+              }
+            } catch (err) {
+            }
+          }
+        }
+        if (isEscrow) {
+          setActualEscrowAddress(escrowAddressParam);
+          if (lbpFromEscrow) {
+            setActualLBPAddress(lbpFromEscrow);
+          } else if (expectedLBPAddress) {
+            setActualLBPAddress(expectedLBPAddress);
+          }
+        } else if (!isLBP) {
+          setActualEscrowAddress(escrowAddressParam);
+          if (expectedLBPAddress) {
+            setActualLBPAddress(expectedLBPAddress);
+          }
+        }
+        
+        setCheckingAddresses(false);
+      } catch (err) {
+        if (isMounted) {
+          setCheckingAddresses(false);
+        }
+      }
+    };
+    
+    detectAndFixAddresses();
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [escrowAddressParam, expectedLBPAddress, navigate]);
 
   const {
     data: vestingData,
     loading,
     error,
     refetch: refetchVestingData,
-  } = useVestingData(escrowAddress, account, lbpAddressToCheck || undefined, currentTime);
+  } = useVestingData(actualEscrowAddress, account, lbpAddressToCheck || undefined, currentTime);
 
   const [vestingCurveData, setVestingCurveData] = useState([]);
 
   const { correctEscrowAddress, checkingEscrow, lbpFinalized } = useEscrowCheck(
     lbpAddressToCheck,
-    escrowAddress
+    actualEscrowAddress
   );
 
   const handleClaim = useClaimHandler(
     vestingData,
     account,
-    escrowAddress,
+    actualEscrowAddress,
     tx,
     refetchVestingData
   );
@@ -67,7 +172,7 @@ const VestingView = () => {
     setVestingCurveData(curveData);
   }, [vestingData, currentTime]);
 
-  if (loading) {
+  if (checkingAddresses || loading) {
     return <VestingLoading />;
   }
 
@@ -88,7 +193,7 @@ const VestingView = () => {
       vestingData={vestingData}
       lbpAddressToCheck={lbpAddressToCheck}
       secureLBPAddress={vestingData.secureLBPAddress}
-      escrowAddress={escrowAddress}
+      escrowAddress={actualEscrowAddress}
       correctEscrowAddress={correctEscrowAddress}
       checkingEscrow={checkingEscrow}
       lbpFinalized={lbpFinalized}

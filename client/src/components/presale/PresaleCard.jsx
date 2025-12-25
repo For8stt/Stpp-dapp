@@ -242,18 +242,33 @@ const PresaleCard = ({ presale }) => {
               <span>Auction</span>
             </Link>
           )}
-          {presale.lbp && presale.lbp !== "0x0000000000000000000000000000000000000000" && (
-            <Link
-              to={`/lbp/${presale.lbp}`}
-              className="group/btn relative flex flex-1 items-center justify-center gap-3 overflow-hidden rounded-2xl bg-gradient-to-r from-[#10b981] via-[#06b6d4] to-[#0891b2] px-6 py-3.5 text-base font-bold text-white shadow-lg transition-all duration-300 before:absolute before:left-[-100%] before:top-0 before:h-full before:w-full before:bg-gradient-to-r before:from-transparent before:via-[rgba(255,255,255,0.2)] before:to-transparent before:transition-[left] before:duration-600 hover:-translate-y-0.5 hover:scale-[1.02] hover:shadow-xl hover:before:left-[100%] sm:px-5 sm:py-3 sm:text-sm"
-            >
-              <div className="relative z-10 h-5 w-5">
-                <div className="absolute left-0 top-0 h-4 w-1 rounded-full bg-current"></div>
-                <div className="absolute right-0 top-1 h-3 w-1 rounded-full bg-current"></div>
-              </div>
-              <span>LBP</span>
-            </Link>
-          )}
+          <div className="flex gap-3 sm:gap-2">
+            {presale.lbp && presale.lbp !== "0x0000000000000000000000000000000000000000" && (
+              <Link
+                to={`/lbp/${presale.lbp}`}
+                className="group/btn relative flex flex-1 items-center justify-center gap-3 overflow-hidden rounded-2xl bg-gradient-to-r from-[#10b981] via-[#06b6d4] to-[#0891b2] px-6 py-3.5 text-base font-bold text-white shadow-lg transition-all duration-300 before:absolute before:left-[-100%] before:top-0 before:h-full before:w-full before:bg-gradient-to-r before:from-transparent before:via-[rgba(255,255,255,0.2)] before:to-transparent before:transition-[left] before:duration-600 hover:-translate-y-0.5 hover:scale-[1.02] hover:shadow-xl hover:before:left-[100%] sm:px-5 sm:py-3 sm:text-sm"
+              >
+                <div className="relative z-10 h-5 w-5">
+                  <div className="absolute left-0 top-0 h-4 w-1 rounded-full bg-current"></div>
+                  <div className="absolute right-0 top-1 h-3 w-1 rounded-full bg-current"></div>
+                </div>
+                <span>LBP</span>
+              </Link>
+            )}
+            {presale.vesting && presale.vesting !== "0x0000000000000000000000000000000000000000" && presale.lbpFinalized && (
+              <Link
+                to={`/vesting/${presale.vesting}${presale.lbp && presale.lbp !== "0x0000000000000000000000000000000000000000" ? `?lbp=${presale.lbp}` : ""}`}
+                className="group/btn relative flex flex-1 items-center justify-center gap-3 overflow-hidden rounded-2xl border border-[rgba(249,115,22,0.3)] bg-[rgba(249,115,22,0.08)] px-6 py-3.5 text-base font-bold text-[rgba(254,215,170,0.9)] shadow-lg backdrop-blur-sm transition-all duration-300 before:absolute before:left-[-100%] before:top-0 before:h-full before:w-full before:bg-gradient-to-r before:from-transparent before:via-[rgba(255,255,255,0.2)] before:to-transparent before:transition-[left] before:duration-600 hover:-translate-y-0.5 hover:scale-[1.02] hover:border-[rgba(249,115,22,0.5)] hover:bg-[rgba(249,115,22,0.15)] hover:shadow-xl hover:before:left-[100%] sm:px-5 sm:py-3 sm:text-sm"
+              >
+                <div className="relative z-10 h-5 w-5">
+                  <div className="absolute left-1/2 top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border border-current"></div>
+                  <div className="absolute left-1/2 top-1/2 h-1.5 w-0.5 -translate-x-1/2 -translate-y-1/2 rotate-0 bg-current"></div>
+                  <div className="absolute left-1/2 top-1/2 h-1 w-0.5 -translate-x-1/2 -translate-y-1/2 rotate-90 bg-current"></div>
+                </div>
+                <span>Vesting</span>
+              </Link>
+            )}
+          </div>
         </div>
       </div>
     </div>

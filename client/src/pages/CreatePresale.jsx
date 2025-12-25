@@ -36,7 +36,7 @@ const getInitialValues = () => ({
   revealDuration: "3600",
   demandCheckDelay: "600",
   earlyBonusWindow: "600",
-  earlyBonusPct: "0",
+  earlyBonusPct: "500",
   nonRevealPenaltyBps: "0",
   lbpStableShareBps: "4000",
   thresholdLow: "100",
@@ -51,9 +51,9 @@ const getInitialValues = () => ({
   poolStartWeightToken: "80",
   poolEndWeightToken: "20",
   poolSwapFee: "0.003",
-  vestingCliffDuration: "0",
+  vestingCliffDuration: "259200", // 3 days (3 * 24 * 60 * 60 = 259200 seconds)
   vestingFinalDuration: "2592000", // 30 days for LBP (30 * 24 * 60 * 60 = 2592000 seconds)
-  vestingCliffPercentBP: "0",
+  vestingCliffPercentBP: "1500", // 15% (15 * 100 = 1500 BPS)
 });
 
 const parseTimestamp = (value) => {

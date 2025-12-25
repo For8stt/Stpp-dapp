@@ -246,8 +246,26 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable, SecureLBPEvents, Secur
         if (finalized) revert AlreadyFinalized();
         if (vestingEscrow_ == address(0)) revert EscrowZero();
 
-        uint256 availableTokens = token.balanceOf(address(this));
-        if (availableTokens < totalTokensAllocated) revert InsufficientTokens();
+        // Calculate total available tokens: balance in contract + tokens in pool
+        uint256 contractBalance = token.balanceOf(address(this));
+        uint256 poolReserveToken = pool.reserveToken();
+        uint256 totalAvailableTokens = contractBalance + poolReserveToken;
+
+        if (totalAvailableTokens < totalTokensAllocated) {
+            revert InsufficientTokens();
+        }
+
+        if (contractBalance < totalTokensAllocated && poolReserveToken > 0) {
+            uint256 lpBalance = pool.balanceLP(address(this));
+            if (lpBalance > 0) {
+                pool.removeLiquidity(lpBalance);
+                contractBalance = token.balanceOf(address(this));
+            }
+        }
+
+        if (contractBalance < totalTokensAllocated) {
+            revert InsufficientTokens();
+        }
 
         finalized = true;
 

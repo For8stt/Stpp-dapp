@@ -66,6 +66,11 @@ const VestingContent = ({
         correctEscrowAddress={correctEscrowAddress}
         checkingEscrow={checkingEscrow}
         lbpFinalized={lbpFinalized}
+        totalTokensAllocated={userAllocation}
+        escrowMismatchWarning={vestingData.escrowMismatchWarning}
+        timeUntilCliff={timeUntilCliff}
+        isCliffPassed={vestingData.userVested > 0n || (timeUntilCliff !== undefined && timeUntilCliff <= 0)}
+        userAllocationFromAuction={vestingData.userAllocationFromAuction}
       />
 
       <VestingInfoCards
@@ -135,6 +140,7 @@ const VestingContent = ({
                 isPending={isPending}
                 onClaim={onClaim}
               />
+
             </>
           ) : (
             <VestingEmpty message="You don't have any tokens allocated in this vesting escrow." />

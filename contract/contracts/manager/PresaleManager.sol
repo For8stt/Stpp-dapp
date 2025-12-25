@@ -257,6 +257,11 @@ contract PresaleManager is Ownable, IPresaleManager, IAutomationCompatible, Pres
         IERC20(record.saleToken).safeTransfer(lbpTarget, tokensReceived);
         ILBP(lbpTarget).initPoolFromAuction{value: ethReceived}(tokensReceived);
 
+        if (record.vestingEscrow == address(0)) {
+            TokenVestingEscrow escrow = new TokenVestingEscrow(record.saleToken, lbpTarget);
+            record.vestingEscrow = address(escrow);
+        }
+
         record.lbpInitialized = true;
         record.lbpTokensProvided = tokensReceived;
         record.lbpEthProvided = ethReceived;
@@ -273,12 +278,22 @@ contract PresaleManager is Ownable, IPresaleManager, IAutomationCompatible, Pres
         if (record.lbpFinalized) revert AuctionAlreadyFinalized();
         address vestingTarget = record.vestingEscrow;
         if (vestingTarget == address(0)) {
-            if (vestingEscrow_ == address(0)) revert EscrowZero();
-            if (IVestingEscrow(vestingEscrow_).token() != record.saleToken) revert EscrowTokenMismatch();
-            vestingTarget = vestingEscrow_;
-            record.vestingEscrow = vestingEscrow_;
+            if (vestingEscrow_ == address(0)) {
+                if (record.lbp == address(0)) revert LbpNotLaunched();
+                TokenVestingEscrow escrow = new TokenVestingEscrow(record.saleToken, record.lbp);
+                vestingTarget = address(escrow);
+                record.vestingEscrow = vestingTarget;
+            } else {
+                if (IVestingEscrow(vestingEscrow_).token() != record.saleToken) revert EscrowTokenMismatch();
+                vestingTarget = vestingEscrow_;
+                record.vestingEscrow = vestingEscrow_;
+            }
         } else {
-            if (vestingEscrow_ != address(0) && vestingEscrow_ != vestingTarget) revert EscrowTokenMismatch();
+            if (vestingEscrow_ != address(0) && vestingEscrow_ != vestingTarget) {
+                if (IVestingEscrow(vestingEscrow_).token() != record.saleToken) revert EscrowTokenMismatch();
+                vestingTarget = vestingEscrow_;
+                record.vestingEscrow = vestingEscrow_;
+            }
             if (IVestingEscrow(vestingTarget).token() != record.saleToken) revert EscrowTokenMismatch();
         }
 
@@ -543,10 +558,13 @@ contract PresaleManager is Ownable, IPresaleManager, IAutomationCompatible, Pres
         if (cfg.startTime >= cfg.endTime) revert InvalidLbpTimes();
         lbpAddress = _deploySecureLBP(record, cfg, auctionAddress);
 
-        TokenVestingEscrow escrow = new TokenVestingEscrow(record.saleToken, lbpAddress);
-        record.vestingEscrow = address(escrow);
+        // NOTE: Vesting escrow is NOT created here anymore.
+        // It will be created in launchLBP() after LBP is initialized,
+        // or in finalizeLbp() if not created yet.
+        // This ensures vesting escrow is created with a fully initialized LBP.
+        record.vestingEscrow = address(0);
 
-        return (lbpAddress, address(escrow));
+        return (lbpAddress, address(0));
     }
 
     function _deploySecureLBP(

@@ -32,9 +32,9 @@ const defaultLbpConfig = {
   poolStartWeightToken: "80",
   poolEndWeightToken: "20",
   poolSwapFee: "0.003",
-  vestingCliffDuration: "0",
+  vestingCliffDuration: "259200", // 3 days (3 * 24 * 60 * 60 = 259200 seconds)
   vestingFinalDuration: "2592000", // 30 days for LBP (30 * 24 * 60 * 60 = 2592000 seconds)
-  vestingCliffPercentBP: "0",
+  vestingCliffPercentBP: "1500", // 15% (15 * 100 = 1500 BPS)
 };
 
 const parseTimestamp = (value) => {
@@ -845,8 +845,136 @@ const PresalePage = ({ account }) => {
     runAction("Launch LBP", () => managerContract.launchLBP(info.auction, launchLbpConfig), null);
   };
 
-  const handleFinalizeLbp = () =>
-    runAction("Finalize LBP", () => managerContract.finalizeLbp(info.auction, info.vesting));
+  const handleFinalizeLbp = async () => {
+    if (!managerContract || !info?.auction) return;
+    
+    try {
+      const provider = await import("ethers").then(m => m.BrowserProvider ? new m.BrowserProvider(window.ethereum) : null);
+      if (!provider) throw new Error("No provider");
+      
+      const allAbis = await import("../abi/allAbis.json");
+      const managerAbi = allAbis.PresaleManager || [];
+      const lbpAbi = allAbis.SecureLBP || [];
+      const escrowAbi = allAbis.TokenVestingEscrow || [];
+      const record = await managerContract.getAuctionRecord(info.auction);
+      const recordVestingEscrow = record.vestingEscrow;
+      const recordLbp = record.lbp;
+      
+      console.log("=== Finalize LBP - Pre-check ===");
+      console.log("Auction Address:", info.auction);
+      console.log("LBP Address (from record):", recordLbp);
+      console.log("Vesting Escrow (from record):", recordVestingEscrow);
+      console.log("Vesting Escrow (from info):", info.vesting);
+      console.log("Record LBP Initialized:", record.lbpInitialized);
+      console.log("Record LBP Finalized:", record.lbpFinalized);
+      let lbpVestingEscrow = ethers.ZeroAddress;
+      let lbpTotalTokensAllocated = 0n;
+      let lbpTokenBalance = 0n;
+      let lbpFinalized = false;
+      
+      if (recordLbp && recordLbp !== ethers.ZeroAddress) {
+        const lbpContract = new ethers.Contract(recordLbp, lbpAbi, provider);
+        [lbpVestingEscrow, lbpTotalTokensAllocated, lbpFinalized] = await Promise.all([
+          lbpContract.vestingEscrow().catch(() => ethers.ZeroAddress),
+          lbpContract.totalTokensAllocated().catch(() => 0n),
+          lbpContract.finalized().catch(() => false),
+        ]);
+        const tokenAddress = await lbpContract.token().catch(() => ethers.ZeroAddress);
+        if (tokenAddress !== ethers.ZeroAddress) {
+          const tokenAbi = allAbis.ERC20 || allAbis.TestToken || [];
+          if (tokenAbi.length > 0) {
+            const tokenContract = new ethers.Contract(tokenAddress, tokenAbi, provider);
+            lbpTokenBalance = await tokenContract.balanceOf(recordLbp).catch(() => 0n);
+          }
+        }
+      }
+      
+      console.log("LBP State:", {
+        lbpAddress: recordLbp,
+        lbpVestingEscrow,
+        lbpTotalTokensAllocated: lbpTotalTokensAllocated.toString(),
+        lbpTokenBalance: lbpTokenBalance.toString(),
+        lbpFinalized,
+        hasEnoughTokens: lbpTokenBalance >= lbpTotalTokensAllocated,
+      });
+      let vestingEscrowToUse = recordVestingEscrow;
+      if (vestingEscrowToUse === ethers.ZeroAddress || !vestingEscrowToUse) {
+        vestingEscrowToUse = info.vesting || ethers.ZeroAddress;
+      }
+      if (vestingEscrowToUse === ethers.ZeroAddress && lbpVestingEscrow !== ethers.ZeroAddress) {
+        vestingEscrowToUse = lbpVestingEscrow;
+        console.log("⚠️ Using vesting escrow from LBP:", vestingEscrowToUse);
+      }
+      if (vestingEscrowToUse === ethers.ZeroAddress) {
+        console.log("⚠️ No vesting escrow found. A new one will be created automatically.");
+      } else {
+        try {
+          const escrowContract = new ethers.Contract(vestingEscrowToUse, escrowAbi, provider);
+          const [escrowToken, escrowLBP] = await Promise.all([
+            escrowContract.token().catch(() => ethers.ZeroAddress),
+            escrowContract.secureLBP().catch(() => ethers.ZeroAddress),
+          ]);
+          
+          console.log("Vesting Escrow Verification:", {
+            escrowAddress: vestingEscrowToUse,
+            escrowToken,
+            escrowLBP,
+            matchesRecordLBP: escrowLBP.toLowerCase() === recordLbp.toLowerCase(),
+          });
+          
+          if (escrowLBP.toLowerCase() !== recordLbp.toLowerCase()) {
+            console.warn("⚠️ WARNING: Vesting escrow is linked to a different LBP!", {
+              escrowLBP,
+              recordLbp,
+            });
+          }
+        } catch (err) {
+          console.warn("Could not verify vesting escrow:", err);
+        }
+      }
+      
+      console.log("=== Final Vesting Escrow Selection ===");
+      console.log("Vesting Escrow to use:", vestingEscrowToUse);
+      console.log("=====================================");
+      await runAction(
+        "Finalize LBP",
+        () => managerContract.finalizeLbp(info.auction, vestingEscrowToUse !== ethers.ZeroAddress ? vestingEscrowToUse : ethers.ZeroAddress),
+        null
+      );
+      if (vestingEscrowToUse && vestingEscrowToUse !== ethers.ZeroAddress) {
+        try {
+          await new Promise(resolve => setTimeout(resolve, 2000)); // Wait for block confirmation
+          const escrowContract = new ethers.Contract(vestingEscrowToUse, escrowAbi, provider);
+          const tokenAddress = await escrowContract.token().catch(() => ethers.ZeroAddress);
+          if (tokenAddress !== ethers.ZeroAddress) {
+            const tokenAbi = allAbis.ERC20 || allAbis.TestToken || [];
+            if (tokenAbi.length > 0) {
+              const tokenContract = new ethers.Contract(tokenAddress, tokenAbi, provider);
+              const escrowBalance = await tokenContract.balanceOf(vestingEscrowToUse).catch(() => 0n);
+              console.log("=== Post-Finalize Verification ===");
+              console.log("Vesting Escrow Balance:", ethers.formatEther(escrowBalance));
+              console.log("Expected Tokens:", ethers.formatEther(lbpTotalTokensAllocated));
+              console.log("Tokens transferred:", escrowBalance >= lbpTotalTokensAllocated ? "✓ Yes" : "✗ No");
+              console.log("==================================");
+              
+              if (escrowBalance < lbpTotalTokensAllocated) {
+                console.warn("⚠️ WARNING: Not all tokens were transferred to vesting escrow!");
+                const shortfall = lbpTotalTokensAllocated - escrowBalance;
+                console.warn("Missing tokens:", ethers.formatEther(shortfall));
+              } else {
+                console.log("✓ Tokens successfully transferred to vesting escrow!");
+              }
+            }
+          }
+        } catch (verifyErr) {
+          console.warn("Could not verify token transfer:", verifyErr);
+        }
+      }
+    } catch (err) {
+      console.error("Error in handleFinalizeLbp:", err);
+      handleTxError(err, "Failed to finalize LBP");
+    }
+  };
 
   const handleUnwind = () =>
     runAction("Unwind LBP", () => managerContract.unwindLbpAll(info.auction));

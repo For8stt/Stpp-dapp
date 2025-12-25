@@ -1,17 +1,17 @@
 {
-  "merkleRoot": "0x811d4a256b7fd689742b2c7f3dc400d7e25aeece6709903824e99e92d85e3f14",
+  "merkleRoot": "0x1d11988a7bd2c7097d558f8278d6f5c57dc886f7e266bf8a326db7cbefebf763",
   "allocations": {
     "0x1cbd3b2770909d4e10f157cabc84c7264073c9ec": {
-      "bonusQty": "7000000000000000000",
+      "bonusQty": "5000000000000000000",
       "merkleProof": []
     }
   },
   "summary": {
     "totalEarlyParticipants": 1,
-    "totalRequestedBonus": "7000000000000000000",
-    "totalFinalBonus": "7000000000000000000",
+    "totalRequestedBonus": "5000000000000000000",
+    "totalFinalBonus": "5000000000000000000",
     "scalingFactor": "10000",
     "bonusReserve": "5000000000000000000000"
   },
-  "ipfsCID": "QmUM5P5gwe6JcAxqG1scmSs6f5y938eqN81EsjsxtJpRUr"
+  "ipfsCID": "QmWCpTR9R3ubdBJZTZDH6NKnGeJao3fZnFZvxFf68AxtpE"
 }

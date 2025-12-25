@@ -55,19 +55,8 @@ export const useVestingData = (escrowAddress, userAddress = null, overrideLBPAdd
         escrowContract.secureLBP().catch(() => ethers.ZeroAddress),
       ]);
 
-      const secureLBPAddress = overrideLBPAddress || secureLBPAddressFromEscrow;
-
-        const escrowLBPAddress = await escrowContract.secureLBP().catch(() => ethers.ZeroAddress);
-        
-        console.log("[Vesting] Escrow addresses:", {
-          escrowAddress,
-          tokenAddress,
-          secureLBPAddressFromEscrow,
-          escrowLBPAddress,
-          overrideLBPAddress,
-          secureLBPAddressUsed: secureLBPAddress,
-          addressesMatch: escrowLBPAddress.toLowerCase() === secureLBPAddress.toLowerCase(),
-        });
+      const secureLBPAddress = secureLBPAddressFromEscrow;
+      const escrowLBPAddress = secureLBPAddressFromEscrow;
 
       if (tokenAddress === ethers.ZeroAddress) {
         throw new Error("Invalid escrow contract - token address is zero");
@@ -79,15 +68,28 @@ export const useVestingData = (escrowAddress, userAddress = null, overrideLBPAdd
 
       const secureLBPAbi = allAbis.SecureLBP || [];
       const secureLBPContract = new Contract(secureLBPAddress, secureLBPAbi, provider);
-
-      console.log("[Vesting] SecureLBP contract address:", secureLBPAddress);
-
+      let lbpVestingEscrow = ethers.ZeroAddress;
+      let escrowMismatchWarning = null;
       try {
-        const finalizedDirect = await secureLBPContract.finalized();
-        console.log("[Vesting] Direct finalized() call result:", finalizedDirect);
+        lbpVestingEscrow = await secureLBPContract.vestingEscrow().catch(() => ethers.ZeroAddress);
+        if (lbpVestingEscrow !== ethers.ZeroAddress && escrowAddress.toLowerCase() !== lbpVestingEscrow.toLowerCase()) {
+          escrowMismatchWarning = {
+            escrowAddressInURL: escrowAddress,
+            vestingEscrowInLBP: lbpVestingEscrow,
+            message: "The LBP is linked to a different vesting escrow than the one you're viewing. Tokens may have been sent to the wrong escrow.",
+          };
+        } else {
+        }
       } catch (err) {
-        console.error("[Vesting] Error calling finalized() directly:", err);
       }
+      let overrideLBPContract = null;
+      if (overrideLBPAddress && overrideLBPAddress.toLowerCase() !== secureLBPAddress.toLowerCase()) {
+        try {
+          overrideLBPContract = new Contract(overrideLBPAddress, secureLBPAbi, provider);
+        } catch (err) {
+        }
+      }
+
 
       const tokenAbi = [
         {
@@ -136,45 +138,25 @@ export const useVestingData = (escrowAddress, userAddress = null, overrideLBPAdd
           vestingFinalDuration,
           vestingCliffPercentBP,
         ] = await Promise.all([
-          secureLBPContract.finalized().then((result) => {
-            console.log("[Vesting] finalized() returned:", result, "type:", typeof result, "isBoolean:", result === true || result === false);
-            return result;
-          }).catch((err) => {
-            console.error("[Vesting] Error fetching finalized:", err);
-            return false;
-          }),
+          secureLBPContract.finalized().catch(() => false),
           secureLBPContract.vestingConfigured().catch((err) => {
-            console.warn("[Vesting] Error fetching vestingConfigured:", err);
             return false;
           }),
           secureLBPContract.vestingStart().catch((err) => {
-            console.warn("[Vesting] Error fetching vestingStart:", err);
             return 0n;
           }),
           secureLBPContract.vestingCliffDuration().catch((err) => {
-            console.warn("[Vesting] Error fetching vestingCliffDuration:", err);
             return 0n;
           }),
           secureLBPContract.vestingFinalDuration().catch((err) => {
-            console.warn("[Vesting] Error fetching vestingFinalDuration:", err);
             return 0n;
           }),
           secureLBPContract.vestingCliffPercentBP().catch((err) => {
-            console.warn("[Vesting] Error fetching vestingCliffPercentBP:", err);
             return 0n;
           }),
         ]);
         
-        console.log("[Vesting] Fetched vesting config:", {
-          finalized,
-          vestingConfigured,
-          vestingStart: Number(vestingStart),
-          vestingCliffDuration: Number(vestingCliffDuration),
-          vestingFinalDuration: Number(vestingFinalDuration),
-          vestingCliffPercentBP: Number(vestingCliffPercentBP),
-        });
       } catch (err) {
-        console.error("[Vesting] Error fetching vesting config:", err);
         throw err;
       }
 
@@ -182,6 +164,7 @@ export const useVestingData = (escrowAddress, userAddress = null, overrideLBPAdd
       let userVested = 0n;
       let userClaimed = 0n;
       let userClaimable = 0n;
+      let userAllocationFromAuction = 0n;
 
       if (userAddress && userAddress !== ethers.ZeroAddress) {
         let allocationFromLBP = 0n;
@@ -191,37 +174,65 @@ export const useVestingData = (escrowAddress, userAddress = null, overrideLBPAdd
           try {
             allocationFromLBP = await secureLBPContract.getUserAllocation(userAddress);
           } catch (err2) {
-            console.warn("[Vesting] Could not read allocation from LBP:", err2);
+          }
+        }
+        let allocationFromAuction = 0n;
+        try {
+          const auctionAddress = await secureLBPContract.auction().catch(() => ethers.ZeroAddress);
+          if (auctionAddress && auctionAddress !== ethers.ZeroAddress) {
+            const auctionAbi = allAbis.DutchAuction || [];
+            if (auctionAbi.length > 0) {
+              const auctionContract = new Contract(auctionAddress, auctionAbi, provider);
+              const auctionAllocation = await auctionContract.accountAllocations(userAddress).catch(() => null);
+              if (auctionAllocation && auctionAllocation.totalQty) {
+                allocationFromAuction = BigInt(auctionAllocation.totalQty.toString());
+              }
+            }
+          }
+        } catch (err) {
+        }
+        
+        // Log allocation comparison
+
+        const [userVestedFromEscrowLBP, userClaimedFromContract, userClaimableFromContract] = await Promise.all([
+          secureLBPContract.vestedAmount(userAddress).catch((err) => {
+            return 0n;
+          }),
+          escrowContract.claimed(userAddress).catch((err) => {
+            return 0n;
+          }),
+          escrowContract.claimable(userAddress).catch((err) => {
+            return 0n;
+          }),
+        ]);
+        userClaimed = userClaimedFromContract;
+        userClaimable = userVestedFromEscrowLBP > userClaimed ? userVestedFromEscrowLBP - userClaimed : 0n;
+        let userVestedFromOverrideLBP = 0n;
+        if (overrideLBPContract) {
+          try {
+            userVestedFromOverrideLBP = await overrideLBPContract.vestedAmount(userAddress).catch(() => 0n);
+          } catch (err) {
           }
         }
 
-        [userAllocation, userVested, userClaimed, userClaimable] = await Promise.all([
-          Promise.resolve(allocationFromLBP),
-          secureLBPContract.vestedAmount(userAddress).catch(() => 0n),
-          escrowContract.claimed(userAddress).catch(() => 0n),
-          escrowContract.claimable(userAddress).catch(() => 0n),
-        ]);
+        userVested = userVestedFromEscrowLBP;
+        userAllocation = allocationFromLBP;
+        userAllocationFromAuction = allocationFromAuction;
+        // This is the correct value and should be used
 
-        // Also check claimable calculation manually
         let manualClaimable = 0n;
         if (userVested > userClaimed) {
           manualClaimable = userVested - userClaimed;
         }
-
-        console.log("[Vesting] User data:", {
-          userAddress,
-          userAllocation: userAllocation.toString(),
-          userVested: userVested.toString(),
-          userClaimed: userClaimed.toString(),
-          userClaimableFromContract: userClaimable.toString(),
-          manualClaimable: manualClaimable.toString(),
-          difference: (userVested - userClaimed).toString(),
-        });
-
-        if (userClaimable === 0n && manualClaimable > 0n) {
-          console.warn("[Vesting] Contract claimable is 0, but manual calculation shows claimable:", manualClaimable.toString());
-          userClaimable = manualClaimable;
-        }
+        const vestingStartBigInt = BigInt(vestingStart);
+        const vestingCliffDurationBigInt = BigInt(vestingCliffDuration);
+        const cliffTimeBigInt = vestingStartBigInt + vestingCliffDurationBigInt;
+        const finalTimeBigInt = vestingStartBigInt + BigInt(vestingFinalDuration);
+        const currentTimeBigInt = currentTime ? BigInt(currentTime) : BigInt(Math.floor(Date.now() / 1000));
+        const timeUntilCliff = cliffTimeBigInt > currentTimeBigInt ? Number(cliffTimeBigInt - currentTimeBigInt) : 0;
+        const isCliffPassed = currentTimeBigInt >= cliffTimeBigInt;
+        const isFinalPassed = currentTimeBigInt >= finalTimeBigInt;
+        const originalClaimableFromContract = userClaimableFromContract;
       }
       const vestingPercent = userAllocation > 0n
         ? Number((userVested * 10000n) / userAllocation) / 100
@@ -233,38 +244,31 @@ export const useVestingData = (escrowAddress, userAddress = null, overrideLBPAdd
       const timeUntilFinal = finalTime > currentTimeBigInt ? Number(finalTime - currentTimeBigInt) : 0;
 
       setData({
-        // Contract addresses
         escrowAddress,
-        secureLBPAddress,
+        secureLBPAddress, // This is now always escrow's LBP address
+        overrideLBPAddress, // Store override address for comparison
+        lbpVestingEscrow: lbpVestingEscrow || null, // The vesting escrow address stored in LBP
+        escrowMismatchWarning, // Warning if escrow addresses don't match
         tokenAddress,
-        
-        // Token info
         tokenSymbol,
         tokenDecimals,
-        
-        // Vesting config
         finalized,
         vestingConfigured,
         vestingStart: Number(vestingStart),
         vestingCliffDuration: Number(vestingCliffDuration),
         vestingFinalDuration: Number(vestingFinalDuration),
         vestingCliffPercentBP: Number(vestingCliffPercentBP),
-        
-        // User data
         userAllocation,
+        userAllocationFromAuction, // Allocation from auction (for debugging)
         userVested,
         userClaimed,
-        userClaimable,
+        userClaimable, // CRITICAL: Calculated as userVestedFromEscrowLBP - userClaimed (line 300)
         vestingPercent,
-        
-        // Time calculations
         currentTime: Number(currentTimeBigInt),
         cliffTime: Number(cliffTime),
         finalTime: Number(finalTime),
         timeUntilCliff,
         timeUntilFinal,
-        
-        // Contracts for direct access
         escrowContract,
         secureLBPContract,
         tokenContract,
