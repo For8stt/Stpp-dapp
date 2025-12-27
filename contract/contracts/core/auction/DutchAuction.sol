@@ -417,6 +417,14 @@ contract DutchAuction is IAuction, Ownable, ReentrancyGuard, DutchAuctionEvents,
             if (!sent) revert TransferFailed();
         }
 
+        // Automatically send remaining ETH to treasury after LBP portion is deducted
+        uint256 remainingTreasury = ethForTreasury;
+        if (remainingTreasury > 0) {
+            ethForTreasury = 0;
+            (bool treasurySent, ) = payable(treasury).call{value: remainingTreasury}("");
+            if (!treasurySent) revert TransferFailed();
+        }
+
         lbpLaunched = true;
         emit LBPLaunched(lbpTokenRecipient, lbpStableRecipient, unsoldTokens, stableForLBP);
     }

@@ -1012,8 +1012,333 @@ const PresalePage = ({ account }) => {
     }
   };
 
-  const handleUnwind = () =>
-    runAction("Unwind LBP", () => managerContract.unwindLbpAll(info.auction));
+  const handleUnwind = async () => {
+    if (!managerContract || !info?.auction || !info?.lbp) {
+      handleTxError(new Error("LBP not initialized. Please launch LBP first."));
+      return;
+    }
+
+    try {
+      const { BrowserProvider } = await import("ethers");
+      if (!window.ethereum) {
+        throw new Error("No wallet provider");
+      }
+      const provider = new BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      
+      const allAbis = await import("../abi/allAbis.json");
+      const lbpAbi = allAbis.SecureLBP || [];
+      const escrowAbi = allAbis.TokenVestingEscrow || [];
+      const auctionAbi = allAbis.DutchAuction || [];
+      const lbpCode = await provider.getCode(info.lbp);
+      if (!lbpCode || lbpCode === "0x" || lbpCode === "0x0") {
+        throw new Error(`LBP contract does not exist at address ${info.lbp}. Please verify the LBP address is correct.`);
+      }
+      const lbpContract = new ethers.Contract(info.lbp, lbpAbi, provider); // Read-only for checks
+      const managerAbi = allAbis.PresaleManager || [];
+      const managerContractWithSigner = new ethers.Contract(address, managerAbi, signer);
+      const userAddress = await signer.getAddress();
+      const managerOwner = await managerContract.owner().catch(() => ethers.ZeroAddress);
+      
+      if (userAddress.toLowerCase() !== managerOwner.toLowerCase()) {
+        throw new Error(`You are not the owner of this presale. Presale owner: ${managerOwner}, Your address: ${userAddress}. Please connect the wallet that created this presale.`);
+      }
+      const endTime = await lbpContract.endTime().catch(() => null);
+      if (endTime) {
+        const currentBlock = await provider.getBlock("latest");
+        const currentTime = currentBlock?.timestamp || Math.floor(Date.now() / 1000);
+        if (currentTime <= endTime) {
+          const timeRemaining = Number(endTime) - currentTime;
+          const hours = Math.floor(timeRemaining / 3600);
+          const minutes = Math.floor((timeRemaining % 3600) / 60);
+          throw new Error(`LBP has not ended yet. Time remaining: ${hours}h ${minutes}m. Unwind can only be performed after LBP ends.`);
+        }
+      }
+      const record = await managerContract.getAuctionRecord(info.auction);
+      const recordLbp = record.lbp;
+      
+      if (recordLbp !== info.lbp) {
+        throw new Error(`LBP address mismatch: record has ${recordLbp}, but info has ${info.lbp}`);
+      }
+
+      setTxStatus({ status: "pending", message: "Checking LBP state..." });
+      const poolInitialized = await lbpContract.poolInitialized().catch(() => false);
+      if (!poolInitialized) {
+        throw new Error("LBP pool is not initialized. Please launch LBP first.");
+      }
+      
+      const finalized = await lbpContract.finalized().catch(() => false);
+      
+      if (!finalized) {
+        setTxStatus({ status: "pending", message: "Finalizing LBP…" });
+        let vestingEscrowToUse = record.vestingEscrow;
+        if (!vestingEscrowToUse || vestingEscrowToUse === ethers.ZeroAddress) {
+          vestingEscrowToUse = info.vesting || ethers.ZeroAddress;
+        }
+        if (!vestingEscrowToUse || vestingEscrowToUse === ethers.ZeroAddress) {
+          const lbpVestingEscrow = await lbpContract.vestingEscrow().catch(() => ethers.ZeroAddress);
+          if (lbpVestingEscrow !== ethers.ZeroAddress) {
+            vestingEscrowToUse = lbpVestingEscrow;
+          }
+        }
+        
+        if (!vestingEscrowToUse || vestingEscrowToUse === ethers.ZeroAddress) {
+          throw new Error("Vesting escrow is required for finalization. Please finalize LBP first using 'Finalize LBP' button.");
+        }
+        try {
+          await managerContractWithSigner.finalizeLbp.staticCall(info.auction, vestingEscrowToUse);
+        } catch (preCheckErr) {
+          if (!preCheckErr?.message?.includes("missing revert data") && !preCheckErr?.code?.includes("CALL_EXCEPTION")) {
+            let preCheckMsg = "Cannot finalize LBP. ";
+            if (preCheckErr?.message?.includes("NotEnded") || preCheckErr?.message?.includes("AuctionActive")) {
+              preCheckMsg += "LBP has not ended yet.";
+            } else if (preCheckErr?.message?.includes("AlreadyFinalized")) {
+              preCheckMsg += "LBP is already finalized.";
+            } else if (preCheckErr?.message?.includes("InsufficientTokens")) {
+              preCheckMsg += "Insufficient tokens in pool.";
+            } else {
+              preCheckMsg += `Reason: ${preCheckErr?.message || "Unknown error"}`;
+            }
+            throw new Error(preCheckMsg);
+          }
+        }
+        
+        showTxInfo("Please confirm finalization in your wallet", { autoClose: false });
+        const finalizeTx = await managerContractWithSigner.finalizeLbp(info.auction, vestingEscrowToUse);
+        showTxInfo("Finalization submitted to the network", { autoClose: 3000 });
+        setTxStatus({ status: "pending", message: "Finalizing LBP…", hash: finalizeTx.hash });
+        await finalizeTx.wait();
+        showTxSuccess("LBP finalized successfully!", { autoClose: 2000 });
+      } else {
+        showTxInfo("LBP already finalized, proceeding to unwind...", { autoClose: 2000 });
+      }
+
+      setTxStatus({ status: "pending", message: "Checking liquidity state…" });
+      
+      const [finalizedState, endTimeState, poolInitializedState, poolAddressState] = await Promise.all([
+        lbpContract.finalized().catch(() => false),
+        lbpContract.endTime().catch(() => null),
+        lbpContract.poolInitialized().catch(() => false),
+        lbpContract.pool().catch(() => ethers.ZeroAddress)
+      ]);
+      
+      const currentBlock = await provider.getBlock("latest");
+      const currentTime = currentBlock?.timestamp || Math.floor(Date.now() / 1000);
+      let lpBalanceState = 0n;
+      if (poolAddressState !== ethers.ZeroAddress) {
+        try {
+          const poolAbi = allAbis.LBPWeightedAMM || [];
+          if (poolAbi.length > 0) {
+            const poolContract = new ethers.Contract(poolAddressState, poolAbi, provider);
+            lpBalanceState = await poolContract.balanceLP(info.lbp).catch(() => 0n);
+          }
+        } catch (err) {
+        }
+      }
+      if (!finalizedState) {
+        throw new Error("LBP is not finalized. Please use 'Finalize LBP' button first.");
+      }
+      
+      if (endTimeState && currentTime <= Number(endTimeState)) {
+        const timeRemaining = Number(endTimeState) - currentTime;
+        const hours = Math.floor(timeRemaining / 3600);
+        const minutes = Math.floor((timeRemaining % 3600) / 60);
+        throw new Error(`LBP has not ended yet. Time remaining: ${hours}h ${minutes}m. Unwind can only be performed after LBP ends.`);
+      }
+      
+      if (!poolInitializedState) {
+        throw new Error("LBP pool is not initialized. Cannot unwind liquidity.");
+      }
+      if (lpBalanceState === 0n && poolAddressState !== ethers.ZeroAddress) {
+        showTxInfo("No liquidity to unwind, proceeding to withdrawals...", { autoClose: 2000 });
+      } else {
+        try {
+          const poolAddress = poolAddressState;
+          if (poolAddress !== ethers.ZeroAddress) {
+          const poolAbi = allAbis.LBPWeightedAMM || [];
+          if (poolAbi.length > 0) {
+            const poolContract = new ethers.Contract(poolAddress, poolAbi, provider);
+            const lpBalance = await poolContract.balanceLP(info.lbp).catch(() => 0n);
+            
+            if (lpBalance === 0n) {
+              showTxInfo("No liquidity to unwind, proceeding...", { autoClose: 2000 });
+            } else {
+              setTxStatus({ status: "pending", message: "Unwinding liquidity…" });
+              showTxInfo("Please confirm liquidity unwinding in your wallet", { autoClose: false });
+              
+              try {
+                const unwindTx = await managerContractWithSigner.unwindLbpAll(info.auction, {
+                  gasLimit: 500000 // Set explicit gas limit
+                });
+                showTxInfo("Unwind submitted to the network", { autoClose: 3000 });
+                setTxStatus({ status: "pending", message: "Unwinding liquidity…", hash: unwindTx.hash });
+                await unwindTx.wait();
+                showTxSuccess("Liquidity unwound successfully!", { autoClose: 2000 });
+              } catch (unwindTxErr) {
+                if (unwindTxErr?.code === "ACTION_REJECTED" ||
+                    unwindTxErr?.reason === "rejected" ||
+                    unwindTxErr?.message?.includes("user rejected") ||
+                    unwindTxErr?.message?.includes("user cancel")) {
+                  showTxInfo("Transaction cancelled by user", { autoClose: 3000 });
+                  setTxStatus({ status: "error", message: "Transaction cancelled" });
+                  return; // Stop execution if user cancelled
+                }
+                const isNoLPTokens = unwindTxErr?.message?.includes("NoLPTokens") ||
+                    unwindTxErr?.message?.includes("No LP tokens") ||
+                    unwindTxErr?.reason?.includes("NoLPTokens");
+                
+                const isEstimateGasError = unwindTxErr?.code === "CALL_EXCEPTION" && 
+                    (unwindTxErr?.action === "estimateGas" || unwindTxErr?.message?.includes("estimateGas"));
+                
+                if (isNoLPTokens || isEstimateGasError) {
+                  const recheckLpBalance = await poolContract.balanceLP(info.lbp).catch(() => 0n);
+                  
+                  if (recheckLpBalance === 0n) {
+                    showTxInfo("Liquidity already unwound, proceeding...", { autoClose: 2000 });
+                  } else {
+                    throw new Error(`Failed to unwind liquidity. LP balance: ${ethers.formatEther(recheckLpBalance)}. Error: ${unwindTxErr?.message || unwindTxErr?.reason || "Unknown"}`);
+                  }
+                } else {
+                  let unwindMsg = "Failed to unwind liquidity. ";
+                  if (unwindTxErr?.message?.includes("NotFinalized") || unwindTxErr?.reason?.includes("NotFinalized")) {
+                    unwindMsg += "LBP must be finalized first. Please use 'Finalize LBP' button first.";
+                  } else if (unwindTxErr?.message?.includes("AuctionActive") || 
+                            unwindTxErr?.message?.includes("NotEnded") ||
+                            unwindTxErr?.reason?.includes("AuctionActive")) {
+                    unwindMsg += "LBP must have ended first. Wait for LBP end time.";
+                  } else if (unwindTxErr?.message?.includes("Ownable: caller is not the owner") ||
+                            unwindTxErr?.message?.includes("not the owner")) {
+                    unwindMsg += "You are not the owner of this LBP contract. Please connect the owner wallet.";
+                  } else {
+                    unwindMsg += `Reason: ${unwindTxErr?.message || unwindTxErr?.reason || "Unknown error"}`;
+                  }
+                  throw new Error(unwindMsg);
+                }
+              }
+            }
+          } else {
+            setTxStatus({ status: "pending", message: "Unwinding liquidity…" });
+            showTxInfo("Please confirm liquidity unwinding in your wallet", { autoClose: false });
+            
+            try {
+              const unwindTx = await managerContractWithSigner.unwindLbpAll(info.auction);
+              showTxInfo("Unwind submitted to the network", { autoClose: 3000 });
+              setTxStatus({ status: "pending", message: "Unwinding liquidity…", hash: unwindTx.hash });
+              await unwindTx.wait();
+              showTxSuccess("Liquidity unwound successfully!", { autoClose: 2000 });
+            } catch (unwindTxErr) {
+              if (unwindTxErr?.message?.includes("NoLPTokens") ||
+                  unwindTxErr?.message?.includes("No LP tokens") ||
+                  unwindTxErr?.reason?.includes("NoLPTokens")) {
+                showTxInfo("Liquidity already unwound, proceeding...", { autoClose: 2000 });
+              } else {
+                throw unwindTxErr;
+              }
+            }
+          }
+        } else {
+          showTxInfo("No pool found, liquidity may already be unwound, proceeding...", { autoClose: 2000 });
+        }
+        } catch (unwindErr) {
+          if (unwindErr?.message?.includes("NoLPTokens") ||
+              unwindErr?.message?.includes("No LP tokens") ||
+              unwindErr?.reason?.includes("NoLPTokens")) {
+            showTxInfo("Liquidity already unwound, proceeding...", { autoClose: 2000 });
+          } else {
+            throw unwindErr;
+          }
+        }
+      }
+
+      setTxStatus({ status: "pending", message: "Withdrawing ETH…" });
+      const ethBalance = await provider.getBalance(info.lbp);
+      
+      if (ethBalance > 0n) {
+        showTxInfo("Please confirm ETH withdrawal in your wallet", { autoClose: false });
+        const withdrawEthTx = await managerContractWithSigner.withdrawLbpEth(info.auction, ethBalance);
+        showTxInfo("ETH withdrawal submitted to the network", { autoClose: 3000 });
+        setTxStatus({ status: "pending", message: "Withdrawing ETH…", hash: withdrawEthTx.hash });
+        await withdrawEthTx.wait();
+        showTxSuccess(`Withdrew ${ethers.formatEther(ethBalance)} ETH successfully!`, { autoClose: 2000 });
+      } else {
+        showTxInfo("No ETH to withdraw, proceeding...", { autoClose: 2000 });
+      }
+
+      setTxStatus({ status: "pending", message: "Withdrawing tokens…" });
+      const tokenAddress = await lbpContract.token().catch(() => ethers.ZeroAddress);
+      
+      if (tokenAddress !== ethers.ZeroAddress) {
+        const tokenAbi = allAbis.ERC20 || allAbis.TestToken || [];
+        if (tokenAbi.length > 0) {
+          const tokenContract = new ethers.Contract(tokenAddress, tokenAbi, provider);
+          const tokenBalance = await tokenContract.balanceOf(info.lbp).catch(() => 0n);
+          
+          if (tokenBalance > 0n) {
+            showTxInfo("Please confirm token withdrawal in your wallet", { autoClose: false });
+            const withdrawTokensTx = await managerContractWithSigner.withdrawLbpAllTokens(info.auction);
+            showTxInfo("Token withdrawal submitted to the network", { autoClose: 3000 });
+            setTxStatus({ status: "pending", message: "Withdrawing tokens…", hash: withdrawTokensTx.hash });
+            await withdrawTokensTx.wait();
+            showTxSuccess(`Withdrew ${ethers.formatEther(tokenBalance)} tokens successfully!`, { autoClose: 2000 });
+          } else {
+            showTxInfo("No tokens to withdraw, proceeding...", { autoClose: 2000 });
+          }
+        }
+      }
+
+      setTxStatus({ status: "success", message: "Unwind & Withdraw All completed!" });
+      showTxSuccess("All funds withdrawn to treasury successfully!", { autoClose: 5000 });
+      await refreshInfo();
+      
+    } catch (err) {
+      console.error("Error in handleUnwind:", err);
+      if (err?.code === "ACTION_REJECTED" ||
+          err?.reason === "rejected" ||
+          err?.message?.includes("user rejected") ||
+          err?.message?.includes("user cancel") ||
+          err?.message?.includes("Transaction cancelled")) {
+        return;
+      }
+      
+      let errorMessage = err?.message || "Failed to unwind LBP and withdraw funds";
+      
+      if (err?.reason) {
+        errorMessage = err.reason;
+      } else if (err?.data?.message) {
+        errorMessage = err.data.message;
+      } else if (err?.error?.message) {
+        errorMessage = err.error.message;
+      }
+      if (errorMessage.includes("missing revert data") || errorMessage.includes("CALL_EXCEPTION")) {
+        if (err?.transaction?.to?.toLowerCase() === info.lbp?.toLowerCase()) {
+          errorMessage = "Transaction failed on LBP contract. Possible reasons:\n" +
+            "1. LBP has not ended yet (check endTime)\n" +
+            "2. LBP is not finalized (use 'Finalize LBP' first)\n" +
+            "3. Pool is not initialized\n" +
+            "4. Insufficient tokens/ETH in contract\n" +
+            "Please check the LBP state and try again.";
+        } else {
+          errorMessage = "Transaction failed. The contract may have reverted. Check:\n" +
+            "1. All prerequisites are met (LBP ended, finalized, etc.)\n" +
+            "2. Contract state is correct\n" +
+            "3. You have sufficient gas";
+        }
+      } else if (errorMessage.includes("NotFinalized")) {
+        errorMessage = "LBP must be finalized before unwinding. Please finalize LBP first.";
+      } else if (errorMessage.includes("AuctionActive") || errorMessage.includes("NotEnded")) {
+        errorMessage = "LBP must have ended (block.timestamp > endTime) before unwinding.";
+      } else if (errorMessage.includes("NoLPTokens") || errorMessage.includes("No LP tokens")) {
+        errorMessage = "No liquidity to unwind. Liquidity may have already been unwound.";
+      } else if (errorMessage.includes("InsufficientBalance") || errorMessage.includes("InsufficientTokens")) {
+        errorMessage = "Insufficient balance to withdraw. Funds may have already been withdrawn.";
+      } else if (errorMessage.includes("PoolNotInitialized") || errorMessage.includes("pool is not initialized")) {
+        errorMessage = "LBP pool is not initialized. Please launch LBP first.";
+      }
+      
+      handleTxError(err, errorMessage);
+      setTxStatus({ status: "error", message: errorMessage });
+    }
+  };
 
   const heroStats = info
     ? [

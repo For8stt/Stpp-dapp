@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 
 const Section = ({ title, description, children }) => (
   <div className="relative mb-6 overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-[#334155] to-[#1e293b] p-6 shadow-lg transition-all duration-300 hover:border-[rgba(255,255,255,0.25)] hover:shadow-xl">
@@ -47,22 +47,47 @@ const Tooltip = ({ children, text }) => {
   );
 };
 
-const Input = ({ label, name, value, onChange, type = "text", placeholder, helper, tooltip }) => (
-  <label className="flex flex-col gap-2">
-    <Tooltip text={tooltip}>
-      <span className="mb-1 text-sm font-semibold text-text">{label}</span>
-    </Tooltip>
-    {helper && <span className="text-xs italic text-text-muted">{helper}</span>}
-    <input
-      type={type}
-      name={name}
-      value={value}
-      onChange={(event) => onChange(name, event.target.value)}
-      placeholder={placeholder}
-      className="rounded-xl border border-border bg-gradient-to-br from-[#1e293b] to-[#334155] px-4 py-3.5 text-sm text-text shadow-sm outline-none transition-all duration-300 focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-offset-0"
-    />
-  </label>
-);
+const Input = ({ label, name, value, onChange, type = "text", placeholder, helper, tooltip, showOwnershipIndicator, userAccount }) => {
+  const isOwned = useMemo(() => {
+    if (!showOwnershipIndicator || !userAccount || !value) return false;
+    try {
+      return value.toLowerCase() === userAccount.toLowerCase();
+    } catch {
+      return false;
+    }
+  }, [showOwnershipIndicator, userAccount, value]);
+
+  return (
+    <label className="flex flex-col gap-2">
+      <div className="flex items-center gap-2">
+        <Tooltip text={tooltip}>
+          <span className="mb-1 text-sm font-semibold text-text">{label}</span>
+        </Tooltip>
+        {showOwnershipIndicator && userAccount && value && (
+          <span
+            className={`px-2 py-0.5 rounded text-xs font-semibold ${
+              isOwned
+                ? "bg-green-500/20 text-green-400 border border-green-500/50"
+                : "bg-orange-500/20 text-orange-400 border border-orange-500/50"
+            }`}
+            title={isOwned ? "This is your address" : "This is an external address"}
+          >
+            {isOwned ? "Your Address" : "External"}
+          </span>
+        )}
+      </div>
+      {helper && <span className="text-xs italic text-text-muted">{helper}</span>}
+      <input
+        type={type}
+        name={name}
+        value={value}
+        onChange={(event) => onChange(name, event.target.value)}
+        placeholder={placeholder}
+        className="rounded-xl border border-border bg-gradient-to-br from-[#1e293b] to-[#334155] px-4 py-3.5 text-sm text-text shadow-sm outline-none transition-all duration-300 focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-offset-0"
+      />
+    </label>
+  );
+};
 
 const TextArea = ({ label, name, value, onChange, placeholder, helper, tooltip }) => (
   <label className="col-span-full flex flex-col gap-2">
@@ -102,7 +127,7 @@ const Select = ({ label, name, value, onChange, options, helper, tooltip }) => (
   </label>
 );
 
-const CreatePresaleForm = ({ values, onChange, onSubmit, submitting, disabled }) => (
+const CreatePresaleForm = ({ values, onChange, onSubmit, submitting, disabled, userAccount }) => (
   <form
     onSubmit={(event) => {
       event.preventDefault();
@@ -126,6 +151,8 @@ const CreatePresaleForm = ({ values, onChange, onSubmit, submitting, disabled })
         onChange={onChange}
         placeholder="0x..."
         tooltip="Wallet address that will receive the proceeds (ETH) after the auction ends. Usually this is the project or team address."
+        showOwnershipIndicator={true}
+        userAccount={userAccount}
       />
       <Input
         label="Tokens for Sale"

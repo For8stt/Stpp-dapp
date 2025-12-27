@@ -496,6 +496,7 @@ const CreatePresale = ({ account, onConnect }) => {
           onSubmit={handleSubmit} 
           submitting={submitting}
           disabled={hasSufficientBalance === false}
+          userAccount={connectedAccount}
         />
       </div>
     </section>
