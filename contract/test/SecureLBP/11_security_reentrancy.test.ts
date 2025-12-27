@@ -112,6 +112,9 @@ describe("SecureLBP – 11_security_reentrancy", function () {
         );
         await lbp.waitForDeployment();
 
+        // Configure fees: TEN_PERCENT (1) and FIFTEEN_MINUTES (1)
+        await lbp.connect(owner).configureFee(1, 1);
+
         await lbp.connect(owner).setOracle(await oracle.getAddress());
 
         await token.mint(await lbp.getAddress(), ethers.parseEther("10000"));
@@ -195,6 +198,9 @@ describe("SecureLBP – 11_security_reentrancy", function () {
             auctionSigner.address
         );
         await lbp.waitForDeployment();
+
+        // Configure fees: TEN_PERCENT (1) and FIFTEEN_MINUTES (1)
+        await lbp.connect(owner).configureFee(1, 1);
 
         await manager.setContext(await lbp.getAddress());
 

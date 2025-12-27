@@ -273,7 +273,10 @@ describe("Scenario – STPP full lifecycle", function () {
             vestingStartTime: lbpEnd + 60n,
             vestingCliffDuration: 120n,
             vestingFinalDuration: 480n,
-            vestingCliffPercentBP: 2_500n // 25% unlock at cliff.
+            vestingCliffPercentBP: 2_500n, // 25% unlock at cliff.
+            initialFeePreset: 1, // TEN_PERCENT
+            feeDecayDurationPreset: 1, // FIFTEEN_MINUTES
+            maxContributionPerAddress: 0n // Use default 5 ETH
         };
 
         // Transition residual inventory + ETH into the Secure LBP.

@@ -62,6 +62,9 @@ export async function deployLbpWithPoolFixture(): Promise<LbpBaseContext> {
     )) as SecureLBP;
     await lbp.waitForDeployment();
 
+    // Configure fees: TEN_PERCENT (1) and FIFTEEN_MINUTES (1)
+    await lbp.connect(owner).configureFee(1, 1);
+
     await token.mint(await lbp.getAddress(), INITIAL_POOL_TOKENS + EXTRA_MINT);
 
     await lbp.connect(owner).initPoolFromAuction(INITIAL_POOL_TOKENS, { value: INITIAL_POOL_ETH });
@@ -146,6 +149,9 @@ export async function deployLbpWithoutPoolFixture(): Promise<Omit<LbpBaseContext
         auctionSigner.address
     )) as SecureLBP;
     await lbp.waitForDeployment();
+
+    // Configure fees: TEN_PERCENT (1) and FIFTEEN_MINUTES (1)
+    await lbp.connect(owner).configureFee(1, 1);
 
     const Feed = await ethers.getContractFactory("MockPriceFeed");
     const priceFeed = (await Feed.deploy(ethers.parseUnits("2000", 8))) as MockPriceFeed;

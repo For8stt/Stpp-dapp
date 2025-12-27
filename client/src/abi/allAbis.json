@@ -288,6 +288,19 @@
         {
           "indexed": true,
           "internalType": "address",
+          "name": "oracle",
+          "type": "address"
+        }
+      ],
+      "name": "LbpOracleSet",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
           "name": "owner",
           "type": "address"
         },
@@ -1083,6 +1096,21 @@
               "internalType": "uint256",
               "name": "vestingCliffPercentBP",
               "type": "uint256"
+            },
+            {
+              "internalType": "uint8",
+              "name": "initialFeePreset",
+              "type": "uint8"
+            },
+            {
+              "internalType": "uint8",
+              "name": "feeDecayDurationPreset",
+              "type": "uint8"
+            },
+            {
+              "internalType": "uint256",
+              "name": "maxContributionPerAddress",
+              "type": "uint256"
             }
           ],
           "internalType": "struct PresaleManager.LbpLaunchConfig",
@@ -1183,6 +1211,21 @@
               "internalType": "uint256",
               "name": "vestingCliffPercentBP",
               "type": "uint256"
+            },
+            {
+              "internalType": "uint8",
+              "name": "initialFeePreset",
+              "type": "uint8"
+            },
+            {
+              "internalType": "uint8",
+              "name": "feeDecayDurationPreset",
+              "type": "uint8"
+            },
+            {
+              "internalType": "uint256",
+              "name": "maxContributionPerAddress",
+              "type": "uint256"
             }
           ],
           "internalType": "struct PresaleManager.LbpLaunchConfig",
@@ -1199,6 +1242,19 @@
         }
       ],
       "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "lbpOracle",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
       "type": "function"
     },
     {
@@ -1336,6 +1392,32 @@
       "inputs": [
         {
           "internalType": "address",
+          "name": "oracle",
+          "type": "address"
+        }
+      ],
+      "name": "setLbpOracle",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "oracle",
+          "type": "address"
+        }
+      ],
+      "name": "setLbpOracleDuringInit",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
           "name": "auctionAddress",
           "type": "address"
         },
@@ -1345,7 +1427,7 @@
           "type": "address"
         }
       ],
-      "name": "setLbpOracle",
+      "name": "setLbpOracleForAuction",
       "outputs": [],
       "stateMutability": "nonpayable",
       "type": "function"
@@ -1726,6 +1808,21 @@
               "internalType": "uint256",
               "name": "vestingCliffPercentBP",
               "type": "uint256"
+            },
+            {
+              "internalType": "uint8",
+              "name": "initialFeePreset",
+              "type": "uint8"
+            },
+            {
+              "internalType": "uint8",
+              "name": "feeDecayDurationPreset",
+              "type": "uint8"
+            },
+            {
+              "internalType": "uint256",
+              "name": "maxContributionPerAddress",
+              "type": "uint256"
             }
           ],
           "internalType": "struct PresaleManager.LbpLaunchConfig",
@@ -1774,6 +1871,19 @@
     },
     {
       "inputs": [],
+      "name": "lbpOracle",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
       "name": "managerImplementation",
       "outputs": [
         {
@@ -1802,6 +1912,19 @@
         }
       ],
       "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "oracle",
+          "type": "address"
+        }
+      ],
+      "name": "setLbpOracle",
+      "outputs": [],
+      "stateMutability": "nonpayable",
       "type": "function"
     }
   ],
@@ -4154,6 +4277,16 @@
     },
     {
       "inputs": [],
+      "name": "FeeAlreadyConfigured",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "FeeNotConfigured",
+      "type": "error"
+    },
+    {
+      "inputs": [],
       "name": "InsufficientBalance",
       "type": "error"
     },
@@ -4165,6 +4298,16 @@
     {
       "inputs": [],
       "name": "InsufficientTokens",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "InvalidFeeDecayDurationPreset",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "InvalidInitialFeePreset",
       "type": "error"
     },
     {
@@ -4545,6 +4688,25 @@
       "inputs": [
         {
           "indexed": false,
+          "internalType": "uint256",
+          "name": "lastUnpauseTime",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "initialFeeBP",
+          "type": "uint256"
+        }
+      ],
+      "name": "PostPauseDecayStarted",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
           "internalType": "address",
           "name": "to",
           "type": "address"
@@ -4654,6 +4816,37 @@
       "type": "function"
     },
     {
+      "inputs": [],
+      "name": "baseFeeBP",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "enum SecureLBP.InitialFeePreset",
+          "name": "initialFeePreset",
+          "type": "uint8"
+        },
+        {
+          "internalType": "enum SecureLBP.FeeDecayDurationPreset",
+          "name": "decayDurationPreset",
+          "type": "uint8"
+        }
+      ],
+      "name": "configureFee",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
       "inputs": [
         {
           "internalType": "address",
@@ -4727,6 +4920,32 @@
     },
     {
       "inputs": [],
+      "name": "feeConfigured",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "feeDecayDuration",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
       "name": "feesAccumulated",
       "outputs": [
         {
@@ -4778,6 +4997,19 @@
       "type": "function"
     },
     {
+      "inputs": [],
+      "name": "getCurrentPriceChangeBP",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "priceChangeBP",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
       "inputs": [
         {
           "internalType": "address",
@@ -4790,6 +5022,24 @@
         {
           "internalType": "uint256",
           "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "getVolatilityCheckpoint",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "lastPrice",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "lastTimestamp",
           "type": "uint256"
         }
       ],
@@ -4824,7 +5074,46 @@
     },
     {
       "inputs": [],
+      "name": "lastPausedUntil",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "lastUnpauseTime",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
       "name": "maxContributionPerAddress",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "maxVolatilityFeeBP",
       "outputs": [
         {
           "internalType": "uint256",
@@ -4968,6 +5257,97 @@
     },
     {
       "inputs": [],
+      "name": "postPauseDecayFeeBP",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "postPauseDecayWindow",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "postPauseFeeStep1",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "postPauseFeeStep1Duration",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "postPauseFeeStep2",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "postPauseFeeStep2Duration",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "postPauseFeeStep3",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
       "name": "presaleManager",
       "outputs": [
         {
@@ -5045,12 +5425,104 @@
     {
       "inputs": [
         {
+          "internalType": "uint256",
+          "name": "_step1Fee",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "_step2Fee",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "_step3Fee",
+          "type": "uint256"
+        }
+      ],
+      "name": "setPostPauseDecayFees",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "_decayWindow",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "_step1Duration",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "_step2Duration",
+          "type": "uint256"
+        }
+      ],
+      "name": "setPostPauseDecayWindow",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
           "internalType": "address",
           "name": "_treasury",
           "type": "address"
         }
       ],
       "name": "setTreasury",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "_thresholdLowBP",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "_thresholdHighBP",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "_feeMediumBP",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "_feeHighBP",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "_maxFeeBP",
+          "type": "uint256"
+        }
+      ],
+      "name": "setVolatilityFeeParams",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "_windowSeconds",
+          "type": "uint256"
+        }
+      ],
+      "name": "setVolatilityWindow",
       "outputs": [],
       "stateMutability": "nonpayable",
       "type": "function"
@@ -5259,6 +5731,102 @@
     {
       "inputs": [],
       "name": "vestingStart",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "volatilityCheckpoint",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "lastPrice",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "lastTimestamp",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "volatilityFeeBP",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "volatilityFeeHighBP",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "volatilityFeeMediumBP",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "volatilityThresholdHighBP",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "volatilityThresholdLowBP",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "volatilityWindow",
       "outputs": [
         {
           "internalType": "uint256",
@@ -6402,6 +6970,73 @@
         {
           "indexed": false,
           "internalType": "uint256",
+          "name": "lbpSpot",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "lastLbpSpotPrice",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "deltaPriceBP",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "priceJumpThresholdBP",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "bool",
+          "name": "deltaPriceAnomaly",
+          "type": "bool"
+        },
+        {
+          "indexed": false,
+          "internalType": "bool",
+          "name": "inCooldown",
+          "type": "bool"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "feeBP",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "bool",
+          "name": "isFirstCall",
+          "type": "bool"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "reserveETH",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "reserveToken",
+          "type": "uint256"
+        }
+      ],
+      "name": "OracleEvaluation",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
+          "internalType": "uint256",
           "name": "untilTimestamp",
           "type": "uint256"
         }
@@ -6410,8 +7045,70 @@
       "type": "event"
     },
     {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "deltaPriceBP",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "lbpSpot",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "lastLbpSpot",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "thresholdBP",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "bool",
+          "name": "triggered",
+          "type": "bool"
+        },
+        {
+          "indexed": false,
+          "internalType": "bool",
+          "name": "inCooldown",
+          "type": "bool"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "feeBP",
+          "type": "uint256"
+        }
+      ],
+      "name": "PriceAnomalyDetected",
+      "type": "event"
+    },
+    {
       "inputs": [],
-      "name": "anomalyThresholdBP",
+      "name": "BP_SCALE",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "MAX_STALENESS",
       "outputs": [
         {
           "internalType": "uint256",
@@ -6436,7 +7133,13 @@
       "type": "function"
     },
     {
-      "inputs": [],
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "lbpPool",
+          "type": "address"
+        }
+      ],
       "name": "computeAdaptiveFee",
       "outputs": [
         {
@@ -6450,33 +7153,7 @@
     },
     {
       "inputs": [],
-      "name": "getLatestPrice",
-      "outputs": [
-        {
-          "internalType": "int256",
-          "name": "",
-          "type": "int256"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "isPaused",
-      "outputs": [
-        {
-          "internalType": "bool",
-          "name": "",
-          "type": "bool"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "lastComputedFeeBP",
+      "name": "cooldown",
       "outputs": [
         {
           "internalType": "uint256",
@@ -6489,12 +7166,139 @@
     },
     {
       "inputs": [],
-      "name": "lastPrice",
+      "name": "deltaDivergenceThresholdBP",
       "outputs": [
         {
-          "internalType": "int256",
+          "internalType": "uint256",
           "name": "",
-          "type": "int256"
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "pool",
+          "type": "address"
+        }
+      ],
+      "name": "getLbpSpotPrice",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "spotPrice",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "getReferencePrice",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "lbpPool",
+          "type": "address"
+        }
+      ],
+      "name": "isPaused",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "name": "lastCheckpointTime",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "name": "lastComputedFeeBP",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "name": "lastDivergenceBP",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "name": "lastLbpSpotPrice",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
         }
       ],
       "stateMutability": "view",
@@ -6515,6 +7319,19 @@
     },
     {
       "inputs": [],
+      "name": "owner",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
       "name": "pauseDuration",
       "outputs": [
         {
@@ -6527,8 +7344,33 @@
       "type": "function"
     },
     {
-      "inputs": [],
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
       "name": "pausedUntil",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "lbpPool",
+          "type": "address"
+        }
+      ],
+      "name": "pausedUntilForPool",
       "outputs": [
         {
           "internalType": "uint256",
@@ -6553,6 +7395,32 @@
       "type": "function"
     },
     {
+      "inputs": [],
+      "name": "priceJumpThresholdBP",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "_cooldown",
+          "type": "uint256"
+        }
+      ],
+      "name": "setCooldown",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
       "inputs": [
         {
           "internalType": "uint256",
@@ -6560,7 +7428,7 @@
           "type": "uint256"
         }
       ],
-      "name": "setAnomalyThreshold",
+      "name": "setDeltaDivergenceThreshold",
       "outputs": [],
       "stateMutability": "nonpayable",
       "type": "function"
@@ -6597,7 +7465,55 @@
       "type": "function"
     },
     {
-      "inputs": [],
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "_thresholdBP",
+          "type": "uint256"
+        }
+      ],
+      "name": "setPriceJumpThreshold",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "lbpPool",
+          "type": "address"
+        }
+      ],
+      "name": "simulateComputeAdaptiveFee",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "wouldPause",
+          "type": "bool"
+        },
+        {
+          "internalType": "uint256",
+          "name": "wouldSetFeeBP",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "wouldSetPausedUntil",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "lbpPool",
+          "type": "address"
+        }
+      ],
       "name": "viewAdaptiveFee",
       "outputs": [
         {

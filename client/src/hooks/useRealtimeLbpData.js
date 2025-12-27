@@ -56,15 +56,13 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
   const lbpContractRef = useRef(null);
   const ammContractRef = useRef(null);
 
-  // Refs to store contract addresses and info for continuous polling
   const poolAddressRef = useRef(null);
   const tokenInfoRef = useRef(null);
   const chartDomainRef = useRef({ startTime: null, endTime: null });
   const lbpAddressRef = useRef(null);
   const lbpEndTimeRef = useRef(null); // Store endTime to check if LBP has ended
   const lbpFinalizedRef = useRef(false); // Store finalized status to stop all requests
-  
-  // Store swap events for chart reconstruction
+  const oraclePausedUntilRef = useRef(null); // Store oraclePausedUntil to prevent it from being overwritten
   const [swapEvents, setSwapEvents] = useState([]);
   const initialReservesRef = useRef({ eth: null, token: null });
 
@@ -83,13 +81,9 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
        window.location.hostname === "127.0.0.1");
     
     if (!isLocal) return;
-    
-    // Prevent concurrent calls
     if (isAdvancingTimeRef.current) {
       return;
     }
-    
-    // Throttle: only advance time once per second maximum
     const now = Date.now();
     const timeSinceLastAdvance = now - lastTimeAdvanceRef.current;
     if (timeSinceLastAdvance < 1000) {
@@ -104,7 +98,7 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
       // Hardhat RPC endpoint is typically http://127.0.0.1:8545
       const hardhatRpcUrl = "http://127.0.0.1:8545";
       const hardhatProvider = new JsonRpcProvider(hardhatRpcUrl);
-      
+
       // Advance time by LOCAL_TIME_ADVANCE_SEC seconds
       // This simulates time progression so weights/fees update
       await hardhatProvider.send("evm_increaseTime", [LOCAL_TIME_ADVANCE_SEC]);
@@ -154,7 +148,6 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
       console.warn("Could not get latest block:", err);
     }
 
-    // CRITICAL: Stop updating if LBP has ended
     if (lbpEndTimeRef.current !== null && now >= lbpEndTimeRef.current) {
       return;
     }
@@ -280,10 +273,9 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
       console.warn("Could not get latest block:", err);
     }
 
-    // CRITICAL: Stop updating if LBP has ended
+    //  Stop updating if LBP has ended
     if (lbpEndTimeRef.current !== null && now >= lbpEndTimeRef.current) {
       // LBP has ended - stop updating chart and weights
-      console.log(`[LBP] LBP ended at ${lbpEndTimeRef.current}, stopping updates. Current time: ${now}`);
       // Don't set guard since we're returning early
       return;
     }
@@ -349,7 +341,7 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
         }
       }
 
-      // CRITICAL: Fetch time-dependent values using view functions
+      //  Fetch time-dependent values using view functions
       // These values change based on block.timestamp, so we MUST call them every second
       const [
         reserveToken,
@@ -383,14 +375,14 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
         const prevTokenWeight = Number(ethers.formatEther(weights.token));
         const weightDiff = Math.abs(tokenWeightNum - prevTokenWeight);
         if (weightDiff > 0.001) { // Log if weight changed by more than 0.1%
-          console.log(`[LBP] Weight updated: Token=${(tokenWeightNum * 100).toFixed(2)}%, ETH=${(ethWeightNum * 100).toFixed(2)}%, Time=${now}`);
         }
       }
 
-      // Update adaptive fee if fetched
-      if (currentFee !== null) {
-        setAdaptiveFee(currentFee);
-      }
+      //  Do NOT update adaptiveFee here - it's managed by oracle logic
+      // The oracle logic in fetchLBPData() sets adaptiveFee based on displayFeeBP
+      // which is the single source of truth (maxFeeBP if paused, viewAdaptiveFee() otherwise)
+      // Updating here would overwrite the correct oracle-determined fee with the LBP's currentFee
+      // which may be stale if oracle has paused or adjusted the fee
 
       // Update totals if fetched
       if (totalEthRaised !== null) {
@@ -540,7 +532,6 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
         })),
       ].filter((event) => event.timestamp > 0); // Filter out events without valid timestamps
 
-      console.log(`[LBP] Fetched ${processedEvents.length} swap events (${swapETHForTokenEvents.length} SwapETHForToken, ${swapTokenForETHEvents.length} SwapTokenForETH)`);
       // Always set a new array reference to trigger React re-renders
       // Sort events by timestamp to ensure consistent ordering
       const sortedProcessedEvents = [...processedEvents].sort((a, b) => {
@@ -548,18 +539,6 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
         const timeB = b.timestamp || b.blockTimestamp || 0;
         return timeA - timeB;
       });
-      
-      // Log event timestamps for debugging
-      if (sortedProcessedEvents.length > 0) {
-        const eventTimes = sortedProcessedEvents.map(e => new Date((e.timestamp || e.blockTimestamp || 0) * 1000).toLocaleTimeString());
-        console.log(`[LBP] Swap event timestamps: ${eventTimes.join(', ')}`);
-        console.log(`[LBP] Total swap events: ${sortedProcessedEvents.length}`);
-        // Log the latest event
-        const latestEvent = sortedProcessedEvents[sortedProcessedEvents.length - 1];
-        if (latestEvent) {
-          console.log(`[LBP] Latest swap event at: ${new Date((latestEvent.timestamp || latestEvent.blockTimestamp || 0) * 1000).toLocaleTimeString()}`);
-        }
-      }
       
       // Force a new array reference to ensure React detects the change
       setSwapEvents([...sortedProcessedEvents]);
@@ -572,9 +551,11 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
   /**
    * Fetch all LBP contract data (called less frequently)
    * This fetches static and semi-static values
+   * @param {boolean} force - If true, bypass isFetchingRef guard
    */
-  const fetchLBPData = useCallback(async () => {
-    if (!lbpAddress || isFetchingRef.current) return;
+  const fetchLBPData = useCallback(async (force = false) => {
+    if (!lbpAddress) return;
+    if (!force && isFetchingRef.current) return;
 
     const provider = ensureProvider();
     if (!provider) {
@@ -637,11 +618,39 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
         lbpContract.poolEndWeightToken().catch(() => 0n),
         lbpContract.currentFeeBP().catch(() => 0n), // Time-dependent!
       ]);
+      
+      // Fetch volatility and post-pause decay data separately (may not exist in older contracts)
+      let volatilityFeeBP = 0n;
+      let baseFeeBP = 0n;
+      let postPauseDecayFeeBP = 0n;
+      let volatilityCheckpoint = [0n, 0n];
+      let priceChangeBP = 0n;
+      let postPauseDecayDebug = null;
+      
+      try {
+        [volatilityFeeBP, baseFeeBP, postPauseDecayFeeBP, volatilityCheckpoint, priceChangeBP] = await Promise.all([
+          lbpContract.volatilityFeeBP().catch(() => 0n),
+          lbpContract.baseFeeBP().catch(() => 0n),
+          lbpContract.postPauseDecayFeeBP().catch(() => 0n),
+          lbpContract.getVolatilityCheckpoint().catch(() => [0n, 0n]),
+          lbpContract.getCurrentPriceChangeBP().catch(() => 0n),
+        ]);
+        
+        // Fetch debug info for post-pause decay
+        try {
+          postPauseDecayDebug = await lbpContract.getPostPauseDecayDebug().catch(() => null);
+          // Post-pause decay debug data available
+        } catch (err) {
+          // Debug function may not exist in older contracts
+        }
+      } catch (err) {
+        // Volatility/post-pause functions may not exist in older contracts - ignore
+        console.warn("Could not fetch volatility/post-pause data (contract may not support it):", err);
+      }
 
-      // Update totals and fee
+      // Update totals (fee will be updated after oracle check)
       setTotalEthRaised(totalEthRaised);
       setTotalTokensAllocated(totalTokensAllocated);
-      setAdaptiveFee(currentFee);
 
       // Get token info
       let tokenInfo = null;
@@ -673,27 +682,298 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
         console.warn("Could not fetch token info:", tokenErr);
       }
 
-      // Check oracle pause status
+      // Check oracle pause status and get adaptive fee from oracle
+      // SINGLE SOURCE OF TRUTH: Only use on-chain state, no simulation
       let oraclePaused = false;
-      if (oracle !== ethers.ZeroAddress) {
+      let oraclePausedUntil = null;
+      let oracleFeeBP = null;
+      let maxFeeBP = null;
+      
+      if (oracle !== ethers.ZeroAddress && poolAddress !== ethers.ZeroAddress) {
         try {
           const oracleAbi = [
             {
               constant: true,
-              inputs: [],
+              inputs: [{ name: "lbpPool", type: "address" }],
               name: "isPaused",
               outputs: [{ name: "", type: "bool" }],
               type: "function",
             },
+            {
+              constant: true,
+              inputs: [{ name: "lbpPool", type: "address" }],
+              name: "pausedUntilForPool",
+              outputs: [{ name: "", type: "uint256" }],
+              type: "function",
+            },
+            {
+              constant: true,
+              inputs: [{ name: "lbpPool", type: "address" }],
+              name: "viewAdaptiveFee",
+              outputs: [{ name: "", type: "uint256" }],
+              type: "function",
+            },
+            {
+              constant: true,
+              inputs: [],
+              name: "maxFeeBP",
+              outputs: [{ name: "", type: "uint256" }],
+              type: "function",
+            },
+            {
+              constant: true,
+              inputs: [],
+              name: "pauseDuration",
+              outputs: [{ name: "", type: "uint256" }],
+              type: "function",
+            },
+            {
+              constant: true,
+              inputs: [{ name: "lbpPool", type: "address" }],
+              name: "lastComputedFeeBP",
+              outputs: [{ name: "", type: "uint256" }],
+              type: "function",
+            },
+            {
+              constant: true,
+              inputs: [{ name: "lbpPool", type: "address" }],
+              name: "simulateComputeAdaptiveFee",
+              outputs: [
+                { name: "wouldPause", type: "bool" },
+                { name: "wouldSetFeeBP", type: "uint256" },
+                { name: "wouldSetPausedUntil", type: "uint256" },
+              ],
+              type: "function",
+            },
           ];
           const oracleContract = new Contract(oracle, oracleAbi, provider);
-          oraclePaused = await oracleContract.isPaused();
+          
+          // Get blockchain timestamp (canonical time source)
+          const currentBlock = await provider.getBlock("latest").catch(() => null);
+          const currentBlockTimestamp = currentBlock ? BigInt(currentBlock.timestamp) : BigInt(Math.floor(Date.now() / 1000));
+          
+          // Get maxFeeBP first to check if lastComputedFeeBP indicates pause
+          maxFeeBP = await oracleContract.maxFeeBP().catch(() => null);
+          
+          // Step 1: Check pause status from contract (ONLY on-chain state)
+          //  Check pausedUntilForPool, isPaused(), AND lastComputedFeeBP
+          // If lastComputedFeeBP === maxFeeBP, it means anomaly was detected and pause should be active
+          const pausedUntilBigInt = await oracleContract.pausedUntilForPool(poolAddress).catch(() => 0n);
+          const isPausedFromContract = await oracleContract.isPaused(poolAddress).catch(() => false);
+          const lastComputedFeeBP = await oracleContract.lastComputedFeeBP(poolAddress).catch(() => null);
+          
+          //  If lastComputedFeeBP === maxFeeBP, it means anomaly was detected
+          // This is a strong indicator that pause should be active, even if pausedUntil is 0
+          const feeIndicatesPause = maxFeeBP !== null && lastComputedFeeBP !== null && lastComputedFeeBP === maxFeeBP;
+          
+          //  Use simulateComputeAdaptiveFee() to predict if pause would be active
+          // This is necessary because computeAdaptiveFee() is only called during transactions,
+          // so the state may not be updated until the next transaction
+          let simulatedPause = false;
+          let simulatedFeeBP = null;
+          let simulatedPausedUntil = null;
+          try {
+            const simulation = await oracleContract.simulateComputeAdaptiveFee(poolAddress).catch(() => null);
+            if (simulation) {
+              simulatedPause = simulation.wouldPause === true;
+              simulatedFeeBP = simulation.wouldSetFeeBP;
+              simulatedPausedUntil = simulation.wouldSetPausedUntil > 0n ? Number(simulation.wouldSetPausedUntil) : null;
+            }
+          } catch (simErr) {
+            console.warn("[useRealtimeLbpData] Failed to simulate computeAdaptiveFee:", simErr);
+          }
+          
+          
+          // Step 2: Determine if pause is active using blockchain timestamp
+          // If isPaused() returns true OR pausedUntil is in the future OR lastComputedFeeBP === maxFeeBP OR simulation indicates pause, pause is active
+          //  lastComputedFeeBP === maxFeeBP is a strong indicator that anomaly was detected
+          //  simulatedPause indicates that computeAdaptiveFee() would trigger a pause if called now
+          if (isPausedFromContract || (pausedUntilBigInt > 0n && currentBlockTimestamp < pausedUntilBigInt) || feeIndicatesPause || simulatedPause) {
+            // Pause is active
+            oraclePaused = true;
+            
+            // If pausedUntil is set and valid, use it
+            if (pausedUntilBigInt > 0n && currentBlockTimestamp < pausedUntilBigInt) {
+              const pausedUntilNum = Number(pausedUntilBigInt);
+              
+              //  Only update ref if on-chain value changed or ref is null
+              // This ensures timer counts down smoothly without jumping
+              if (oraclePausedUntilRef.current === null || oraclePausedUntilRef.current !== pausedUntilNum) {
+                oraclePausedUntilRef.current = pausedUntilNum;
+              }
+              oraclePausedUntil = oraclePausedUntilRef.current;
+            } else if ((isPausedFromContract || feeIndicatesPause || simulatedPause) && pausedUntilBigInt === 0n) {
+              // isPaused() is true OR fee indicates pause OR simulation indicates pause, but pausedUntil is 0 - this means pause was just activated
+              // Use simulatedPausedUntil if available, otherwise try to get pause duration from contract to estimate pause end time
+              if (simulatedPausedUntil !== null && simulatedPausedUntil > 0) {
+                // Use simulated pause end time
+                oraclePausedUntilRef.current = simulatedPausedUntil;
+                oraclePausedUntil = simulatedPausedUntil;
+              } else if (oraclePausedUntilRef.current === null) {
+                try {
+                  const pauseDuration = await oracleContract.pauseDuration().catch(() => null);
+                  if (pauseDuration !== null) {
+                    // Calculate pause end time: current time + pause duration
+                    const estimatedPauseEnd = Number(currentBlockTimestamp) + Number(pauseDuration);
+                    oraclePausedUntilRef.current = estimatedPauseEnd;
+                    oraclePausedUntil = estimatedPauseEnd;
+                  } else {
+                    // Fallback: use 5 minutes if we can't get pause duration
+                    const estimatedPauseEnd = Number(currentBlockTimestamp) + 300;
+                    oraclePausedUntilRef.current = estimatedPauseEnd;
+                    oraclePausedUntil = estimatedPauseEnd;
+                  }
+                } catch (pauseDurationErr) {
+                  // Fallback: use 5 minutes if we can't get pause duration
+                  const estimatedPauseEnd = Number(currentBlockTimestamp) + 300;
+                  oraclePausedUntilRef.current = estimatedPauseEnd;
+                  oraclePausedUntil = estimatedPauseEnd;
+                }
+              } else {
+                // Use stored value if available
+                oraclePausedUntil = oraclePausedUntilRef.current;
+              }
+            } else if (oraclePausedUntilRef.current !== null) {
+              // Use stored value if available
+              oraclePausedUntil = oraclePausedUntilRef.current;
+            }
+          } else if (pausedUntilBigInt === 0n || currentBlockTimestamp >= pausedUntilBigInt) {
+            // Pause is not active or has expired according to on-chain state
+            // BUT: If lastComputedFeeBP === maxFeeBP, it means anomaly was detected
+            // This can happen if computeAdaptiveFee() was called but pausedUntil wasn't set yet
+            // OR if computeAdaptiveFee() hasn't been called yet but should be
+            if (feeIndicatesPause || simulatedPause) {
+              // lastComputedFeeBP === maxFeeBP OR simulation indicates pause means anomaly was detected
+              // Treat as pause active even if pausedUntil is 0
+              oraclePaused = true;
+              // Use simulatedPausedUntil if available, otherwise try to get pause duration to estimate pause end time
+              if (simulatedPausedUntil !== null && simulatedPausedUntil > 0) {
+                // Use simulated pause end time
+                oraclePausedUntilRef.current = simulatedPausedUntil;
+                oraclePausedUntil = simulatedPausedUntil;
+              } else if (oraclePausedUntilRef.current === null) {
+                try {
+                  const pauseDuration = await oracleContract.pauseDuration().catch(() => null);
+                  if (pauseDuration !== null) {
+                    const estimatedPauseEnd = Number(currentBlockTimestamp) + Number(pauseDuration);
+                    oraclePausedUntilRef.current = estimatedPauseEnd;
+                    oraclePausedUntil = estimatedPauseEnd;
+                  } else {
+                    const estimatedPauseEnd = Number(currentBlockTimestamp) + 300;
+                    oraclePausedUntilRef.current = estimatedPauseEnd;
+                    oraclePausedUntil = estimatedPauseEnd;
+                  }
+                } catch (pauseDurationErr) {
+                  const estimatedPauseEnd = Number(currentBlockTimestamp) + 300;
+                  oraclePausedUntilRef.current = estimatedPauseEnd;
+                  oraclePausedUntil = estimatedPauseEnd;
+                }
+              } else {
+                oraclePausedUntil = oraclePausedUntilRef.current;
+              }
+            } else {
+              // No pause indicators - pause is not active
+              oraclePaused = false;
+              oraclePausedUntil = null;
+              oraclePausedUntilRef.current = null;
+            }
+          }
+          
+          // Step 3: Get adaptive fee using SINGLE SOURCE OF TRUTH rule
+          // Rule: If paused → maxFeeBP, else → viewAdaptiveFee()
+          //  maxFeeBP was already fetched above, reuse it
+          if (oraclePaused) {
+            // Pause is active - ALWAYS use maxFeeBP
+            // If simulation provided a fee, use it (it should be maxFeeBP)
+            if (simulatedFeeBP !== null && simulatedFeeBP === maxFeeBP) {
+              oracleFeeBP = simulatedFeeBP;
+            } else if (maxFeeBP !== null) {
+              oracleFeeBP = maxFeeBP;
+            } else {
+              // Fallback: fetch maxFeeBP if not already fetched
+              maxFeeBP = await oracleContract.maxFeeBP().catch(() => null);
+              if (maxFeeBP !== null) {
+                oracleFeeBP = maxFeeBP;
+              }
+            }
+          } else {
+            // Pause is NOT active according to on-chain state
+            // but if simulation indicates pause would be triggered, use simulated fee
+            if (simulatedPause && simulatedFeeBP !== null) {
+              // Simulation indicates pause would be triggered - use simulated fee (should be maxFeeBP)
+              oracleFeeBP = simulatedFeeBP;
+              // Also set oraclePaused to true based on simulation
+              oraclePaused = true;
+              if (simulatedPausedUntil !== null && simulatedPausedUntil > 0) {
+                oraclePausedUntilRef.current = simulatedPausedUntil;
+                oraclePausedUntil = simulatedPausedUntil;
+              }
+            } else {
+              // No simulation pause - use viewAdaptiveFee() from contract
+              oracleFeeBP = await oracleContract.viewAdaptiveFee(poolAddress).catch(() => null);
+              
+              //  If viewAdaptiveFee() returns maxFeeBP, it means pause is actually active
+              // This can happen if computeAdaptiveFee() was called but pausedUntil wasn't set yet
+              if (maxFeeBP !== null && oracleFeeBP !== null && oracleFeeBP === maxFeeBP) {
+                oraclePaused = true;
+                // Try to get pause duration to estimate pause end time
+                if (oraclePausedUntilRef.current === null) {
+                  try {
+                    const pauseDuration = await oracleContract.pauseDuration().catch(() => null);
+                    if (pauseDuration !== null) {
+                      const estimatedPauseEnd = Number(currentBlockTimestamp) + Number(pauseDuration);
+                      oraclePausedUntilRef.current = estimatedPauseEnd;
+                      oraclePausedUntil = estimatedPauseEnd;
+                    } else {
+                      const estimatedPauseEnd = Number(currentBlockTimestamp) + 300;
+                      oraclePausedUntilRef.current = estimatedPauseEnd;
+                      oraclePausedUntil = estimatedPauseEnd;
+                    }
+                  } catch (pauseDurationErr) {
+                    const estimatedPauseEnd = Number(currentBlockTimestamp) + 300;
+                    oraclePausedUntilRef.current = estimatedPauseEnd;
+                    oraclePausedUntil = estimatedPauseEnd;
+                  }
+                } else {
+                  oraclePausedUntil = oraclePausedUntilRef.current;
+                }
+              }
+            }
+          }
+          
         } catch (oracleErr) {
           console.warn("Could not check oracle pause status:", oracleErr);
         }
       }
 
-      // Update chart domain
+      let displayFeeBP = null;
+      if (oraclePaused && maxFeeBP !== null) {
+        displayFeeBP = maxFeeBP;
+      } else if (currentFee !== null && currentFee !== undefined) {
+        displayFeeBP = currentFee;
+      } else if (oracleFeeBP !== null && oracleFeeBP > 0n) {
+        // Fallback to oracle fee if currentFee is unavailable
+        displayFeeBP = oracleFeeBP;
+      } else {
+        // Final fallback
+        displayFeeBP = null;
+      }
+
+      setAdaptiveFee((prevFee) => {
+        if (displayFeeBP === null) {
+          return prevFee;
+        }
+
+        const prevFeeBigInt = prevFee !== null ? BigInt(prevFee.toString()) : null;
+        const displayFeeBPBigInt = BigInt(displayFeeBP.toString());
+
+        if (prevFeeBigInt === null || prevFeeBigInt !== displayFeeBPBigInt) {
+          return displayFeeBP;
+        }
+        return prevFee;
+      });
+
+
       const startTimeNum = Number(startTime);
       const endTimeNum = Number(endTime);
       if (!chartDomainRef.current.startTime || chartDomainRef.current.startTime !== startTimeNum) {
@@ -706,9 +986,14 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
       // Store endTime in ref for checking if LBP has ended
       lbpEndTimeRef.current = endTimeNum;
       
-      // CRITICAL: Store finalized status - if true, stop ALL future requests
+      //  Store finalized status - if true, stop ALL future requests
       lbpFinalizedRef.current = finalized;
 
+      // Parse volatility checkpoint data
+      const volatilityCheckpointData = Array.isArray(volatilityCheckpoint) 
+        ? { lastPrice: volatilityCheckpoint[0], lastTimestamp: volatilityCheckpoint[1] }
+        : { lastPrice: 0n, lastTimestamp: 0n };
+      
       // Store LBP data for compatibility
       const lbpDataObj = {
         address: lbpAddress,
@@ -728,16 +1013,29 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
         vestingEscrow,
         oracle,
         oraclePaused,
+        oraclePausedUntil,
         paused,
         maxContributionPerAddress,
         initialTokenWeight: poolStartWeightToken,
         finalTokenWeight: poolEndWeightToken,
-        currentFee,
+        currentFee: displayFeeBP, // Use displayFeeBP (single source of truth)
+        // Volatility data
+        volatilityFeeBP,
+        baseFeeBP,
+        postPauseDecayFeeBP,
+        volatilityCheckpoint: volatilityCheckpointData,
+        priceChangeBP,
+        postPauseDecayDebug: postPauseDecayDebug ? {
+          lastUnpauseTime: postPauseDecayDebug[0]?.toString() || "0",
+          elapsedTime: postPauseDecayDebug[1]?.toString() || "0",
+          postPauseDecayFeeBP: postPauseDecayDebug[2]?.toString() || "0",
+          currentStep: postPauseDecayDebug[3]?.toString() || "0",
+        } : null,
       };
       setLbpData(lbpDataObj);
 
       // Store pool address for continuous polling
-      // CRITICAL: If finalized, keep poolData/reserves/weights to show final metrics
+      //  If finalized, keep poolData/reserves/weights to show final metrics
       if (poolInitialized && poolAddress !== ethers.ZeroAddress && tokenInfo) {
         poolAddressRef.current = poolAddress;
         
@@ -762,7 +1060,6 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
                 token: initialReserveToken,
                 eth: initialReserveETH,
               };
-              console.log(`[LBP] Set initial reserves: ETH=${ethers.formatEther(initialReserveETH)}, Token=${ethers.formatUnits(initialReserveToken, tokenInfo?.decimals || 18)}`);
             }
           } catch (err) {
             console.warn("Could not fetch initial reserves:", err);
@@ -794,7 +1091,6 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
           await fetchPoolDataOnly();
         } else {
           // Finalized - fetch pool data ONCE to get final metrics for display
-          console.log("[LBP] LBP is finalized - fetching final pool metrics once");
           isFetchingRef.current = false;
           // Fetch final pool data one time (won't update again due to finalized check)
           await fetchPoolDataOnly();
@@ -812,22 +1108,26 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
   /**
    * Manual refetch function
    * This is exported as refetchLbpData and should be called after purchases
+   * @param {boolean} force - If true, bypass isFetchingRef guard to force immediate update
    */
-  const refetch = useCallback(async () => {
+  const refetch = useCallback(async (force = false) => {
     if (!lbpAddress) return;
-    console.log("[LBP] Manual refetch triggered");
-    // Fetch LBP data first (includes pool data)
-    await fetchLBPData();
-    // Always refetch swap events to capture new swaps immediately
-    if (poolAddressRef.current) {
-      console.log("[LBP] Refetching swap events after purchase");
-      // Refetch multiple times with delays to catch events that might be indexed with delay
-      await fetchSwapEvents();
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      await fetchSwapEvents();
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      await fetchSwapEvents();
-      console.log("[LBP] Swap events refetch complete");
+    
+    try {
+      // Fetch LBP data first (includes pool data and oracle state)
+      // Pass force flag to bypass guard if needed
+      await fetchLBPData(force);
+      // Always refetch swap events to capture new swaps immediately
+      if (poolAddressRef.current) {
+        // Refetch multiple times with delays to catch events that might be indexed with delay
+        await fetchSwapEvents();
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        await fetchSwapEvents();
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        await fetchSwapEvents();
+      }
+    } catch (refetchErr) {
+      console.warn("[useRealtimeLbpData] Error in refetch:", refetchErr);
     }
   }, [lbpAddress, fetchLBPData, fetchSwapEvents]);
 
@@ -866,11 +1166,10 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
         // NOTE: Block listener does NOT advance time - only interval polling does
         // This prevents double time advancement
         if (!isFetchingRef.current && poolAddressRef.current) {
-          // CRITICAL: Stop if finalized
+          //  Stop if finalized
           if (lbpFinalizedRef.current) {
             provider.off("block", handleBlock);
             blockListenerRef.current = null;
-            console.log("[LBP] Block listener removed - LBP finalized");
             return;
           }
 
@@ -917,12 +1216,12 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
       }
     }, 30000); // Every 30 seconds
 
-    // CRITICAL: Set up aggressive interval polling (every 1 second)
+    // Set up aggressive interval polling (every 1 second)
     // This ensures weights and prices update continuously even without blocks
     // STOPS automatically when LBP ends OR finalized (checked inside fetchPoolDataOnly)
     const intervalId = setInterval(() => {
       if (!isFetchingRef.current) {
-        // CRITICAL: Stop polling if finalized
+        //  Stop polling if finalized
         if (lbpFinalizedRef.current) {
           if (intervalRef.current) {
             clearInterval(intervalRef.current);
@@ -940,7 +1239,6 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
             }
             blockListenerRef.current = null;
           }
-          console.log("[LBP] Polling stopped - LBP is finalized");
           return;
         }
 
@@ -964,7 +1262,6 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
             }
             blockListenerRef.current = null;
           }
-          console.log("[LBP] Polling stopped - LBP has ended");
           return;
         }
 
@@ -1023,7 +1320,6 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
   // Reconstruct chart data deterministically
   const reconstructedChartData = useMemo(() => {
     if (!lbpData || !lbpData.startTime || !lbpData.endTime) {
-      console.log("[LBP Chart] Missing lbpData or time range");
       return [];
     }
 
@@ -1032,7 +1328,6 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
     let currentTime = poolData?.blockchainTime || Math.floor(Date.now() / 1000);
     // Clamp currentTime to be within [startTime, endTime]
     currentTime = Math.max(lbpData.startTime, Math.min(currentTime, lbpData.endTime));
-    console.log(`[LBP Chart] Reconstructing chart: startTime=${lbpData.startTime}, endTime=${lbpData.endTime}, currentTime=${currentTime}, swapEvents=${swapEvents.length}`);
 
     // Use initial reserves if available, otherwise use current reserves
     // If we have swap events, we can work backwards to estimate initial reserves
@@ -1070,7 +1365,6 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
       if (estimatedETH > 0n && estimatedToken > 0n) {
         initialReserveETH = estimatedETH;
         initialReserveToken = estimatedToken;
-        console.log(`[LBP] Estimated initial reserves from swap events: ETH=${ethers.formatEther(estimatedETH)}, Token=${ethers.formatUnits(estimatedToken, lbpData.tokenInfo?.decimals || 18)}`);
       } else {
         // Fallback to current reserves if estimation failed
         initialReserveETH = reserves.eth || 0n;
@@ -1082,7 +1376,6 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
       initialReserveETH = reserves.eth || 0n;
       initialReserveToken = reserves.token || 0n;
       if (initialReserveETH > 0n && initialReserveToken > 0n) {
-        console.log(`[LBP] Using current reserves as initial: ETH=${ethers.formatEther(initialReserveETH)}, Token=${ethers.formatUnits(initialReserveToken, lbpData.tokenInfo?.decimals || 18)}`);
       }
     }
 
@@ -1092,7 +1385,6 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
       return [];
     }
 
-    console.log(`[LBP Chart] Reconstructing with: initialReserveETH=${ethers.formatEther(initialReserveETH)}, initialReserveToken=${ethers.formatUnits(initialReserveToken, lbpData.tokenInfo?.decimals || 18)}, swapEvents=${swapEvents.length}`);
     
     const reconstructed = reconstructChartData({
       startTime: lbpData.startTime,
@@ -1107,13 +1399,6 @@ export const useRealtimeLbpData = (lbpAddress, refreshRateMs = POLL_INTERVAL_MS)
       points: 200,
     });
     
-    console.log(`[LBP Chart] Reconstructed ${reconstructed.length} chart points from ${swapEvents.length} swap events`);
-    if (reconstructed.length > 0) {
-      const firstPoint = reconstructed[0];
-      const lastPoint = reconstructed[reconstructed.length - 1];
-      console.log(`[LBP Chart] Chart range: ${new Date(firstPoint.timestamp * 1000).toLocaleTimeString()} to ${new Date(lastPoint.timestamp * 1000).toLocaleTimeString()}`);
-      console.log(`[LBP Chart] First price: ${firstPoint.price}, Last price: ${lastPoint.price}`);
-    }
     return reconstructed;
   }, [
     lbpData,

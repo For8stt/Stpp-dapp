@@ -32,9 +32,12 @@ const defaultLbpConfig = {
   poolStartWeightToken: "80",
   poolEndWeightToken: "20",
   poolSwapFee: "0.003",
+  initialFeePreset: "1", // Default: 10% (enum value 1 = TEN_PERCENT)
+  feeDecayDurationPreset: "1", // Default: 15 minutes (enum value 1 = FIFTEEN_MINUTES)
   vestingCliffDuration: "259200", // 3 days (3 * 24 * 60 * 60 = 259200 seconds)
   vestingFinalDuration: "2592000", // 30 days for LBP (30 * 24 * 60 * 60 = 2592000 seconds)
   vestingCliffPercentBP: "1500", // 15% (15 * 100 = 1500 BPS)
+  maxContributionPerAddress: "5", // Default: 5 ETH
 };
 
 const parseTimestamp = (value) => {
@@ -204,6 +207,11 @@ const PresalePage = ({ account }) => {
       vestingCliffDuration: Number(lbpConfig.vestingCliffDuration || 0),
       vestingFinalDuration: Number(lbpConfig.vestingFinalDuration || 0),
       vestingCliffPercentBP: parseBps(lbpConfig.vestingCliffPercentBP),
+      initialFeePreset: Number(lbpConfig.initialFeePreset ?? "1"),
+      feeDecayDurationPreset: Number(lbpConfig.feeDecayDurationPreset ?? "1"),
+      maxContributionPerAddress: (lbpConfig.maxContributionPerAddress && lbpConfig.maxContributionPerAddress.trim() !== "")
+        ? ethers.parseEther(lbpConfig.maxContributionPerAddress).toString()
+        : "0",
     }),
     [lbpConfig, info]
   );
@@ -787,6 +795,7 @@ const PresalePage = ({ account }) => {
         poolSwapFee: launchLbpConfig.poolSwapFee,
         vestingStartTime: launchLbpConfig.vestingStartTime,
         vestingCliffDuration: launchLbpConfig.vestingCliffDuration,
+        maxContributionPerAddress: launchLbpConfig.maxContributionPerAddress,
         vestingFinalDuration: launchLbpConfig.vestingFinalDuration,
         vestingCliffPercentBP: launchLbpConfig.vestingCliffPercentBP,
       });
@@ -842,7 +851,34 @@ const PresalePage = ({ account }) => {
     }
 
     console.log("Attempting transaction without preCheck to see real error...");
-    runAction("Launch LBP", () => managerContract.launchLBP(info.auction, launchLbpConfig), null);
+    
+    const launchAction = async () => {
+      const tx = await managerContract.launchLBP(info.auction, launchLbpConfig);
+      await tx.wait();
+      if (lbpConfig.maxContributionPerAddress && Number(lbpConfig.maxContributionPerAddress) > 0) {
+        try {
+          const record = await managerContract.getAuctionRecord(info.auction);
+          if (record.lbp && record.lbp !== ethers.ZeroAddress) {
+            const allAbis = await import("../abi/allAbis.json");
+            const lbpAbi = allAbis.SecureLBP || [];
+            const { BrowserProvider } = await import("ethers");
+            const provider = new BrowserProvider(window.ethereum);
+            const signer = await provider.getSigner();
+            const lbpContract = new ethers.Contract(record.lbp, lbpAbi, signer);
+            const maxContributionWei = ethers.parseEther(lbpConfig.maxContributionPerAddress);
+            const setMaxTx = await lbpContract.setMaxContributionPerAddress(maxContributionWei);
+            await setMaxTx.wait();
+            console.log("Max contribution per address set to", lbpConfig.maxContributionPerAddress, "ETH");
+          }
+        } catch (err) {
+          console.warn("Failed to set max contribution per address:", err);
+        }
+      }
+      
+      return tx;
+    };
+    
+    runAction("Launch LBP", launchAction, null);
   };
 
   const handleFinalizeLbp = async () => {

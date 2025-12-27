@@ -425,7 +425,10 @@ async function simulateLbpFlow(
         vestingStartTime: lbpEnd + BigInt(config.vesting.startDelayAfterLBP),
         vestingCliffDuration: BigInt(config.vesting.cliffDuration),
         vestingFinalDuration: BigInt(config.vesting.fullDuration),
-        vestingCliffPercentBP: config.vesting.cliffPercentBP
+        vestingCliffPercentBP: config.vesting.cliffPercentBP,
+        initialFeePreset: 1, // TEN_PERCENT
+        feeDecayDurationPreset: 1, // FIFTEEN_MINUTES
+        maxContributionPerAddress: 0n // Use default 5 ETH
     };
 
     await ctx.manager.launchLBP(auctionAddress, launchConfig);

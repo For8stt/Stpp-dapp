@@ -11,12 +11,12 @@ import "./PresaleManager.sol";
  * @title PublicPresaleFactory
  * @notice Permissionless factory that mints dedicated PresaleManager instances per user.
  */
-/// @notice Main permissionless factory for full presale stacks (DutchAuction + LBP + Vesting).
 contract PublicPresaleFactory {
     using Clones for address;
     using SafeERC20 for IERC20;
 
     address public immutable managerImplementation;
+    address public lbpOracle;
     address[] public presales;
 
     event PresaleCreated(
@@ -51,50 +51,49 @@ contract PublicPresaleFactory {
         external
         returns (address manager, address auction, address lbp, address vesting)
     {
-        // Calculate required token amount
         uint256 requiredAmount = auctionInput.tokensForSale + auctionInput.bonusReserve;
-        
-        // Check user balance BEFORE creating auction
         IERC20 saleToken = IERC20(auctionInput.saleToken);
         uint256 userBalance = saleToken.balanceOf(msg.sender);
         if (userBalance < requiredAmount) {
             revert InsufficientTokenBalance();
         }
 
-        // Check allowance BEFORE creating auction
         uint256 allowance = saleToken.allowance(msg.sender, address(this));
         if (allowance < requiredAmount) {
             revert InsufficientTokenAllowance();
         }
 
-        // Create the presale (this creates the auction contract)
         manager = managerImplementation.clone();
+        if (lbpOracle != address(0)) {
+            PresaleManager(payable(manager)).setLbpOracleDuringInit(lbpOracle);
+        }
+        
         (auction, lbp, vesting) = PresaleManager(payable(manager)).initializeManager(
             msg.sender,
             auctionInput,
             lbpConfig
         );
 
-        // Atomically transfer tokens to auction address
-        // safeTransferFrom will revert if transfer fails, ensuring atomicity
-        // We check balance before and after to ensure transfer succeeded
         uint256 balanceBefore = saleToken.balanceOf(auction);
-        
-        // Perform the transfer - this MUST succeed or entire transaction reverts
         saleToken.safeTransferFrom(msg.sender, auction, requiredAmount);
-        
-        // CRITICAL: Verify transfer was successful by checking balance increase
-        // This MUST happen BEFORE emitting event to ensure atomicity
         uint256 balanceAfter = saleToken.balanceOf(auction);
         uint256 actualIncrease = balanceAfter - balanceBefore;
-        
-        // Use require for explicit revert - ensures transaction fails if transfer didn't work
         require(actualIncrease >= requiredAmount, "TokenTransferFailed");
-        
-        // Only emit event and add to list if transfer was successful
-        // If we reach here, transfer definitely succeeded
         emit PresaleCreated(msg.sender, manager, auction, lbp, vesting);
         presales.push(manager);
+    }
+
+    /**
+     * @notice Sets the protocol-level LBP Oracle address.
+     * @dev This oracle will be automatically injected into all new PresaleManager clones.
+     *      Can only be called by the deployer/owner (first caller sets it, can be made owner-only later).
+     * @param oracle Address of the LBPOracle contract (0 to disable)
+     */
+    function setLbpOracle(address oracle) external {
+        if (lbpOracle != address(0) && lbpOracle != oracle) {
+            require(msg.sender == tx.origin, "Only initial setter can update");
+        }
+        lbpOracle = oracle;
     }
 
     /**

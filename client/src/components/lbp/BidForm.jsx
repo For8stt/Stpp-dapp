@@ -9,8 +9,10 @@ const BidForm = ({
   handlePlaceBid,
   isPending,
   account,
+  timeUntilPauseEnd,
 }) => {
   const { isConnected } = useAccount();
+  const isPaused = lbpData?.oraclePaused || lbpData?.paused;
 
   return (
     <div className="relative overflow-hidden rounded-2xl border border-[rgba(51,65,85,0.6)] bg-gradient-to-br from-[rgba(30,41,59,0.8)] to-[rgba(15,23,42,0.9)] p-8 backdrop-blur-[12px] backdrop-saturate-[180%] shadow-[0_20px_25px_-5px_rgba(0,0,0,0.3),0_10px_10px_-5px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.1)] transition-all duration-300 before:absolute before:left-0 before:right-0 before:top-0 before:h-0.5 before:bg-gradient-to-r before:from-[rgba(34,197,94,0.8)] before:via-[rgba(6,182,212,0.8)] before:to-[rgba(34,197,94,0.8)] before:bg-[length:200%_100%] before:animate-shimmer">
@@ -57,6 +59,19 @@ const BidForm = ({
             </p>
           </div>
         )}
+        {isPaused && timeUntilPauseEnd && (
+          <div className="mt-4 rounded-lg border border-[rgba(239,68,68,0.5)] bg-[rgba(239,68,68,0.15)] p-4">
+            <p className="mb-2 text-center text-sm font-semibold text-[rgb(239,68,68)]">
+              ⛔ Trading Paused by Oracle
+            </p>
+            <p className="text-center text-xs text-white">
+              Trading will resume in: {timeUntilPauseEnd.minutes}m {timeUntilPauseEnd.seconds}s
+            </p>
+            <p className="mt-2 text-center text-xs text-[rgba(255,255,255,0.7)]">
+              Oracle detected rapid price movement. Please wait for the pause to end.
+            </p>
+          </div>
+        )}
         {!isConnected ? (
           <div className="mt-4 rounded-lg border border-[rgba(255,193,7,0.3)] bg-[rgba(255,193,7,0.1)] p-4">
             <p className="mb-3 text-center text-[rgba(255,255,255,0.9)]">
@@ -70,12 +85,14 @@ const BidForm = ({
           <button
             onClick={handlePlaceBid}
             disabled={
+              isPaused ||
               !bidForm.ethAmount ||
               !bidForm.minTokensOut ||
               isPending ||
               !account
             }
             className={`relative w-full overflow-hidden rounded-xl border-0 px-6 py-4 text-base font-bold uppercase tracking-wider text-white transition-all duration-300 ${
+              isPaused ||
               isPending ||
               !bidForm.ethAmount ||
               !bidForm.minTokensOut ||

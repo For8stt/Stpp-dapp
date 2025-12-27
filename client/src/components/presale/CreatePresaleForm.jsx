@@ -10,23 +10,25 @@ const Section = ({ title, description, children }) => (
   </div>
 );
 
-const Tooltip = ({ text }) => {
-  const [isVisible, setIsVisible] = useState(false);
-
-  if (!text) return null;
-
+const Tooltip = ({ children, text }) => {
+  const [show, setShow] = useState(false);
+  
+  if (!text) return children;
+  
   return (
-    <div className="relative inline-flex items-center">
+    <div className="relative inline-block">
       <div
-        className="relative cursor-help ml-1"
-        onMouseEnter={() => setIsVisible(true)}
-        onMouseLeave={() => setIsVisible(false)}
+        className="inline-flex items-center gap-1.5 cursor-help"
+        onMouseEnter={() => setShow(true)}
+        onMouseLeave={() => setShow(false)}
       >
+        {children}
         <svg
-          className="h-4 w-4 text-text-muted hover:text-primary transition-colors"
+          className="w-4 h-4 text-text-muted hover:text-text transition-colors"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
+          xmlns="http://www.w3.org/2000/svg"
         >
           <path
             strokeLinecap="round"
@@ -35,27 +37,22 @@ const Tooltip = ({ text }) => {
             d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
           />
         </svg>
-        {isVisible && (
-          <div className="absolute left-1/2 bottom-full mb-2 transform -translate-x-1/2 z-[100] w-72 p-3 text-xs leading-relaxed text-white bg-gray-900 rounded-lg shadow-xl border border-gray-700 pointer-events-none whitespace-normal">
-            <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
-            {text}
-          </div>
-        )}
       </div>
+      {show && (
+        <div className="absolute z-50 w-64 p-3 text-xs leading-relaxed text-text bg-gradient-to-br from-[#1e293b] to-[#334155] border border-border rounded-lg shadow-xl mt-2 left-0 top-full pointer-events-none">
+          {text}
+        </div>
+      )}
     </div>
   );
 };
 
-const LabelWithTooltip = ({ label, tooltip }) => (
-  <div className="flex items-center gap-2">
-    <span className="text-sm font-semibold text-text">{label}</span>
-    {tooltip && <Tooltip text={tooltip} />}
-  </div>
-);
-
-const Input = ({ label, name, value, onChange, type = "text", placeholder, tooltip }) => (
+const Input = ({ label, name, value, onChange, type = "text", placeholder, helper, tooltip }) => (
   <label className="flex flex-col gap-2">
-    <LabelWithTooltip label={label} tooltip={tooltip} />
+    <Tooltip text={tooltip}>
+      <span className="mb-1 text-sm font-semibold text-text">{label}</span>
+    </Tooltip>
+    {helper && <span className="text-xs italic text-text-muted">{helper}</span>}
     <input
       type={type}
       name={name}
@@ -67,9 +64,12 @@ const Input = ({ label, name, value, onChange, type = "text", placeholder, toolt
   </label>
 );
 
-const TextArea = ({ label, name, value, onChange, placeholder, tooltip }) => (
+const TextArea = ({ label, name, value, onChange, placeholder, helper, tooltip }) => (
   <label className="col-span-full flex flex-col gap-2">
-    <LabelWithTooltip label={label} tooltip={tooltip} />
+    <Tooltip text={tooltip}>
+      <span className="mb-1 text-sm font-semibold text-text">{label}</span>
+    </Tooltip>
+    {helper && <span className="text-xs italic text-text-muted">{helper}</span>}
     <textarea
       name={name}
       value={value}
@@ -77,6 +77,28 @@ const TextArea = ({ label, name, value, onChange, placeholder, tooltip }) => (
       placeholder={placeholder}
       className="min-h-[120px] resize-y rounded-xl border border-border bg-gradient-to-br from-[#1e293b] to-[#334155] px-4 py-3.5 text-sm text-text shadow-sm outline-none transition-all duration-300 focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-offset-0"
     />
+  </label>
+);
+
+const Select = ({ label, name, value, onChange, options, helper, tooltip }) => (
+  <label className="flex flex-col gap-2">
+    <Tooltip text={tooltip}>
+      <span className="mb-1 text-sm font-semibold text-text">{label}</span>
+    </Tooltip>
+    {helper && <span className="text-xs italic text-text-muted">{helper}</span>}
+    <select
+      name={name}
+      value={value || ""}
+      onChange={(event) => onChange(name, event.target.value)}
+      className="rounded-xl border border-border bg-gradient-to-br from-[#1e293b] to-[#334155] px-4 py-3.5 text-sm text-text shadow-sm outline-none transition-all duration-300 focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-offset-0 cursor-pointer"
+    >
+      <option value="">Select {label.toLowerCase()}</option>
+      {options.map((option) => (
+        <option key={option.value} value={option.value}>
+          {option.label}
+        </option>
+      ))}
+    </select>
   </label>
 );
 
@@ -303,6 +325,31 @@ const CreatePresaleForm = ({ values, onChange, onSubmit, submitting, disabled })
         placeholder="0.003"
         tooltip="Swap fee in the LBP pool, expressed in ETH. For example, 0.003 = 0.3% fee per transaction. This fee goes to the liquidity pool."
       />
+
+          <Select
+            label="Initial fee"
+            name="initialFeePreset"
+            value={values.initialFeePreset || ""}
+            onChange={onChange}
+            tooltip="Initial fee percentage for LBP transactions. High initial fee protects the launch from bots and arbitrage. The fee will linearly decay to the final fee over the Fee decay duration period."
+            options={[
+              { value: "0", label: "5%" },
+              { value: "1", label: "10%" },
+              { value: "2", label: "15%" },
+            ]}
+          />
+          <Select
+            label="Fee decay duration"
+            name="feeDecayDurationPreset"
+            value={values.feeDecayDurationPreset || ""}
+            onChange={onChange}
+            tooltip="Duration during which the fee linearly decays from the initial fee to the final fee (1%). After this period, the fee stays at the final rate. Options: 10, 15, or 30 minutes."
+            options={[
+              { value: "0", label: "10 minutes" },
+              { value: "1", label: "15 minutes" },
+              { value: "2", label: "30 minutes" },
+            ]}
+          />
       <Input
         label="Vesting cliff duration (seconds)"
         name="vestingCliffDuration"
@@ -325,7 +372,16 @@ const CreatePresaleForm = ({ values, onChange, onSubmit, submitting, disabled })
         value={values.vestingCliffPercentBP}
         onChange={onChange}
         placeholder="0"
-        tooltip="Percentage of tokens that unlock immediately after the cliff period ends, expressed in basis points (BPS). The remaining tokens unlock linearly. For example, 1000 BPS = 10% of tokens immediately after cliff."
+        tooltip="Percentage of tokens that remain locked during the cliff period, expressed in basis points (BPS). 1 BPS = 0.01%. For example, 1500 BPS = 15% of tokens stay locked during the cliff."
+      />
+      <Input
+        label="Max contribution per address (ETH)"
+        name="maxContributionPerAddress"
+        value={values.maxContributionPerAddress || ""}
+        onChange={onChange}
+        placeholder="5"
+        type="number"
+        tooltip="Maximum amount of ETH that a single address (wallet) can contribute during the LBP. This limit helps prevent token concentration and ensures fair distribution. For example, 5 ETH means no single address can contribute more than 5 ETH."
       />
     </Section>
 

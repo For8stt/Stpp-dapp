@@ -60,6 +60,10 @@ contract PresaleManager is Ownable, IPresaleManager, IAutomationCompatible, Pres
         uint256 vestingCliffDuration;
         uint256 vestingFinalDuration;
         uint256 vestingCliffPercentBP;
+        // Fee configuration presets (passed as uint8 to match enum type)
+        uint8 initialFeePreset;      // InitialFeePreset enum: 0=5%, 1=10%, 2=15%
+        uint8 feeDecayDurationPreset; // FeeDecayDurationPreset enum: 0=10min, 1=15min, 2=30min
+        uint256 maxContributionPerAddress; // Max contribution per address (0 = use default 5 ETH)
     }
 
     struct AuctionRecord {
@@ -85,6 +89,8 @@ contract PresaleManager is Ownable, IPresaleManager, IAutomationCompatible, Pres
 
     IAuctionFactory public auctionFactory;
     IUpkeepController public upkeepController;
+
+    address public lbpOracle;
 
     bool public managerInitialized;
 
@@ -349,8 +355,18 @@ contract PresaleManager is Ownable, IPresaleManager, IAutomationCompatible, Pres
         ILBP(record.lbp).withdrawAllTokens();
     }
 
-    /// @notice Updates the oracle contract consumed by the LBP.
-    function setLbpOracle(address auctionAddress, address oracle) external onlyOwner {
+    function setLbpOracle(address oracle) external onlyOwner {
+        lbpOracle = oracle;
+        emit LbpOracleSet(oracle);
+    }
+
+    function setLbpOracleDuringInit(address oracle) external {
+        require(!managerInitialized, "Manager already initialized");
+        lbpOracle = oracle;
+        emit LbpOracleSet(oracle);
+    }
+
+    function setLbpOracleForAuction(address auctionAddress, address oracle) external onlyOwner {
         AuctionRecord storage record = _records[auctionAddress];
         if (!isManagedAuction[auctionAddress]) revert UnknownAuction();
         if (!record.lbpInitialized) revert LbpNotLaunched();
@@ -583,12 +599,25 @@ contract PresaleManager is Ownable, IPresaleManager, IAutomationCompatible, Pres
             address(this),
             auctionAddress
         );
+        if (lbpOracle != address(0)) {
+            lbp.setOracle(lbpOracle);
+        }
+        
         lbp.configureVesting(
             cfg.vestingStartTime,
             cfg.vestingCliffDuration,
             cfg.vestingFinalDuration,
             cfg.vestingCliffPercentBP
         );
+        lbp.configureFee(
+            SecureLBP.InitialFeePreset(cfg.initialFeePreset),
+            SecureLBP.FeeDecayDurationPreset(cfg.feeDecayDurationPreset)
+        );
+
+        if (cfg.maxContributionPerAddress > 0) {
+            lbp.setMaxContributionPerAddress(cfg.maxContributionPerAddress);
+        }
+        
         return payable(address(lbp));
     }
 

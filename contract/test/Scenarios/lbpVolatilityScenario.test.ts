@@ -60,16 +60,41 @@ describe("Scenario – LBP volatility, rebalancing, and unwind", function () {
         expect(tokenWeightMid).to.equal(ethers.parseUnits("0.5", 18));
         expect(ethWeightMid).to.equal(ethers.parseUnits("0.5", 18));
 
+        // Set pause duration
         await oracle.setPauseDuration(120);
+        
+        // Lower the price jump threshold significantly to make it easier to trigger pause in test
+        // Default is 10% (1000 BP), we'll set it to 1% (100 BP) for testing
+        await oracle.setPriceJumpThreshold(100);
+        
+        // Increase max contribution cap to allow large buy for price anomaly detection
+        await lbp.connect(owner).setMaxContributionPerAddress(ethers.parseEther("20"));
+        
+        // Set reference price (needed for oracle to work properly)
         await priceFeed.setPrice(ethers.parseUnits("1200", 8));
-        await oracle.computeAdaptiveFee();
-        expect(await oracle.isPaused()).to.equal(true);
+        
+        // First, establish a baseline by calling computeAdaptiveFee
+        // This sets lastLbpSpotPrice so we can detect price jumps
+        await oracle.computeAdaptiveFee(await lbp.pool());
+        
+        // Make a series of smaller buys to gradually increase price, then a large buy to trigger anomaly
+        // This approach helps accumulate price increase
+        await lbp.connect(user2).placeBid(0, { value: ethers.parseEther("3") });
+        await oracle.computeAdaptiveFee(await lbp.pool());
+        
+        // Now make a large buy that should trigger the price anomaly (>1% increase)
+        // Use user2 who has contributed 1.5 + 3 = 4.5 ETH, so has 15.5 ETH remaining capacity
+        await expect(lbp.connect(user2).placeBid(0, { value: ethers.parseEther("10") }))
+            .to.be.revertedWithCustomError(lbp, "OraclePausedError");
+        
+        // Verify that pause was activated after the large buy
+        expect(await oracle.isPaused(await lbp.pool())).to.equal(true);
 
         await expect(lbp.connect(user1).placeBid(0, { value: ethers.parseEther("0.5") }))
             .to.be.revertedWithCustomError(lbp, "OraclePausedError");
 
         await time.increase(180);
-        await oracle.computeAdaptiveFee();
+        await oracle.computeAdaptiveFee(await lbp.pool());
 
         await expect(lbp.connect(user1).placeBid(0, { value: ethers.parseEther("0.75") }))
             .to.emit(lbp, "BidPlaced")

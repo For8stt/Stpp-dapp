@@ -256,7 +256,10 @@ describe("Scenario – Low Uptake Adjustment", function () {
             vestingStartTime: lbpEnd + 600n,
             vestingCliffDuration: 0n,
             vestingFinalDuration: 0n,
-            vestingCliffPercentBP: 0n
+            vestingCliffPercentBP: 0n,
+            initialFeePreset: 1, // TEN_PERCENT
+            feeDecayDurationPreset: 1, // FIFTEEN_MINUTES
+            maxContributionPerAddress: 0n // Use default 5 ETH
         };
 
         const launchTx = await manager.connect(owner).launchLBP(auctionAddress, launchConfig);

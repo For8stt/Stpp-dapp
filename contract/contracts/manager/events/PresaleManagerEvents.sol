@@ -33,4 +33,5 @@ abstract contract PresaleManagerEvents {
     event AuctionProceedsWithdrawn(address indexed auction, address indexed recipient, uint256 amount);
     event AuctionDemandCheckExecuted(address indexed auction);
     event KeeperEnabledUpdated(bool enabled);
+    event LbpOracleSet(address indexed oracle);
 }

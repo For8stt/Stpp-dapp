@@ -24,6 +24,7 @@ export const DEFAULT_LBP_CONFIG = {
   poolStartWeightToken: "0.8",
   poolEndWeightToken: "0.2",
   poolSwapFee: "0.003",
+  maxContributionPerAddress: "0", // 0 means use default (5 ETH)
   vestingStartTime: Math.floor(Date.now() / 1000) + 3600,
   vestingCliffDuration: 0,
   vestingFinalDuration: 2592000, // 30 days for LBP (30 * 24 * 60 * 60 = 2592000 seconds)

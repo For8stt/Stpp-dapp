@@ -302,14 +302,17 @@ function printSummary(addresses: DeploymentAddresses): void {
   console.log("   npx hardhat node");
   console.log("\n2. Deploy to local network:");
   console.log("   npx hardhat run scripts/deployAll.ts --network localhost");
-  console.log("\n3. Connect your frontend:");
+  console.log("\n3. Oracle is automatically set in PresaleManager implementation");
+  console.log("   - All new LBPs created by users will automatically use the oracle");
+  console.log("   - Oracle address:", addresses.feeOracle);
+  console.log("\n4. Connect your frontend:");
   console.log("   - The UI will automatically read addresses from:");
   console.log("     • client/src/abi/data/stppDeployments.json");
   console.log("     • client/src/abi/addresses.json");
   console.log("   - ABIs are available in:");
   console.log("     • client/src/abi/allAbis.json");
   console.log("   - Make sure your wagmi config uses chainId:", network.config.chainId || 31337);
-  console.log("\n4. To redeploy:");
+  console.log("\n5. To redeploy:");
   console.log("   npx hardhat run scripts/deployAll.ts --network <network>");
   console.log("=".repeat(80) + "\n");
 }
@@ -371,8 +374,54 @@ async function main() {
       "LBPOracle (Fee Oracle)"
     );
     addresses.feeOracle = await lbpOracle.getAddress();
+    
+    // Configure oracle parameters (protocol-level configuration)
+    console.log(`\n⚙️  Configuring LBPOracle parameters...`);
+    try {
+      // Set fee parameters (baseFeeBP: 1%, maxFeeBP: 10%)
+      const setFeeTx = await lbpOracle.setFeeBP(100, 1000);
+      await setFeeTx.wait();
+      console.log(`  ✓ Fee parameters configured (base: 1%, max: 10%)`);
+      
+      // Set delta-divergence threshold (10% change in divergence triggers pause)
+      const setDeltaDivTx = await lbpOracle.setDeltaDivergenceThreshold(1000);
+      await setDeltaDivTx.wait();
+      console.log(`  ✓ Delta-divergence threshold configured (10%)`);
+      
+      // Set price jump threshold (10% single-buy jump triggers pause)
+      const setPriceJumpTx = await lbpOracle.setPriceJumpThreshold(1000);
+      await setPriceJumpTx.wait();
+      console.log(`  ✓ Price jump threshold configured (10%)`);
+      
+      // Set pause duration (5 minutes)
+      const setPauseTx = await lbpOracle.setPauseDuration(3 * 60); // 3 minutes in seconds
+      await setPauseTx.wait();
+      console.log(`  ✓ Pause duration configured (3 minutes)`);
+      
+      // Set cooldown (1 minute to prevent pause spam)
+      const setCooldownTx = await lbpOracle.setCooldown(60); // 1 minute in seconds
+      await setCooldownTx.wait();
+      console.log(`  ✓ Cooldown configured (1 minute)`);
+    } catch (error) {
+      console.error(`  ⚠️  Failed to configure oracle parameters:`, error);
+      console.log(`  ⚠️  You may need to configure oracle parameters manually`);
+    }
 
-    // 7. Deploy TestToken (ERC20)
+    // 7. Set oracle in PublicPresaleFactory (for automatic injection into new clones)
+    console.log(`\n🔗 Setting LBP Oracle in PublicPresaleFactory...`);
+    try {
+      const factoryContract = await ethers.getContractAt("PublicPresaleFactory", addresses.publicFactory);
+      const setOracleTx = await factoryContract.setLbpOracle(addresses.feeOracle);
+      await setOracleTx.wait();
+      console.log(`  ✓ LBP Oracle set in PublicPresaleFactory`);
+      console.log(`  ✓ All new PresaleManager clones will automatically receive this oracle`);
+      console.log(`  ✓ All new LBPs created by users will automatically use this oracle`);
+    } catch (error) {
+      console.error(`  ⚠️  Failed to set oracle in PublicPresaleFactory:`, error);
+      console.log(`  ⚠️  You may need to call PublicPresaleFactory.setLbpOracle(${addresses.feeOracle}) manually`);
+    }
+
+    // 8. Deploy TestToken (ERC20)
     const initialSupply = ethers.parseEther("1000000"); // 1M tokens
     const testToken = await deploy(
       "TestToken",

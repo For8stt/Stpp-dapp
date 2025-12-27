@@ -25,6 +25,26 @@ const Input = ({ label, name, value, onChange, type = "text", placeholder }) => 
   </label>
 );
 
+const Select = ({ label, name, value, onChange, options, helper }) => (
+  <label className="flex flex-col gap-2">
+    <span className="text-xs font-medium uppercase tracking-wider text-white/70">{label}</span>
+    {helper && <span className="text-xs text-white/50 italic">{helper}</span>}
+    <select
+      name={name}
+      value={value}
+      onChange={(event) => onChange(name, event.target.value)}
+      className="w-full rounded-xl border border-white/12 bg-gradient-to-br from-slate-950/90 to-slate-900/80 px-4 py-3 text-sm text-white shadow-[0_2px_8px_rgba(0,0,0,0.15),inset_0_1px_0_rgba(255,255,255,0.05)] outline-none transition-all duration-300 hover:border-white/18 hover:shadow-[0_4px_12px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.08)] focus:border-indigo-500/60 focus:bg-gradient-to-br focus:from-slate-950/95 focus:to-slate-900/90 focus:shadow-[0_0_0_3px_rgba(99,102,241,0.15),0_4px_12px_rgba(99,102,241,0.2),inset_0_1px_0_rgba(255,255,255,0.1)] cursor-pointer"
+    >
+      <option value="">Select {label.toLowerCase()}</option>
+      {options.map((option) => (
+        <option key={option.value} value={option.value} className="bg-slate-900 text-white">
+          {option.label}
+        </option>
+      ))}
+    </select>
+  </label>
+);
+
 const AuctionControls = ({
   isOwner,
   auctionAddress,
@@ -195,6 +215,36 @@ const AuctionControls = ({
             onChange={onLbpConfigChange}
             placeholder="20"
           />
+          
+
+          <div className="md:col-span-2">
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <Select
+                label="Initial fee"
+                name="initialFeePreset"
+                value={lbpConfig.initialFeePreset || ""}
+                onChange={onLbpConfigChange}
+                options={[
+                  { value: "0", label: "5%" },
+                  { value: "1", label: "10%" },
+                  { value: "2", label: "15%" },
+                ]}
+              />
+              <Select
+                label="Fee decay duration"
+                name="feeDecayDurationPreset"
+                value={lbpConfig.feeDecayDurationPreset || ""}
+                onChange={onLbpConfigChange}
+                options={[
+                  { value: "0", label: "10 minutes" },
+                  { value: "1", label: "15 minutes" },
+                  { value: "2", label: "30 minutes" },
+                ]}
+              />
+            </div>
+          </div>
+
           <Input
             label="Swap fee"
             name="poolSwapFee"
@@ -222,6 +272,14 @@ const AuctionControls = ({
             value={lbpConfig.vestingCliffPercentBP}
             onChange={onLbpConfigChange}
             placeholder="0"
+          />
+          <Input
+            label="Max contribution per address (ETH)"
+            name="maxContributionPerAddress"
+            value={lbpConfig.maxContributionPerAddress || ""}
+            onChange={onLbpConfigChange}
+            placeholder="5"
+            type="number"
           />
         </div>
       </div>

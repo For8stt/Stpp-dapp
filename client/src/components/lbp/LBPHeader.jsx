@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { ethers } from "ethers";
 import { formatTime, shortenAddress } from "../../utils/formatUtils";
 
-const LBPHeader = ({ lbpAddress, lbpData, status, timeUntilEnd }) => {
+const LBPHeader = ({ lbpAddress, lbpData, status, timeUntilEnd, timeUntilPauseEnd }) => {
   const statusBadgeStyles = {
     Active: "bg-[rgba(34,197,94,0.2)] text-[rgb(74,222,128)] border-[rgba(34,197,94,0.5)]",
     Finalized: "bg-[rgba(59,130,246,0.2)] text-[rgb(96,165,250)] border-[rgba(59,130,246,0.5)]",
@@ -87,9 +87,22 @@ const LBPHeader = ({ lbpAddress, lbpData, status, timeUntilEnd }) => {
             </p>
           </div>
         )}
-        <div className="relative overflow-hidden rounded-xl border border-[rgba(71,85,105,0.3)] bg-gradient-to-br from-[rgba(51,65,85,0.4)] to-[rgba(30,41,59,0.5)] p-5 transition-all duration-300 before:absolute before:inset-0 before:bg-gradient-to-br before:from-[rgba(34,197,94,0.05)] before:to-transparent before:opacity-0 before:transition-opacity before:duration-300 hover:-translate-y-0.5 hover:border-[rgba(71,85,105,0.6)] hover:shadow-[0_10px_20px_-5px_rgba(0,0,0,0.3)] hover:before:opacity-100">
+        <div className={`relative overflow-hidden rounded-xl border p-5 transition-all duration-300 ${
+          timeUntilPauseEnd 
+            ? "border-[rgba(239,68,68,0.5)] bg-gradient-to-br from-[rgba(239,68,68,0.2)] to-[rgba(220,38,38,0.1)]" 
+            : "border-[rgba(71,85,105,0.3)] bg-gradient-to-br from-[rgba(51,65,85,0.4)] to-[rgba(30,41,59,0.5)]"
+        } before:absolute before:inset-0 before:bg-gradient-to-br before:from-[rgba(34,197,94,0.05)] before:to-transparent before:opacity-0 before:transition-opacity before:duration-300 hover:-translate-y-0.5 hover:border-[rgba(71,85,105,0.6)] hover:shadow-[0_10px_20px_-5px_rgba(0,0,0,0.3)] hover:before:opacity-100`}>
           <h3 className="relative z-10 mb-2 text-[0.8125rem] font-semibold uppercase tracking-wider text-[rgb(148,163,184)]">Oracle Pause</h3>
-          <p className="relative z-10 break-all font-mono text-sm font-medium text-white">{lbpData.oraclePaused ? "Yes" : "No"}</p>
+          {timeUntilPauseEnd ? (
+            <div>
+              <p className="relative z-10 text-sm font-bold text-[rgb(239,68,68)] mb-1">⛔ Yes</p>
+              <p className="relative z-10 text-base font-bold text-white">
+                Resumes in: {timeUntilPauseEnd.hours}h {timeUntilPauseEnd.minutes}m {timeUntilPauseEnd.seconds}s
+              </p>
+            </div>
+          ) : (
+            <p className="relative z-10 break-all font-mono text-sm font-medium text-white">No</p>
+          )}
         </div>
       </div>
     </div>

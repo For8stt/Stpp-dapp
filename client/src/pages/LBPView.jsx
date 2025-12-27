@@ -89,6 +89,16 @@ const LbpView = () => {
     return { hours, minutes, seconds, total: remaining };
   }, [lbpData, currentTime]);
 
+  const timeUntilPauseEnd = useMemo(() => {
+    if (!lbpData?.oraclePausedUntil) return null;
+    if (currentTime >= lbpData.oraclePausedUntil) return null;
+    const remaining = lbpData.oraclePausedUntil - currentTime;
+    const hours = Math.floor(remaining / 3600);
+    const minutes = Math.floor((remaining % 3600) / 60);
+    const seconds = remaining % 60;
+    return { hours, minutes, seconds, total: remaining };
+  }, [lbpData, currentTime]); // Use lbpData instead of lbpData?.oraclePausedUntil to ensure updates
+
   const isActive = status === "Active";
   const canBid = isActive && !lbpData?.paused && !lbpData?.oraclePaused;
 
@@ -132,6 +142,7 @@ const LbpView = () => {
           lbpData={lbpData}
           status={status}
           timeUntilEnd={timeUntilEnd}
+          timeUntilPauseEnd={timeUntilPauseEnd}
         />
 
         <PoolStateOverview
@@ -145,6 +156,7 @@ const LbpView = () => {
           totalEthRaised={totalEthRaised}
           userData={userData}
         />
+
 
         <PriceChart
           chartData={activeChartData}
@@ -170,6 +182,7 @@ const LbpView = () => {
             handlePlaceBid={handlePlaceBid}
             isPending={isPending}
             account={account}
+            timeUntilPauseEnd={timeUntilPauseEnd}
           />
         )}
 

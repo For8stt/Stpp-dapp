@@ -44,7 +44,47 @@ export const handleTxError = (error, defaultMessage = "Transaction failed") => {
     return;
   }
 
-  // Handle CALL_EXCEPTION (estimateGas failures, contract reverts without reason)
+  const errorString = JSON.stringify(error || {});
+  const checkNestedError = (err, depth = 0) => {
+    if (depth > 5) return false; // Prevent infinite recursion
+    if (!err) return false;
+    
+    const checks = [
+      err?.reason === "OraclePausedError",
+      err?.name === "OraclePausedError",
+      err?.message?.includes("OraclePausedError"),
+      err?.error && checkNestedError(err.error, depth + 1),
+      err?.info?.error && checkNestedError(err.info.error, depth + 1),
+    ];
+    
+    return checks.some(Boolean);
+  };
+  
+  const isOraclePaused = 
+    checkNestedError(error) ||
+    errorString?.includes("OraclePausedError") ||
+    errorString?.includes("OraclePaused") ||
+    defaultMessage?.includes("Oracle") ||
+    defaultMessage?.includes("paused by Oracle") ||
+    (error?.code === "CALL_EXCEPTION" && errorString?.includes("OraclePaused"));
+
+  if (isOraclePaused) {
+    toast.error(
+      defaultMessage?.includes("Oracle") || defaultMessage?.includes("paused by Oracle")
+        ? defaultMessage
+        : "⛔ Trading is paused by Oracle due to rapid price movement. Please wait for the pause to end before placing another bid.",
+      {
+        position: "bottom-right",
+        autoClose: 12000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+      }
+    );
+    return;
+  }
+
   if (error?.code === "CALL_EXCEPTION" || error?.message?.includes("missing revert data")) {
     toast.error(defaultMessage, {
       position: "bottom-right",

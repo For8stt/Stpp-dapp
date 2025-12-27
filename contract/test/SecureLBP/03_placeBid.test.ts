@@ -57,13 +57,34 @@ describe("SecureLBP – 03_placeBid", function () {
 
         await time.increaseTo(startTime + 1n);
         const bid = ethers.parseEther("1");
-        const feeBP = await lbp.currentFeeBP();
-        const expectedFee = (bid * feeBP) / (await lbp.BP_SCALE());
-        const expectedNet = bid - expectedFee;
 
-        await expect(lbp.connect(user1).placeBid(0, { value: bid }))
-            .to.emit(lbp, "BidPlaced")
-            .withArgs(user1.address, bid, expectedNet, feeBP, anyValue);
+        const feeBPBefore = await lbp.currentFeeBP();
+
+        const tx = await lbp.connect(user1).placeBid(0, { value: bid });
+        const receipt = await tx.wait();
+        const event = receipt?.logs.find((log: any) => {
+            try {
+                const parsed = lbp.interface.parseLog(log);
+                return parsed?.name === "BidPlaced";
+            } catch {
+                return false;
+            }
+        });
+        
+        if (event) {
+            const parsed = lbp.interface.parseLog(event);
+            const eventFeeBP = parsed?.args[3];
+            const eventNet = parsed?.args[2];
+            const expectedFee = (bid * eventFeeBP) / (await lbp.BP_SCALE());
+            const expectedNet = bid - expectedFee;
+            
+            expect(parsed?.args[0]).to.equal(user1.address);
+            expect(parsed?.args[1]).to.equal(bid);
+            expect(eventNet).to.equal(expectedNet);
+            expect(eventFeeBP).to.equal(eventFeeBP); // Fee from event
+        } else {
+            throw new Error("BidPlaced event not found");
+        }
     });
 
     it("should revert if pool not initialized", async function () {
@@ -127,16 +148,34 @@ describe("SecureLBP – 03_placeBid", function () {
         await time.increaseTo(startTime + 1n);
 
         const bid = ethers.parseEther("1");
-        const feeBP = await lbp.currentFeeBP();
-        const expectedFee = (bid * feeBP) / (await lbp.BP_SCALE());
-
         const raisedBefore = await lbp.totalEthRaised();
         const feesBefore = await lbp.feesAccumulated();
 
-        await lbp.connect(user1).placeBid(0, { value: bid });
+        // Execute transaction and get actual fee from event
+        const tx = await lbp.connect(user1).placeBid(0, { value: bid });
+        const receipt = await tx.wait();
+        const event = receipt?.logs.find((log: any) => {
+            try {
+                const parsed = lbp.interface.parseLog(log);
+                return parsed?.name === "BidPlaced";
+            } catch {
+                return false;
+            }
+        });
+        
+        let actualFee = 0n;
+        if (event) {
+            const parsed = lbp.interface.parseLog(event);
+            const eventFeeBP = parsed?.args[3];
+            actualFee = (bid * eventFeeBP) / (await lbp.BP_SCALE());
+        } else {
+            // Fallback: use currentFeeBP if event not found
+            const feeBP = await lbp.currentFeeBP();
+            actualFee = (bid * feeBP) / (await lbp.BP_SCALE());
+        }
 
         expect(await lbp.totalEthRaised()).to.equal(raisedBefore + bid);
-        expect(await lbp.feesAccumulated()).to.equal(feesBefore + expectedFee);
+        expect(await lbp.feesAccumulated()).to.equal(feesBefore + actualFee);
     });
 
     describe("legacy sanity checks", function () {

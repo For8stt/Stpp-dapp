@@ -16,4 +16,5 @@ abstract contract SecureLBPEvents {
     event PartialUnwindExecuted(uint256 percentBP, uint256 ethRemoved, uint256 tokensRemoved);
     event PoolRebalancedTo5050(uint256 ethAdded, uint256 tokensAdded);
     event TokensWithdrawn(address to, uint256 amount);
+    event PostPauseDecayStarted(uint256 lastUnpauseTime, uint256 initialFeeBP);
 }

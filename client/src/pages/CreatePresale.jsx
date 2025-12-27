@@ -51,9 +51,12 @@ const getInitialValues = () => ({
   poolStartWeightToken: "80",
   poolEndWeightToken: "20",
   poolSwapFee: "0.003",
+  initialFeePreset: "1", // Default: 10% (enum value 1 = TEN_PERCENT)
+  feeDecayDurationPreset: "1", // Default: 15 minutes (enum value 1 = FIFTEEN_MINUTES)
   vestingCliffDuration: "259200", // 3 days (3 * 24 * 60 * 60 = 259200 seconds)
   vestingFinalDuration: "2592000", // 30 days for LBP (30 * 24 * 60 * 60 = 2592000 seconds)
   vestingCliffPercentBP: "1500", // 15% (15 * 100 = 1500 BPS)
+  maxContributionPerAddress: "5", // Default: 5 ETH
 });
 
 const parseTimestamp = (value) => {
@@ -195,6 +198,11 @@ const CreatePresale = ({ account, onConnect }) => {
     vestingCliffDuration: Number(formValues.vestingCliffDuration || 0),
     vestingFinalDuration: Number(formValues.vestingFinalDuration || 0),
     vestingCliffPercentBP: parseBps(formValues.vestingCliffPercentBP),
+    initialFeePreset: Number(formValues.initialFeePreset ?? "1"),
+    feeDecayDurationPreset: Number(formValues.feeDecayDurationPreset ?? "1"),
+    maxContributionPerAddress: (formValues.maxContributionPerAddress && formValues.maxContributionPerAddress.trim() !== "")
+      ? ethers.parseEther(formValues.maxContributionPerAddress).toString() 
+      : "0",
   });
 
   const handleSubmit = async () => {
@@ -310,7 +318,8 @@ const CreatePresale = ({ account, onConnect }) => {
       
       showTxInfo("Creating presale and transferring tokens atomically... Please confirm the transaction in your wallet", { autoClose: false });
       const lbpConfig = buildLbpConfig();
-      
+      console.log("LBP Config:", lbpConfig);
+      console.log("maxContributionPerAddress:", lbpConfig.maxContributionPerAddress);
 
       let tx;
       try {

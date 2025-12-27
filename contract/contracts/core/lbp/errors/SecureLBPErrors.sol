@@ -44,4 +44,8 @@ abstract contract SecureLBPErrors {
     error RescueSaleToken();
     error WithdrawFailed();
     error NoTokensAvailable();
+    error FeeAlreadyConfigured();
+    error FeeNotConfigured();
+    error InvalidInitialFeePreset();
+    error InvalidFeeDecayDurationPreset();
 }

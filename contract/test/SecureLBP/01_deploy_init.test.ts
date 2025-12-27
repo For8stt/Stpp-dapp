@@ -33,6 +33,9 @@ describe("SecureLBP – 01_deploy_init", function () {
         )) as SecureLBP;
         await lbp.waitForDeployment();
 
+        // Configure fees: TEN_PERCENT (1) and FIFTEEN_MINUTES (1)
+        await lbp.connect(owner).configureFee(1, 1);
+
         return { token, lbp, owner, treasury, presaleManager, auction, start, end };
     }
 
@@ -60,6 +63,10 @@ describe("SecureLBP – 01_deploy_init", function () {
             ethers.ZeroAddress
         )) as SecureLBP;
         await lbp.waitForDeployment();
+
+        // Configure fees: TEN_PERCENT (1) and FIFTEEN_MINUTES (1)
+        const [owner] = await ethers.getSigners();
+        await lbp.connect(owner).configureFee(1, 1);
 
         return { token, lbp };
     }
@@ -180,6 +187,7 @@ describe("SecureLBP – 01_deploy_init", function () {
         const end = start + 400n;
 
         const LBP = await ethers.getContractFactory("SecureLBP");
+        const [owner] = await ethers.getSigners();
         const fresh = (await LBP.deploy(
             await token.getAddress(),
             start,
@@ -192,6 +200,9 @@ describe("SecureLBP – 01_deploy_init", function () {
             ethers.ZeroAddress
         )) as SecureLBP;
         await fresh.waitForDeployment();
+
+        // Configure fees: TEN_PERCENT (1) and FIFTEEN_MINUTES (1)
+        await fresh.connect(owner).configureFee(1, 1);
 
         await fresh.configurePresaleContext(presaleManager.address, auction.address);
         await expect(
