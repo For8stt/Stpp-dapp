@@ -12,19 +12,28 @@ const FailedAuctionRefundPanel = ({
 }) => {
   const { isConnected } = useAccount();
 
+  // Calculate unrevealed deposits from commits (must be before any early returns)
+  const unrevealedDeposits = React.useMemo(() => {
+    if (!userData?.commits || userData.commits.length === 0) {
+      return 0n;
+    }
+    return userData.commits
+      .filter(commit => !commit.revealed && !commit.withdrawn)
+      .reduce((sum, commit) => sum + (commit.deposit || 0n), 0n);
+  }, [userData?.commits]);
+
   if (!auctionData || !auctionData.finalized || auctionData.successful) {
     return null;
   }
 
   const hasDeposits = (userData?.revealedDeposit && userData.revealedDeposit > 0n) || 
-                      (userData?.committedQty && userData.committedQty > 0n);
+                      unrevealedDeposits > 0n;
 
   if (!hasDeposits) {
     return null;
   }
 
-  const totalRefund = (userData?.revealedDeposit || 0n) + 
-                      (userData?.committedQty ? userData.committedQty * (auctionData.priceTicks?.[0] || 0n) : 0n);
+  const totalRefund = (userData?.revealedDeposit || 0n) + unrevealedDeposits;
 
   return (
     <div className="mb-8 rounded-2xl border border-[rgba(239,68,68,0.4)] bg-[rgba(15,23,42,0.6)] p-8">
@@ -43,9 +52,9 @@ const FailedAuctionRefundPanel = ({
             Revealed deposits: {formatEth(userData.revealedDeposit)} ETH
           </p>
         )}
-        {userData?.committedQty > 0n && (
+        {unrevealedDeposits > 0n && (
           <p className="mt-1 text-xs text-[rgba(255,255,255,0.6)]">
-            Unrevealed commits: {formatEth(userData.committedQty * (auctionData.priceTicks?.[0] || 0n))} ETH
+            Unrevealed commits: {formatEth(unrevealedDeposits)} ETH
           </p>
         )}
       </div>

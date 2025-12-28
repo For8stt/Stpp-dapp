@@ -58,11 +58,11 @@ const Input = ({ label, name, value, onChange, type = "text", placeholder, helpe
   }, [showOwnershipIndicator, userAccount, value]);
 
   return (
-    <label className="flex flex-col gap-2">
+  <label className="flex flex-col gap-2">
       <div className="flex items-center gap-2">
-        <Tooltip text={tooltip}>
-          <span className="mb-1 text-sm font-semibold text-text">{label}</span>
-        </Tooltip>
+    <Tooltip text={tooltip}>
+      <span className="mb-1 text-sm font-semibold text-text">{label}</span>
+    </Tooltip>
         {showOwnershipIndicator && userAccount && value && (
           <span
             className={`px-2 py-0.5 rounded text-xs font-semibold ${
@@ -76,17 +76,17 @@ const Input = ({ label, name, value, onChange, type = "text", placeholder, helpe
           </span>
         )}
       </div>
-      {helper && <span className="text-xs italic text-text-muted">{helper}</span>}
-      <input
-        type={type}
-        name={name}
-        value={value}
-        onChange={(event) => onChange(name, event.target.value)}
-        placeholder={placeholder}
-        className="rounded-xl border border-border bg-gradient-to-br from-[#1e293b] to-[#334155] px-4 py-3.5 text-sm text-text shadow-sm outline-none transition-all duration-300 focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-offset-0"
-      />
-    </label>
-  );
+    {helper && <span className="text-xs italic text-text-muted">{helper}</span>}
+    <input
+      type={type}
+      name={name}
+      value={value}
+      onChange={(event) => onChange(name, event.target.value)}
+      placeholder={placeholder}
+      className="rounded-xl border border-border bg-gradient-to-br from-[#1e293b] to-[#334155] px-4 py-3.5 text-sm text-text shadow-sm outline-none transition-all duration-300 focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-offset-0"
+    />
+  </label>
+);
 };
 
 const TextArea = ({ label, name, value, onChange, placeholder, helper, tooltip }) => (

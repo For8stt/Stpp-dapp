@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import "../core/auction/AuctionConfig.sol";
+import "../core/auction/DutchAuction.sol";
 import "../core/lbp/SecureLBP.sol";
 import "../core/vesting/TokenVestingEscrow.sol";
 import "../interfaces/IAuction.sol";
@@ -457,6 +458,21 @@ contract PresaleManager is Ownable, IPresaleManager, IAutomationCompatible, Pres
         uint256 balanceBefore = auction.ethForTreasury();
         auction.withdrawTreasury(recipient);
         emit AuctionProceedsWithdrawn(auctionAddress, recipient, balanceBefore - auction.ethForTreasury());
+    }
+
+    /// @notice Returns tokens from an unsuccessful auction to the auction owner.
+    /// @dev Can only be called after finalization if auction was not successful.
+    function returnAuctionTokens(address payable auctionAddress) external onlyOwner {
+        AuctionRecord storage record = _records[auctionAddress];
+        if (!isManagedAuction[auctionAddress]) revert UnknownAuction();
+        if (!record.finalized) revert AuctionNotFinalized();
+        
+        IAuction auction = IAuction(auctionAddress);
+        if (auction.successful()) revert AuctionNotFinalized(); // Only for unsuccessful auctions
+        
+        // Call the returnTokensToOwner method on the auction contract
+        // This will transfer all remaining tokens to the auction owner
+        DutchAuction(auctionAddress).returnTokensToOwner();
     }
 
     /// @notice Returns the list of auctions deployed via this manager.

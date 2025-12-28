@@ -1408,6 +1408,19 @@
     {
       "inputs": [
         {
+          "internalType": "address payable",
+          "name": "auctionAddress",
+          "type": "address"
+        }
+      ],
+      "name": "returnAuctionTokens",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
           "internalType": "bool",
           "name": "enabled",
           "type": "bool"
@@ -2899,6 +2912,25 @@
       "anonymous": false,
       "inputs": [
         {
+          "indexed": true,
+          "internalType": "address",
+          "name": "owner",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "name": "TokensReturned",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
           "indexed": false,
           "internalType": "uint256",
           "name": "vestingStart",
@@ -3758,6 +3790,13 @@
     {
       "inputs": [],
       "name": "renounceOwnership",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "returnTokensToOwner",
       "outputs": [],
       "stateMutability": "nonpayable",
       "type": "function"

@@ -216,7 +216,7 @@ describe("DutchAuction – 07_launch_lbp", function () {
             
             const treasuryAfter = await auction.ethForTreasury();
             const treasuryBalanceAfter = await ethers.provider.getBalance(treasuryAddress);
-            
+
             // After launchLbp(), ethForTreasury should be 0 (all remaining ETH sent to treasury)
             expect(treasuryAfter).to.equal(0n);
             // Treasury should receive the remaining ETH (treasuryBefore - expectedStableShare)

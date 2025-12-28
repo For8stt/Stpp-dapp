@@ -467,7 +467,7 @@ async function main() {
     } catch (error) {
       console.error(`  ⚠️  Failed to set oracle in PublicPresaleFactory:`, error);
       if (addresses.feeOracle) {
-        console.log(`  ⚠️  You may need to call PublicPresaleFactory.setLbpOracle(${addresses.feeOracle}) manually`);
+      console.log(`  ⚠️  You may need to call PublicPresaleFactory.setLbpOracle(${addresses.feeOracle}) manually`);
       }
     }
 

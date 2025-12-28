@@ -710,6 +710,34 @@ contract DutchAuction is IAuction, Ownable, ReentrancyGuard, DutchAuctionEvents,
         emit VestingUpdated(newStart, newDuration);
     }
 
+    /// @notice Returns all remaining tokens to the auction owner when auction is not successful.
+    /// @dev Can only be called after finalization if auction was not successful.
+    /// @dev If owner is PresaleManager, returns tokens to PresaleManager's owner instead.
+    function returnTokensToOwner() external onlyOwner {
+        if (!finalized) revert AuctionNotFinalized();
+        if (successful) revert AuctionNotFinalized(); // Only for unsuccessful auctions
+
+        address ownerAddress = owner();
+        if (ownerAddress == address(0)) revert InvalidCommit();
+
+        // If owner is PresaleManager, get the PresaleManager's owner
+        if (ownerAddress == presaleManager) {
+            try Ownable(presaleManager).owner() returns (address presaleManagerOwner) {
+                if (presaleManagerOwner != address(0)) {
+                    ownerAddress = presaleManagerOwner;
+                }
+            } catch {
+                // If we can't get PresaleManager's owner, use PresaleManager address
+            }
+        }
+
+        uint256 balance = saleToken.balanceOf(address(this));
+        if (balance > 0) {
+            saleToken.safeTransfer(ownerAddress, balance);
+            emit TokensReturned(ownerAddress, balance);
+        }
+    }
+
     /// @notice Accepts direct ETH transfers (e.g., manual top-ups or keeper refunds).
     receive() external payable {}
 }
