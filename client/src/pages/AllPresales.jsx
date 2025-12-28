@@ -105,93 +105,151 @@ const AllPresales = () => {
   }, [loadPresales]);
 
   return (
-    <section className="mx-auto flex max-w-[1200px] flex-col gap-8 px-6 pb-16 pt-8">
-      <div className="relative flex flex-col justify-between gap-8 overflow-hidden rounded-[2rem] border border-border bg-gradient-to-br from-[#0f172a] via-[#1e293b] to-[#0f172a] p-6 shadow-card transition-all duration-300 hover:border-[rgba(255,255,255,0.25)] hover:shadow-[0_25px_60px_rgba(0,0,0,0.5)] lg:flex-row lg:items-center lg:gap-12 lg:p-12">
-        <div className="relative z-10 flex-1">
-          <h1 className="mb-3 bg-gradient-to-br from-text to-[#cbd5e1] bg-clip-text text-[2rem] font-bold leading-tight text-transparent lg:text-[2.5rem]">
-            Permissionless presales
-          </h1>
-          <p className="mb-6 max-w-[480px] text-base leading-relaxed text-text-muted">
-            Browse all PresaleManager clones created via the public factory.
-          </p>
-          <div className="mt-6 flex flex-col gap-4 rounded-2xl border border-border bg-muted p-4 text-sm text-text-muted backdrop-blur-sm transition-all duration-300 hover:border-[rgba(255,255,255,0.25)] hover:bg-[rgba(255,255,255,0.03)] lg:flex-row lg:gap-8">
-            <div>
-              <p>Live auctions</p>
-              <strong className="mt-1 block text-[0.95rem] font-semibold text-text">Real-time tracking</strong>
-            </div>
-            <div>
-              <p>Factory clones</p>
-              <strong className="mt-1 block text-[0.95rem] font-semibold text-text">Permissionless creation</strong>
-            </div>
-          </div>
+    <div className="min-h-screen bg-background">
+      
+      <section className="relative overflow-hidden border-b border-border/20 bg-gradient-to-b from-background via-background to-surface/5 py-20 sm:py-28">
+        
+        <div className="absolute inset-0">
+          <div className="absolute inset-0 bg-[linear-gradient(rgba(99,102,241,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(99,102,241,0.03)_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_80%_50%_at_50%_0%,#000_70%,transparent_110%)]"></div>
+          <div className="absolute left-1/4 top-0 h-96 w-96 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/8 blur-3xl"></div>
+          <div className="absolute right-1/4 top-0 h-96 w-96 translate-x-1/2 -translate-y-1/2 rounded-full bg-secondary/6 blur-3xl"></div>
         </div>
-        <div className="relative z-10 flex flex-col items-start gap-4 lg:items-end">
-          <button 
-            onClick={loadPresales} 
-            className="rounded-full border border-[rgba(255,255,255,0.1)] bg-gradient-to-r from-primary via-[#7c3aed] to-[#ec4899] px-8 py-3.5 text-sm font-semibold text-white shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl active:translate-y-0"
-          >
-            Refresh
-          </button>
-          <button 
-            onClick={() => window.location.reload()} 
-            className="rounded-full border border-[rgba(56,189,248,0.3)] bg-[rgba(56,189,248,0.05)] px-6 py-2.5 text-sm font-medium text-[#38bdf8] backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-[rgba(56,189,248,0.5)] hover:bg-[rgba(56,189,248,0.1)]"
-          >
-            Reload Page
-          </button>
-        </div>
-      </div>
 
-      {error && (
-        <div className="relative overflow-hidden rounded-2xl border border-[rgba(239,68,68,0.3)] bg-gradient-to-br from-[rgba(239,68,68,0.1)] to-[rgba(220,38,38,0.05)] p-6 before:absolute before:right-4 before:top-4 before:text-2xl before:opacity-30">
-          <div className="relative z-10">
-            <p className="mb-2 font-semibold text-[#fca5a5]">⚠️ Error Loading Presales</p>
-            <p className="mb-4 text-sm leading-relaxed text-[#fecaca]">{error}</p>
-            {error.includes('not deployed') && (
-              <div className="rounded-xl border border-[rgba(239,68,68,0.2)] bg-[rgba(0,0,0,0.2)] p-4">
-                <p className="mb-2 text-sm font-medium text-[#fca5a5]">To fix this issue:</p>
-                <ol className="m-0 list-none p-0">
-                  <li className="mb-1 border-l-2 border-l-[rgba(239,68,68,0.3)] pl-3 text-xs text-[#fecaca]">
-                    Make sure Hardhat network is running: <span className="rounded border border-[rgba(239,68,68,0.2)] bg-[rgba(239,68,68,0.1)] px-1.5 py-0.5 font-mono text-[0.75rem] text-[#fca5a5]">npx hardhat node</span>
-                  </li>
-                  <li className="mb-1 border-l-2 border-l-[rgba(239,68,68,0.3)] pl-3 text-xs text-[#fecaca]">
-                    Deploy contracts: <span className="rounded border border-[rgba(239,68,68,0.2)] bg-[rgba(239,68,68,0.1)] px-1.5 py-0.5 font-mono text-[0.75rem] text-[#fca5a5]">npm run deploy:all</span>
-                  </li>
-                  <li className="border-l-2 border-l-[rgba(239,68,68,0.3)] pl-3 text-xs text-[#fecaca]">Refresh this page</li>
-                </ol>
+        <div className="container relative mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-6xl">
+            
+            <div className="mb-12 text-center">
+              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-4 py-2 text-xs font-medium text-primary backdrop-blur-sm">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                <span>Live Data</span>
               </div>
-            )}
-          </div>
-        </div>
-      )}
+              <h1 className="mb-5 bg-gradient-to-br from-text via-text to-text/80 bg-clip-text text-5xl font-bold text-transparent sm:text-6xl lg:text-7xl">
+                Permissionless Presales
+              </h1>
+              <p className="mx-auto max-w-2xl text-lg text-text-muted sm:text-xl">
+                Browse all PresaleManager clones created via the public factory. Track auctions, liquidity pools, and vesting schedules in real-time.
+              </p>
+            </div>
 
-      {loading ? (
-        <div className="relative overflow-hidden rounded-[2rem] border border-border bg-gradient-to-br from-[#0f172a] to-[#1e293b] p-8 text-center shadow-card backdrop-blur-[12px]">
-          <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-4 border-[rgba(99,102,241,0.2)] border-t-primary"></div>
-          <p className="relative z-10 text-lg font-medium text-text-muted">Loading presales...</p>
-        </div>
-      ) : items.length === 0 ? (
-        <div className="rounded-[2rem] border border-border bg-gradient-to-br from-[#0f172a] to-[#1e293b] p-8 text-center shadow-card backdrop-blur-[12px]">
-          <div className="mb-4 flex items-center justify-center opacity-50">
-            <div className="flex h-16 w-16 items-center justify-center rounded-xl border-2 border-[rgba(248,250,252,0.3)]">
-              <div className="relative h-8 w-8 rounded border-2 border-[rgba(248,250,252,0.3)]">
-                <div className="absolute left-1/2 top-1/2 h-1 w-4 -translate-x-1/2 -translate-y-1/2 rounded bg-[rgba(248,250,252,0.3)]"></div>
-                <div className="absolute left-1/2 top-1/2 h-4 w-1 -translate-x-1/2 -translate-y-1/2 rounded bg-[rgba(248,250,252,0.3)]"></div>
+            
+            <div className="group relative overflow-hidden rounded-2xl border border-border/40 bg-gradient-to-br from-surface/80 via-surface/60 to-surface/80 p-8 backdrop-blur-xl shadow-2xl shadow-black/20 transition-all duration-500 hover:border-primary/50 hover:shadow-primary/10 sm:p-10">
+              
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-secondary/5 opacity-50 transition-opacity duration-500 group-hover:opacity-100"></div>
+              <div className="absolute -right-20 -top-20 h-40 w-40 rounded-full bg-primary/10 blur-3xl transition-opacity duration-500 group-hover:opacity-60"></div>
+              <div className="absolute -bottom-20 -left-20 h-40 w-40 rounded-full bg-secondary/8 blur-3xl transition-opacity duration-500 group-hover:opacity-60"></div>
+              
+              <div className="relative z-10">
+                <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-2">
+                  <div className="relative rounded-xl border border-primary/20 bg-primary/5 p-6 backdrop-blur-sm">
+                    <div className="absolute -left-1 top-0 h-full w-1 rounded-full bg-gradient-to-b from-primary to-primary/50"></div>
+                    <div className="mb-2 flex items-center gap-2">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/20 text-primary">
+                        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                      </div>
+                      <p className="text-sm font-medium text-text-muted">Live auctions</p>
+                    </div>
+                    <p className="text-2xl font-bold text-text">Real-time tracking</p>
+                  </div>
+                  
+                  <div className="relative rounded-xl border border-secondary/20 bg-secondary/5 p-6 backdrop-blur-sm">
+                    <div className="absolute -left-1 top-0 h-full w-1 rounded-full bg-gradient-to-b from-secondary to-secondary/50"></div>
+                    <div className="mb-2 flex items-center gap-2">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary/20 text-secondary">
+                        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                        </svg>
+                      </div>
+                      <p className="text-sm font-medium text-text-muted">Factory clones</p>
+                    </div>
+                    <p className="text-2xl font-bold text-text">Permissionless creation</p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-          <h3 className="mb-2 text-2xl font-semibold text-text-muted">No presales deployed yet</h3>
-          <p className="mx-auto max-w-[400px] text-base leading-relaxed text-text-muted">
-            Create your first presale using the PublicPresaleFactory to see it listed here.
-          </p>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-2 md:gap-6">
-          {items.map((presale) => (
-            <PresaleCard key={presale.manager} presale={presale} />
-          ))}
+      </section>
+
+      
+      <section className="relative overflow-hidden py-16 sm:py-24">
+        
+        <div className="absolute inset-0">
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(99,102,241,0.02),transparent_70%)]"></div>
+          <div className="absolute left-1/4 bottom-0 h-64 w-64 -translate-x-1/2 translate-y-1/2 rounded-full bg-primary/4 blur-3xl"></div>
+          <div className="absolute right-1/4 bottom-0 h-64 w-64 translate-x-1/2 translate-y-1/2 rounded-full bg-secondary/3 blur-3xl"></div>
         </div>
-      )}
-    </section>
+
+        <div className="container relative mx-auto px-4 sm:px-6 lg:px-8">
+          {error && (
+            <div className="group relative mx-auto max-w-7xl overflow-hidden rounded-2xl border border-red-500/30 bg-gradient-to-br from-red-500/10 to-red-500/5 p-8 backdrop-blur-sm">
+              <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 via-transparent to-transparent"></div>
+              <div className="relative z-10">
+                <div className="mb-4 inline-flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-2">
+                  <span className="text-xl">⚠️</span>
+                  <p className="text-lg font-semibold text-red-400">Error Loading Presales</p>
+                </div>
+                <p className="mb-6 text-base leading-relaxed text-red-300">{error}</p>
+                {error.includes('not deployed') && (
+                  <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-6">
+                    <p className="mb-4 text-sm font-medium text-red-400">To fix this issue:</p>
+                    <ol className="m-0 list-none space-y-3 p-0">
+                      <li className="flex items-start gap-3 border-l-2 border-red-500/30 pl-4 text-sm text-red-300">
+                        <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-500/20 text-xs font-bold text-red-400">1</span>
+                        <span>Make sure Hardhat network is running: <code className="rounded border border-red-500/20 bg-red-500/10 px-2 py-1 font-mono text-xs text-red-400">npx hardhat node</code></span>
+                      </li>
+                      <li className="flex items-start gap-3 border-l-2 border-red-500/30 pl-4 text-sm text-red-300">
+                        <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-500/20 text-xs font-bold text-red-400">2</span>
+                        <span>Deploy contracts: <code className="rounded border border-red-500/20 bg-red-500/10 px-2 py-1 font-mono text-xs text-red-400">npm run deploy:all</code></span>
+                      </li>
+                      <li className="flex items-start gap-3 border-l-2 border-red-500/30 pl-4 text-sm text-red-300">
+                        <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-500/20 text-xs font-bold text-red-400">3</span>
+                        <span>Refresh this page</span>
+                      </li>
+                    </ol>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {loading ? (
+            <div className="relative mx-auto max-w-7xl overflow-hidden rounded-2xl border border-border/40 bg-gradient-to-br from-surface/70 to-surface/50 p-16 text-center backdrop-blur-sm">
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent"></div>
+              <div className="relative z-10">
+                <div className="mx-auto mb-6 h-16 w-16 animate-spin rounded-full border-4 border-primary/20 border-t-primary"></div>
+                <p className="text-xl font-medium text-text-muted">Loading presales...</p>
+              </div>
+            </div>
+          ) : items.length === 0 ? (
+            <div className="group relative mx-auto max-w-7xl overflow-hidden rounded-2xl border border-border/40 bg-gradient-to-br from-surface/70 to-surface/50 p-16 text-center backdrop-blur-sm transition-all duration-500 hover:border-primary/60 hover:from-surface/90 hover:to-surface/70">
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent"></div>
+              <div className="relative z-10">
+                <div className="mb-6 inline-flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-primary/10 text-4xl shadow-lg shadow-primary/25">
+                  📦
+                  <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/20 to-transparent"></div>
+                </div>
+                <h3 className="mb-3 text-3xl font-bold text-text">No presales deployed yet</h3>
+                <p className="mx-auto max-w-md text-lg leading-relaxed text-text-muted">
+                  Create your first presale using the PublicPresaleFactory to see it listed here.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="mx-auto max-w-7xl">
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-2">
+                {items.map((presale) => (
+                  <PresaleCard key={presale.manager} presale={presale} />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+    </div>
   );
 };
 

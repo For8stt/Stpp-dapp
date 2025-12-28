@@ -145,173 +145,252 @@ const PresaleCard = ({ presale }) => {
     : statusConfig.active;
 
   return (
-    <div className="group relative cursor-default overflow-hidden rounded-2xl border border-[rgba(255,255,255,0.12)] bg-gradient-to-br from-[rgba(15,23,42,0.95)] via-[rgba(30,41,59,0.9)] to-[rgba(15,23,42,0.95)] p-6 text-white shadow-[0_20px_40px_rgba(0,0,0,0.4),0_0_0_1px_rgba(255,255,255,0.08),inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-[16px] transition-all duration-300 hover:-translate-y-1 hover:scale-[1.02] hover:border-[rgba(255,255,255,0.25)] hover:shadow-[0_25px_60px_rgba(0,0,0,0.5),0_0_0_1px_rgba(255,255,255,0.12),inset_0_1px_0_rgba(255,255,255,0.08)] before:absolute before:left-0 before:right-0 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-[rgba(99,102,241,0.4)] before:to-transparent before:opacity-0 before:transition-opacity before:duration-300 group-hover:before:opacity-100">
-      <div className={`absolute right-4 top-4 z-10 flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold uppercase tracking-wider backdrop-blur-sm shadow-lg ${currentStatus.bgClass} ${currentStatus.borderClass} ${currentStatus.textClass}`}>
-        <span className="text-xs opacity-80">{currentStatus.icon}</span>
-        <span>{currentStatus.text}</span>
-      </div>
+    <div className="group relative flex h-full flex-col overflow-hidden rounded-3xl border-2 border-primary/40 bg-gradient-to-br from-surface/90 via-surface/80 to-surface/90 p-[2px] backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.4),0_0_0_1px_rgba(99,102,241,0.2)] transition-all duration-700 hover:scale-[1.02] hover:border-primary/70 hover:shadow-[0_12px_48px_rgba(99,102,241,0.5),0_0_0_1px_rgba(99,102,241,0.4),inset_0_0_60px_rgba(99,102,241,0.1)]">
+      
+      <div className="absolute inset-0 rounded-3xl bg-gradient-to-r from-primary/60 via-indigo-500/60 via-purple-500/60 to-secondary/60 opacity-60 transition-opacity duration-700 group-hover:opacity-100"></div>
+      
+      
+      <div className="absolute inset-0 rounded-3xl bg-[linear-gradient(rgba(99,102,241,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(99,102,241,0.03)_1px,transparent_1px)] bg-[size:20px_20px] opacity-40"></div>
+      
+      
+      <div className="relative z-0 flex h-full flex-col overflow-hidden rounded-3xl bg-gradient-to-br from-surface via-surface/95 to-surface p-7 sm:p-8">
+        
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-indigo-500/10 to-secondary/20 opacity-60 transition-opacity duration-700 group-hover:opacity-100"></div>
+        
+        
+        <div className="absolute top-0 left-0 h-16 w-16 border-t-2 border-l-2 border-primary/40 rounded-tl-3xl"></div>
+        <div className="absolute top-0 right-0 h-16 w-16 border-t-2 border-r-2 border-secondary/40 rounded-tr-3xl"></div>
+        <div className="absolute bottom-0 left-0 h-16 w-16 border-b-2 border-l-2 border-primary/40 rounded-bl-3xl"></div>
+        <div className="absolute bottom-0 right-0 h-16 w-16 border-b-2 border-r-2 border-secondary/40 rounded-br-3xl"></div>
+        
+        
+        <div className="absolute -right-12 -top-12 h-48 w-48 rounded-full bg-primary/20 blur-3xl opacity-60 transition-opacity duration-700 group-hover:opacity-90"></div>
+        <div className="absolute -bottom-12 -left-12 h-48 w-48 rounded-full bg-secondary/15 blur-3xl opacity-50 transition-opacity duration-700 group-hover:opacity-80"></div>
+        <div className="absolute top-1/2 left-1/2 h-32 w-32 -translate-x-1/2 -translate-y-1/2 rounded-full bg-indigo-500/10 blur-2xl opacity-30 transition-opacity duration-700 group-hover:opacity-50"></div>
+        
+        
+        <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-primary via-indigo-500 via-secondary to-transparent opacity-80 transition-opacity duration-700 group-hover:opacity-100"></div>
+        
+        
+        <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-secondary via-indigo-500 via-primary to-transparent opacity-80 transition-opacity duration-700 group-hover:opacity-100"></div>
+        
+        
+        <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-gradient-to-b from-transparent via-primary via-indigo-500 via-secondary to-transparent opacity-60 transition-opacity duration-700 group-hover:opacity-85"></div>
+        <div className="absolute right-0 top-0 bottom-0 w-[2px] bg-gradient-to-b from-transparent via-secondary via-indigo-500 via-primary to-transparent opacity-60 transition-opacity duration-700 group-hover:opacity-85"></div>
+      
+        
+        <div className={`absolute right-4 top-4 z-10 flex items-center gap-2 rounded-full border-2 px-4 py-2 text-xs font-bold uppercase tracking-wider backdrop-blur-xl shadow-2xl transition-all duration-300 group-hover:scale-110 ${currentStatus.bgClass} ${currentStatus.borderClass} ${currentStatus.textClass}`}>
+          <span className="relative flex h-2 w-2 items-center justify-center">
+            <span className="absolute h-2 w-2 animate-ping rounded-full bg-current opacity-75"></span>
+            <span className="relative h-1.5 w-1.5 rounded-full bg-current"></span>
+          </span>
+          <span>{currentStatus.text}</span>
+        </div>
 
-      <div className="relative z-10">
+        <div className="relative z-10 flex flex-1 flex-col">
+        
         <div className="mb-6">
-          <div className="mb-4 flex items-start gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#10b981] via-[#06b6d4] to-[#0891b2] shadow-[0_8px_16px_rgba(16,185,129,0.3),inset_0_1px_0_rgba(255,255,255,0.2)]">
-              <div className="relative h-6 w-6 rounded border border-[rgba(255,255,255,0.8)]">
-                <div className="absolute left-1/2 top-1 -translate-x-1/2 h-0.5 w-3 rounded bg-[rgba(255,255,255,0.8)]"></div>
-                <div className="absolute left-1 top-2 h-0.5 w-1.5 rounded bg-[rgba(255,255,255,0.8)]"></div>
-              </div>
+          <div className="mb-5 flex items-start gap-4">
+            <div className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/40 via-indigo-500/30 to-secondary/30 shadow-2xl shadow-primary/50 transition-all duration-700 group-hover:scale-110 group-hover:shadow-[0_0_40px_rgba(99,102,241,0.8)]">
+              <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/40 via-white/20 to-transparent"></div>
+              <div className="absolute -inset-4 rounded-2xl bg-primary/40 blur-3xl opacity-70"></div>
+              <svg className="relative z-10 h-8 w-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+              
+              <div className="absolute top-0 left-0 h-4 w-4 border-t-2 border-l-2 border-primary/60 rounded-tl-2xl"></div>
+              <div className="absolute bottom-0 right-0 h-4 w-4 border-b-2 border-r-2 border-secondary/60 rounded-br-2xl"></div>
             </div>
             <div className="min-w-0 flex-1">
-              <h3 className="mb-2 bg-gradient-to-br from-[#f8fafc] to-[#cbd5e1] bg-clip-text text-lg font-bold text-transparent">Presale Manager</h3>
-              <div className="rounded-xl border border-[rgba(51,65,85,0.5)] bg-[rgba(30,41,59,0.6)] p-3 transition-all duration-200 hover:border-[rgba(51,65,85,0.7)] hover:bg-[rgba(30,41,59,0.7)]">
-                <p className="font-mono text-sm leading-snug text-[#10b981] transition-colors hover:text-[#34d399]">{shortenAddress(presale.manager)}</p>
-                <p className="mt-1 font-mono text-xs text-[rgba(148,163,184,0.8)] opacity-0 transition-opacity duration-300 group-hover:opacity-100">{presale.manager}</p>
+              <h3 className="mb-2 bg-gradient-to-r from-text via-primary/90 to-text bg-clip-text text-2xl font-bold text-transparent">Presale Manager</h3>
+              <div className="group/address relative overflow-hidden rounded-xl border-2 border-primary/50 bg-gradient-to-br from-primary/15 via-primary/10 to-primary/5 p-4 backdrop-blur-sm transition-all duration-300 hover:border-primary/70 hover:from-primary/20 hover:via-primary/15 hover:to-primary/10 hover:shadow-xl hover:shadow-primary/30">
+                <div className="absolute inset-0 bg-[linear-gradient(90deg,transparent,rgba(99,102,241,0.1),transparent)] opacity-0 transition-opacity duration-500 group-hover/address:opacity-100"></div>
+                <p className="relative font-mono text-base font-bold text-primary transition-colors group-hover/address:text-primary/90">{shortenAddress(presale.manager)}</p>
+                <p className="mt-1.5 font-mono text-xs text-text-muted opacity-0 transition-opacity duration-300 group-hover:opacity-100">{presale.manager}</p>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-2 sm:grid-cols-1 sm:gap-2">
-          <div className={`group/info relative overflow-hidden rounded-2xl border p-4 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg ${
-            !presale.owner ? 'bg-[rgba(30,41,59,0.3)] border-[rgba(51,65,85,0.5)]' : 'border-[rgba(59,130,246,0.15)] bg-gradient-to-br from-[rgba(59,130,246,0.08)] to-[rgba(59,130,246,0.04)]'
+        
+        <div className="mb-6 grid flex-1 grid-cols-2 gap-4">
+          <div className={`group/info relative overflow-hidden rounded-xl border-2 p-5 transition-all duration-500 hover:scale-[1.05] hover:shadow-2xl ${
+            !presale.owner ? 'border-border/50 bg-surface/70' : 'border-primary/70 bg-gradient-to-br from-primary/30 via-primary/20 to-primary/15 shadow-xl shadow-primary/30'
           }`}>
-            <div className="mb-3 flex items-center gap-3">
-              <div className={`flex h-8 w-8 items-center justify-center rounded-xl ${
-                !presale.owner ? 'bg-[rgba(51,65,85,0.5)]' : 'bg-[rgba(59,130,246,0.15)]'
-              }`}>
-                <div className="h-4 w-4 rounded-full border border-current relative">
-                  <div className="absolute bottom-0 left-1/2 h-2 w-2 -translate-x-1/2 rounded-full bg-current"></div>
+            <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-transparent to-transparent opacity-80 transition-opacity duration-500 group-hover/info:opacity-100"></div>
+            <div className="absolute -right-4 -top-4 h-20 w-20 rounded-full bg-primary/15 blur-2xl opacity-60 transition-opacity duration-500 group-hover/info:opacity-90"></div>
+            <div className="absolute top-0 right-0 h-6 w-6 border-t-2 border-r-2 border-primary/50 rounded-tr-xl"></div>
+            <div className="relative">
+              <div className="mb-4 flex items-center gap-3">
+                <div className={`relative flex h-12 w-12 shrink-0 items-center justify-center rounded-xl shadow-xl transition-all duration-500 group-hover/info:scale-110 ${
+                  !presale.owner ? 'bg-surface/90 text-text-muted' : 'bg-gradient-to-br from-primary/50 via-primary/40 to-primary/30 text-primary'
+                }`}>
+                  <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-white/30 to-transparent"></div>
+                  <svg className="relative z-10 h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
                 </div>
+                <h4 className={`text-sm font-bold uppercase tracking-wider ${
+                  !presale.owner ? 'text-text-muted' : 'text-primary'
+                }`}>Owner</h4>
               </div>
-              <h4 className={`text-sm font-semibold uppercase tracking-wider ${
-                !presale.owner ? 'text-[rgba(100,116,139,0.8)]' : 'text-[rgba(59,130,246,0.9)]'
-              }`}>Owner</h4>
+              <p className={`font-mono text-base font-bold ${
+                !presale.owner ? 'text-text-muted' : 'text-text'
+              }`}>
+                {shortenAddress(presale.owner)}
+              </p>
             </div>
-            <p className={`font-mono text-sm leading-snug ${
-              !presale.owner ? 'text-[rgba(100,116,139,0.6)]' : 'text-[rgba(248,250,252,0.9)]'
-            }`}>
-              {shortenAddress(presale.owner)}
-            </p>
           </div>
 
-          <div className={`group/info relative overflow-hidden rounded-2xl border p-4 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg ${
-            !presale.auction ? 'bg-[rgba(30,41,59,0.3)] border-[rgba(51,65,85,0.5)]' : 'border-[rgba(147,51,234,0.15)] bg-gradient-to-br from-[rgba(147,51,234,0.08)] to-[rgba(147,51,234,0.04)]'
+          <div className={`group/info relative overflow-hidden rounded-xl border-2 p-5 transition-all duration-500 hover:scale-[1.05] hover:shadow-2xl ${
+            !presale.auction ? 'border-border/50 bg-surface/70' : 'border-primary/70 bg-gradient-to-br from-primary/30 via-primary/20 to-primary/15 shadow-xl shadow-primary/30'
           }`}>
-            <div className="mb-3 flex items-center gap-3">
-              <div className={`flex h-8 w-8 items-center justify-center rounded-xl ${
-                !presale.auction ? 'bg-[rgba(51,65,85,0.5)]' : 'bg-[rgba(147,51,234,0.15)]'
-              }`}>
-                <div className="relative h-4 w-4">
-                  <div className="absolute left-1/2 top-0 h-1.5 w-3 -translate-x-1/2 rounded-t-full border border-current"></div>
-                  <div className="absolute left-1/2 top-1 h-2 w-1 -translate-x-1/2 bg-current"></div>
+            <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-transparent to-transparent opacity-80 transition-opacity duration-500 group-hover/info:opacity-100"></div>
+            <div className="absolute -right-4 -top-4 h-20 w-20 rounded-full bg-primary/15 blur-2xl opacity-60 transition-opacity duration-500 group-hover/info:opacity-90"></div>
+            <div className="absolute top-0 right-0 h-6 w-6 border-t-2 border-r-2 border-primary/50 rounded-tr-xl"></div>
+            <div className="relative">
+              <div className="mb-4 flex items-center gap-3">
+                <div className={`relative flex h-12 w-12 shrink-0 items-center justify-center rounded-xl shadow-xl transition-all duration-500 group-hover/info:scale-110 ${
+                  !presale.auction ? 'bg-surface/90 text-text-muted' : 'bg-gradient-to-br from-primary/50 via-primary/40 to-primary/30 text-primary'
+                }`}>
+                  <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-white/30 to-transparent"></div>
+                  <svg className="relative z-10 h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3" />
+                    <circle cx="12" cy="12" r="2" fill="currentColor" />
+                  </svg>
+                </div>
+                <div className="flex min-w-0 flex-1 items-center gap-2">
+                  <h4 className={`text-sm font-bold uppercase tracking-wider ${
+                    !presale.auction ? 'text-text-muted' : 'text-primary'
+                  }`}>Auction</h4>
+                  {hasWhitelist && (
+                    <span className="inline-flex shrink-0 items-center rounded-full border-2 border-secondary/80 bg-secondary/40 px-2.5 py-1 text-[0.7rem] font-bold uppercase tracking-wider text-secondary shadow-xl">
+                      WL
+                    </span>
+                  )}
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <h4 className={`text-sm font-semibold uppercase tracking-wider ${
-                  !presale.auction ? 'text-[rgba(100,116,139,0.8)]' : 'text-[rgba(147,51,234,0.9)]'
-                }`}>Auction</h4>
-                {hasWhitelist && (
-                  <span className="inline-flex items-center rounded-full border border-[rgba(34,197,94,0.3)] bg-[rgba(34,197,94,0.15)] px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider text-[#86efac] backdrop-blur-sm">
-                    Whitelist
-                  </span>
-                )}
-              </div>
+              <p className={`font-mono text-base font-bold ${
+                !presale.auction ? 'text-text-muted' : 'text-text'
+              }`}>
+                {presale.auction ? shortenAddress(presale.auction) : 'Not launched'}
+              </p>
             </div>
-            <p className={`font-mono text-sm leading-snug ${
-              !presale.auction ? 'text-[rgba(100,116,139,0.6)]' : 'text-[rgba(248,250,252,0.9)]'
-            }`}>
-              {presale.auction ? shortenAddress(presale.auction) : 'Not launched'}
-            </p>
           </div>
 
-          <div className={`group/info relative overflow-hidden rounded-2xl border p-4 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg ${
-            !presale.lbp ? 'bg-[rgba(30,41,59,0.3)] border-[rgba(51,65,85,0.5)]' : 'border-[rgba(6,182,212,0.15)] bg-gradient-to-br from-[rgba(6,182,212,0.08)] to-[rgba(6,182,212,0.04)]'
+          <div className={`group/info relative overflow-hidden rounded-xl border-2 p-5 transition-all duration-500 hover:scale-[1.05] hover:shadow-2xl ${
+            !presale.lbp ? 'border-border/50 bg-surface/70' : 'border-secondary/70 bg-gradient-to-br from-secondary/30 via-secondary/20 to-secondary/15 shadow-xl shadow-secondary/30'
           }`}>
-            <div className="mb-3 flex items-center gap-3">
-              <div className={`flex h-8 w-8 items-center justify-center rounded-xl ${
-                !presale.lbp ? 'bg-[rgba(51,65,85,0.5)]' : 'bg-[rgba(6,182,212,0.15)]'
-              }`}>
-                <div className="relative h-4 w-4">
-                  <div className="absolute left-0 top-0 h-4 w-1 rounded-full bg-current"></div>
-                  <div className="absolute right-0 top-1 h-3 w-1 rounded-full bg-current"></div>
+            <div className="absolute inset-0 bg-gradient-to-br from-secondary/20 via-transparent to-transparent opacity-80 transition-opacity duration-500 group-hover/info:opacity-100"></div>
+            <div className="absolute -right-4 -top-4 h-20 w-20 rounded-full bg-secondary/15 blur-2xl opacity-60 transition-opacity duration-500 group-hover/info:opacity-90"></div>
+            <div className="absolute top-0 right-0 h-6 w-6 border-t-2 border-r-2 border-secondary/50 rounded-tr-xl"></div>
+            <div className="relative">
+              <div className="mb-4 flex items-center gap-3">
+                <div className={`relative flex h-12 w-12 shrink-0 items-center justify-center rounded-xl shadow-xl transition-all duration-500 group-hover/info:scale-110 ${
+                  !presale.lbp ? 'bg-surface/90 text-text-muted' : 'bg-gradient-to-br from-secondary/50 via-secondary/40 to-secondary/30 text-secondary'
+                }`}>
+                  <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-white/30 to-transparent"></div>
+                  <svg className="relative z-10 h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                  </svg>
                 </div>
+                <h4 className={`text-sm font-bold uppercase tracking-wider ${
+                  !presale.lbp ? 'text-text-muted' : 'text-secondary'
+                }`}>Liquidity Pool</h4>
               </div>
-              <h4 className={`text-sm font-semibold uppercase tracking-wider ${
-                !presale.lbp ? 'text-[rgba(100,116,139,0.8)]' : 'text-[rgba(6,182,212,0.9)]'
-              }`}>Liquidity Pool</h4>
+              <p className={`font-mono text-base font-bold ${
+                !presale.lbp ? 'text-text-muted' : 'text-text'
+              }`}>
+                {presale.lbp ? shortenAddress(presale.lbp) : 'Not launched'}
+              </p>
             </div>
-            <p className={`font-mono text-sm leading-snug ${
-              !presale.lbp ? 'text-[rgba(100,116,139,0.6)]' : 'text-[rgba(248,250,252,0.9)]'
-            }`}>
-              {presale.lbp ? shortenAddress(presale.lbp) : 'Not launched'}
-            </p>
           </div>
 
-          <div className={`group/info relative overflow-hidden rounded-2xl border p-4 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg ${
-            !presale.vesting ? 'bg-[rgba(30,41,59,0.3)] border-[rgba(51,65,85,0.5)]' : 'border-[rgba(249,115,22,0.15)] bg-gradient-to-br from-[rgba(249,115,22,0.08)] to-[rgba(249,115,22,0.04)]'
+          <div className={`group/info relative overflow-hidden rounded-xl border-2 p-5 transition-all duration-500 hover:scale-[1.05] hover:shadow-2xl ${
+            !presale.vesting ? 'border-border/50 bg-surface/70' : 'border-secondary/70 bg-gradient-to-br from-secondary/30 via-secondary/20 to-secondary/15 shadow-xl shadow-secondary/30'
           }`}>
-            <div className="mb-3 flex items-center gap-3">
-              <div className={`flex h-8 w-8 items-center justify-center rounded-xl ${
-                !presale.vesting ? 'bg-[rgba(51,65,85,0.5)]' : 'bg-[rgba(249,115,22,0.15)]'
-              }`}>
-                <div className="h-4 w-4 rounded-full border border-current relative">
-                  <div className="absolute left-1/2 top-1/2 h-1.5 w-0.5 -translate-x-1/2 -translate-y-1/2 rotate-0 bg-current"></div>
-                  <div className="absolute left-1/2 top-1/2 h-1 w-0.5 -translate-x-1/2 -translate-y-1/2 rotate-90 bg-current"></div>
+            <div className="absolute inset-0 bg-gradient-to-br from-secondary/20 via-transparent to-transparent opacity-80 transition-opacity duration-500 group-hover/info:opacity-100"></div>
+            <div className="absolute -right-4 -top-4 h-20 w-20 rounded-full bg-secondary/15 blur-2xl opacity-60 transition-opacity duration-500 group-hover/info:opacity-90"></div>
+            <div className="absolute top-0 right-0 h-6 w-6 border-t-2 border-r-2 border-secondary/50 rounded-tr-xl"></div>
+            <div className="relative">
+              <div className="mb-4 flex items-center gap-3">
+                <div className={`relative flex h-12 w-12 shrink-0 items-center justify-center rounded-xl shadow-xl transition-all duration-500 group-hover/info:scale-110 ${
+                  !presale.vesting ? 'bg-surface/90 text-text-muted' : 'bg-gradient-to-br from-secondary/50 via-secondary/40 to-secondary/30 text-secondary'
+                }`}>
+                  <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-white/30 to-transparent"></div>
+                  <svg className="relative z-10 h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
                 </div>
+                <h4 className={`text-sm font-bold uppercase tracking-wider ${
+                  !presale.vesting ? 'text-text-muted' : 'text-secondary'
+                }`}>Vesting</h4>
               </div>
-              <h4 className={`text-sm font-semibold uppercase tracking-wider ${
-                !presale.vesting ? 'text-[rgba(100,116,139,0.8)]' : 'text-[rgba(249,115,22,0.9)]'
-              }`}>Vesting</h4>
+              <p className={`font-mono text-base font-bold ${
+                !presale.vesting ? 'text-text-muted' : 'text-text'
+              }`}>
+                {presale.vesting ? shortenAddress(presale.vesting) : 'Not created'}
+              </p>
             </div>
-            <p className={`font-mono text-sm leading-snug ${
-              !presale.vesting ? 'text-[rgba(100,116,139,0.6)]' : 'text-[rgba(248,250,252,0.9)]'
-            }`}>
-              {presale.vesting ? shortenAddress(presale.vesting) : 'Not created'}
-            </p>
           </div>
         </div>
 
-        <div className="flex flex-col gap-3 border-t border-[rgba(255,255,255,0.1)] pt-4 sm:gap-2">
+        
+        <div className="mt-auto flex flex-col gap-5 border-t-2 border-primary/40 pt-6">
           {presale.auction && (
             <Link
               to={`/presale/${presale.manager}/auction`}
-              className="group/btn relative flex flex-1 items-center justify-center gap-3 overflow-hidden rounded-2xl border border-[rgba(147,51,234,0.3)] bg-[rgba(147,51,234,0.08)] px-6 py-3.5 text-base font-bold text-[rgba(196,181,253,0.9)] shadow-lg backdrop-blur-sm transition-all duration-300 before:absolute before:left-[-100%] before:top-0 before:h-full before:w-full before:bg-gradient-to-r before:from-transparent before:via-[rgba(255,255,255,0.2)] before:to-transparent before:transition-[left] before:duration-600 hover:-translate-y-0.5 hover:scale-[1.02] hover:border-[rgba(147,51,234,0.5)] hover:bg-[rgba(147,51,234,0.15)] hover:shadow-xl hover:before:left-[100%] sm:px-5 sm:py-3 sm:text-sm"
+              className="group/btn relative flex items-center justify-center gap-4 overflow-hidden rounded-2xl border-2 border-primary/70 bg-gradient-to-br from-primary/30 via-primary/25 to-primary/20 px-8 py-5 text-lg font-bold text-primary shadow-2xl shadow-primary/40 transition-all duration-300 hover:scale-[1.02] hover:border-primary/90 hover:from-primary/35 hover:via-primary/30 hover:to-primary/25 hover:shadow-[0_0_50px_rgba(99,102,241,0.6)]"
             >
-              <div className="relative z-10 h-5 w-5">
-                <div className="absolute left-1 top-0 h-3 w-1 rotate-[12deg] bg-current"></div>
-                <div className="absolute left-0 top-1 h-2 w-1 -rotate-[12deg] bg-current"></div>
-              </div>
-              <span>Auction</span>
+              <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent opacity-50"></div>
+              <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-primary/20 blur-2xl opacity-60 transition-opacity duration-300 group-hover/btn:opacity-80"></div>
+              <span className="relative z-10 flex items-center gap-2">
+                <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+                Auction
+              </span>
+              <svg className="relative z-10 h-6 w-6 transition-transform duration-300 group-hover/btn:translate-x-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+              </svg>
             </Link>
           )}
-          <div className="flex gap-3 sm:gap-2">
+          <div className="flex gap-5">
             {presale.lbp && presale.lbp !== "0x0000000000000000000000000000000000000000" && (
               <Link
                 to={`/lbp/${presale.lbp}`}
-                className="group/btn relative flex flex-1 items-center justify-center gap-3 overflow-hidden rounded-2xl bg-gradient-to-r from-[#10b981] via-[#06b6d4] to-[#0891b2] px-6 py-3.5 text-base font-bold text-white shadow-lg transition-all duration-300 before:absolute before:left-[-100%] before:top-0 before:h-full before:w-full before:bg-gradient-to-r before:from-transparent before:via-[rgba(255,255,255,0.2)] before:to-transparent before:transition-[left] before:duration-600 hover:-translate-y-0.5 hover:scale-[1.02] hover:shadow-xl hover:before:left-[100%] sm:px-5 sm:py-3 sm:text-sm"
+                className="group/btn relative flex flex-1 items-center justify-center gap-4 overflow-hidden rounded-2xl bg-gradient-to-br from-secondary via-teal-500 via-cyan-500 to-secondary px-8 py-5 text-lg font-bold text-white shadow-2xl shadow-secondary/60 transition-all duration-300 hover:scale-[1.02] hover:shadow-[0_0_50px_rgba(20,184,166,0.8)]"
               >
-                <div className="relative z-10 h-5 w-5">
-                  <div className="absolute left-0 top-0 h-4 w-1 rounded-full bg-current"></div>
-                  <div className="absolute right-0 top-1 h-3 w-1 rounded-full bg-current"></div>
-                </div>
-                <span>LBP</span>
+                <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent opacity-50"></div>
+                <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-white/10 blur-2xl opacity-60 transition-opacity duration-300 group-hover/btn:opacity-80"></div>
+                <span className="relative z-10 flex items-center gap-2">
+                  <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                  </svg>
+                  LBP
+                </span>
+                <svg className="relative z-10 h-6 w-6 transition-transform duration-300 group-hover/btn:translate-x-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                </svg>
               </Link>
             )}
             {presale.vesting && presale.vesting !== "0x0000000000000000000000000000000000000000" && presale.lbpFinalized && (
               <Link
                 to={`/vesting/${presale.vesting}${presale.lbp && presale.lbp !== "0x0000000000000000000000000000000000000000" ? `?lbp=${presale.lbp}` : ""}`}
-                className="group/btn relative flex flex-1 items-center justify-center gap-3 overflow-hidden rounded-2xl border border-[rgba(249,115,22,0.3)] bg-[rgba(249,115,22,0.08)] px-6 py-3.5 text-base font-bold text-[rgba(254,215,170,0.9)] shadow-lg backdrop-blur-sm transition-all duration-300 before:absolute before:left-[-100%] before:top-0 before:h-full before:w-full before:bg-gradient-to-r before:from-transparent before:via-[rgba(255,255,255,0.2)] before:to-transparent before:transition-[left] before:duration-600 hover:-translate-y-0.5 hover:scale-[1.02] hover:border-[rgba(249,115,22,0.5)] hover:bg-[rgba(249,115,22,0.15)] hover:shadow-xl hover:before:left-[100%] sm:px-5 sm:py-3 sm:text-sm"
+                className="group/btn relative flex flex-1 items-center justify-center gap-3 overflow-hidden rounded-xl border-2 border-secondary/60 bg-gradient-to-r from-secondary/25 via-secondary/20 to-secondary/25 px-7 py-4.5 text-base font-bold text-secondary shadow-2xl shadow-secondary/30 transition-all duration-300 hover:scale-[1.04] hover:border-secondary/80 hover:from-secondary/30 hover:via-secondary/25 hover:to-secondary/30 hover:shadow-[0_0_40px_rgba(20,184,166,0.5)]"
               >
-                <div className="relative z-10 h-5 w-5">
-                  <div className="absolute left-1/2 top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border border-current"></div>
-                  <div className="absolute left-1/2 top-1/2 h-1.5 w-0.5 -translate-x-1/2 -translate-y-1/2 rotate-0 bg-current"></div>
-                  <div className="absolute left-1/2 top-1/2 h-1 w-0.5 -translate-x-1/2 -translate-y-1/2 rotate-90 bg-current"></div>
-                </div>
-                <span>Vesting</span>
+                <span className="relative z-10">Vesting</span>
+                <svg className="relative z-10 h-5 w-5 transition-transform duration-300 group-hover/btn:translate-x-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                </svg>
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-0 transition-opacity duration-500 group-hover/btn:opacity-100"></div>
               </Link>
             )}
           </div>
         </div>
       </div>
+    </div>
     </div>
   );
 };
