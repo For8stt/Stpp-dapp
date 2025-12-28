@@ -1,14 +1,68 @@
 import React, { useState, useMemo } from "react";
 
-const Section = ({ title, description, children }) => (
-  <div className="relative mb-6 overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-[#334155] to-[#1e293b] p-6 shadow-lg transition-all duration-300 hover:border-[rgba(255,255,255,0.25)] hover:shadow-xl">
-    <div className="mb-6">
-      <p className="mb-2 text-xl font-bold text-text">{title}</p>
-      {description && <p className="max-w-[600px] text-sm leading-relaxed text-text-muted">{description}</p>}
+const Section = ({ title, description, children }) => {
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  
+  return (
+    <div className="group relative mb-10 overflow-hidden rounded-2xl border-2 border-primary/50 bg-gradient-to-br from-surface via-surface to-surface p-8 backdrop-blur-sm shadow-2xl shadow-primary/20 transition-all duration-500 hover:border-primary/80 hover:shadow-[0_0_40px_rgba(99,102,241,0.3)] sm:p-10">
+      
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/15 via-transparent to-secondary/12 opacity-70 transition-opacity duration-500 group-hover:opacity-100"></div>
+      
+      
+      <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary via-indigo-500 to-secondary opacity-60 transition-opacity duration-500 group-hover:opacity-100"></div>
+      
+      
+      <div className="absolute top-0 left-0 h-16 w-16 border-t-2 border-l-2 border-primary/60 rounded-tl-2xl"></div>
+      <div className="absolute top-0 right-0 h-16 w-16 border-t-2 border-r-2 border-secondary/60 rounded-tr-2xl"></div>
+      <div className="absolute bottom-0 left-0 h-16 w-16 border-b-2 border-l-2 border-primary/60 rounded-bl-2xl"></div>
+      <div className="absolute bottom-0 right-0 h-16 w-16 border-b-2 border-r-2 border-secondary/60 rounded-br-2xl"></div>
+      
+      
+      <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-primary/20 blur-3xl opacity-60 transition-opacity duration-500 group-hover:opacity-80"></div>
+      <div className="absolute -bottom-8 -left-8 h-32 w-32 rounded-full bg-secondary/15 blur-3xl opacity-50 transition-opacity duration-500 group-hover:opacity-70"></div>
+      
+      <div className="relative z-10">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 flex-1">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary/30 to-primary/15 text-primary shadow-lg">
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            <p className="bg-gradient-to-r from-text via-primary to-text bg-clip-text text-2xl font-bold text-transparent">{title}</p>
+          </div>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setIsCollapsed(!isCollapsed);
+            }}
+            className="flex h-10 w-10 items-center justify-center rounded-xl border-2 border-primary/50 bg-gradient-to-br from-primary/20 to-primary/10 text-primary shadow-md transition-all duration-300 hover:border-primary/70 hover:bg-gradient-to-br hover:from-primary/30 hover:to-primary/20 hover:scale-105 hover:shadow-lg"
+            aria-label={isCollapsed ? "Expand section" : "Collapse section"}
+          >
+            <svg 
+              className={`h-5 w-5 transition-transform duration-300 ${isCollapsed ? 'rotate-180' : ''}`}
+              fill="none" 
+              stroke="currentColor" 
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+        </div>
+        {description && !isCollapsed && (
+          <p className="ml-13 mb-8 max-w-[600px] text-base leading-relaxed text-text-muted transition-opacity duration-300">{description}</p>
+        )}
+        <div className={`relative z-10 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 transition-all duration-500 ease-in-out ${
+          isCollapsed ? 'max-h-0 opacity-0 overflow-hidden' : 'max-h-[10000px] opacity-100'
+        }`}>
+          {children}
+        </div>
+      </div>
     </div>
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">{children}</div>
-  </div>
-);
+  );
+};
 
 const Tooltip = ({ children, text }) => {
   const [show, setShow] = useState(false);
@@ -39,8 +93,10 @@ const Tooltip = ({ children, text }) => {
         </svg>
       </div>
       {show && (
-        <div className="absolute z-50 w-64 p-3 text-xs leading-relaxed text-text bg-gradient-to-br from-[#1e293b] to-[#334155] border border-border rounded-lg shadow-xl mt-2 left-0 top-full pointer-events-none">
-          {text}
+        <div className="absolute z-50 w-72 rounded-xl border-2 border-primary/60 bg-gradient-to-br from-surface via-surface to-surface p-4 text-sm leading-relaxed text-text shadow-2xl shadow-primary/30 backdrop-blur-xl mt-2 left-0 top-full pointer-events-none">
+          <div className="absolute -top-1 left-4 h-2 w-2 rotate-45 border-l-2 border-t-2 border-primary/60 bg-surface"></div>
+          <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-primary/10 via-transparent to-transparent"></div>
+          <div className="relative z-10">{text}</div>
         </div>
       )}
     </div>
@@ -58,75 +114,93 @@ const Input = ({ label, name, value, onChange, type = "text", placeholder, helpe
   }, [showOwnershipIndicator, userAccount, value]);
 
   return (
-  <label className="flex flex-col gap-2">
+  <label className="group/input relative flex flex-col gap-3">
       <div className="flex items-center gap-2">
-    <Tooltip text={tooltip}>
-      <span className="mb-1 text-sm font-semibold text-text">{label}</span>
-    </Tooltip>
+        <Tooltip text={tooltip}>
+          <span className="text-sm font-bold text-text">{label}</span>
+        </Tooltip>
         {showOwnershipIndicator && userAccount && value && (
           <span
-            className={`px-2 py-0.5 rounded text-xs font-semibold ${
+            className={`inline-flex items-center gap-1 rounded-full border-2 px-2.5 py-1 text-xs font-bold ${
               isOwned
-                ? "bg-green-500/20 text-green-400 border border-green-500/50"
-                : "bg-orange-500/20 text-orange-400 border border-orange-500/50"
+                ? "border-secondary/60 bg-secondary/20 text-secondary shadow-md shadow-secondary/20"
+                : "border-orange-500/60 bg-orange-500/20 text-orange-400 shadow-md shadow-orange-500/20"
             }`}
             title={isOwned ? "This is your address" : "This is an external address"}
           >
-            {isOwned ? "Your Address" : "External"}
+            {isOwned ? (
+              <>
+                <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Your Address
+              </>
+            ) : (
+              "External"
+            )}
           </span>
         )}
       </div>
-    {helper && <span className="text-xs italic text-text-muted">{helper}</span>}
-    <input
-      type={type}
-      name={name}
-      value={value}
-      onChange={(event) => onChange(name, event.target.value)}
-      placeholder={placeholder}
-      disabled={disabled}
-      className={`rounded-xl border border-border bg-gradient-to-br from-[#1e293b] to-[#334155] px-4 py-3.5 text-sm text-text shadow-sm outline-none transition-all duration-300 focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-offset-0 ${
-        disabled ? "opacity-50 cursor-not-allowed" : ""
-      }`}
-    />
+      {helper && <span className="text-xs font-medium text-text-muted">{helper}</span>}
+      <div className="relative">
+        <input
+          type={type}
+          name={name}
+          value={value}
+          onChange={(event) => onChange(name, event.target.value)}
+          placeholder={placeholder}
+          disabled={disabled}
+          className={`w-full rounded-xl border-2 border-border/50 bg-gradient-to-br from-surface/90 to-surface/80 px-5 py-4 text-base font-semibold text-text shadow-lg outline-none transition-all duration-300 focus:border-primary/80 focus:ring-2 focus:ring-primary/40 focus:ring-offset-0 focus:from-surface focus:to-surface ${
+            disabled ? "opacity-50 cursor-not-allowed" : "hover:border-primary/60 hover:shadow-xl"
+          }`}
+        />
+        <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover/input:opacity-100 pointer-events-none"></div>
+      </div>
   </label>
 );
 };
 
 const TextArea = ({ label, name, value, onChange, placeholder, helper, tooltip }) => (
-  <label className="col-span-full flex flex-col gap-2">
+  <label className="group/textarea col-span-full relative flex flex-col gap-3">
     <Tooltip text={tooltip}>
-      <span className="mb-1 text-sm font-semibold text-text">{label}</span>
+      <span className="text-sm font-bold text-text">{label}</span>
     </Tooltip>
-    {helper && <span className="text-xs italic text-text-muted">{helper}</span>}
-    <textarea
-      name={name}
-      value={value}
-      onChange={(event) => onChange(name, event.target.value)}
-      placeholder={placeholder}
-      className="min-h-[120px] resize-y rounded-xl border border-border bg-gradient-to-br from-[#1e293b] to-[#334155] px-4 py-3.5 text-sm text-text shadow-sm outline-none transition-all duration-300 focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-offset-0"
-    />
+    {helper && <span className="text-xs font-medium text-text-muted">{helper}</span>}
+    <div className="relative">
+      <textarea
+        name={name}
+        value={value}
+        onChange={(event) => onChange(name, event.target.value)}
+        placeholder={placeholder}
+        className="min-h-[120px] w-full resize-y rounded-xl border-2 border-border/50 bg-gradient-to-br from-surface/90 to-surface/80 px-5 py-4 text-base font-semibold text-text shadow-lg outline-none transition-all duration-300 focus:border-primary/80 focus:ring-2 focus:ring-primary/40 focus:ring-offset-0 hover:border-primary/60 hover:shadow-xl focus:from-surface focus:to-surface"
+      />
+      <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover/textarea:opacity-100 pointer-events-none"></div>
+    </div>
   </label>
 );
 
 const Select = ({ label, name, value, onChange, options, helper, tooltip }) => (
-  <label className="flex flex-col gap-2">
+  <label className="group/select relative flex flex-col gap-3">
     <Tooltip text={tooltip}>
-      <span className="mb-1 text-sm font-semibold text-text">{label}</span>
+      <span className="text-sm font-bold text-text">{label}</span>
     </Tooltip>
-    {helper && <span className="text-xs italic text-text-muted">{helper}</span>}
-    <select
-      name={name}
-      value={value || ""}
-      onChange={(event) => onChange(name, event.target.value)}
-      className="rounded-xl border border-border bg-gradient-to-br from-[#1e293b] to-[#334155] px-4 py-3.5 text-sm text-text shadow-sm outline-none transition-all duration-300 focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-offset-0 cursor-pointer"
-    >
-      <option value="">Select {label.toLowerCase()}</option>
-      {options.map((option) => (
-        <option key={option.value} value={option.value}>
-          {option.label}
-        </option>
-      ))}
-    </select>
+    {helper && <span className="text-xs font-medium text-text-muted">{helper}</span>}
+    <div className="relative">
+      <select
+        name={name}
+        value={value || ""}
+        onChange={(event) => onChange(name, event.target.value)}
+        className="w-full appearance-none rounded-xl border-2 border-border/50 bg-gradient-to-br from-surface/90 to-surface/80 px-5 py-4 text-base font-semibold text-text shadow-lg outline-none transition-all duration-300 focus:border-primary/80 focus:ring-2 focus:ring-primary/40 focus:ring-offset-0 hover:border-primary/60 hover:shadow-xl focus:from-surface focus:to-surface cursor-pointer"
+      >
+        <option value="">Select {label.toLowerCase()}</option>
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+      <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover/select:opacity-100 pointer-events-none"></div>
+    </div>
   </label>
 );
 
@@ -426,15 +500,50 @@ const CreatePresaleForm = ({ values, onChange, onSubmit, submitting, disabled, u
       />
     </Section>
 
-    <div className="relative flex flex-col items-center justify-between gap-6 overflow-hidden rounded-2xl border border-[rgba(34,197,94,0.2)] bg-gradient-to-br from-[rgba(34,197,94,0.05)] to-[rgba(22,163,74,0.03)] p-6 shadow-lg backdrop-blur-sm before:absolute before:left-0 before:right-0 before:top-0 before:h-0.5 before:rounded-t-2xl before:bg-gradient-to-r before:from-[#22c55e] before:to-[rgba(34,197,94,0.6)] md:flex-row md:text-left">
-      <p className="m-0 text-center text-sm leading-relaxed text-text-muted md:text-left">All values are validated before sending the transaction. Gas estimation may take a few seconds.</p>
+    <div className="group/action relative flex flex-col items-center justify-between gap-6 overflow-hidden rounded-2xl border-2 border-secondary/60 bg-gradient-to-br from-secondary/25 via-secondary/20 to-secondary/15 p-8 shadow-xl backdrop-blur-sm transition-all duration-500 hover:border-secondary/80 hover:from-secondary/30 hover:via-secondary/25 hover:to-secondary/20 hover:shadow-2xl hover:shadow-secondary/30 md:flex-row md:text-left">
+      
+      <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-secondary via-teal-500 to-secondary opacity-80 transition-opacity duration-500 group-hover/action:opacity-100"></div>
+      
+      
+      <div className="absolute top-0 left-0 h-8 w-8 border-t-2 border-l-2 border-secondary/60 rounded-tl-2xl"></div>
+      <div className="absolute top-0 right-0 h-8 w-8 border-t-2 border-r-2 border-secondary/60 rounded-tr-2xl"></div>
+      
+      
+      <div className="absolute -right-6 -top-6 h-20 w-20 rounded-full bg-secondary/15 blur-2xl opacity-50 transition-opacity duration-500 group-hover/action:opacity-70"></div>
+      <div className="absolute -bottom-6 -left-6 h-20 w-20 rounded-full bg-secondary/12 blur-2xl opacity-40 transition-opacity duration-500 group-hover/action:opacity-60"></div>
+      
+      <p className="relative z-10 m-0 text-center text-base leading-relaxed text-text md:text-left">All values are validated before sending the transaction. Gas estimation may take a few seconds.</p>
       <button
         type="submit"
         disabled={submitting || disabled}
-        className="min-w-[160px] rounded-xl border border-[rgba(255,255,255,0.1)] bg-gradient-to-r from-[#22c55e] via-[#16a34a] to-[#15803d] px-8 py-3.5 text-base font-semibold text-white shadow-lg transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60 hover:-translate-y-0.5 hover:shadow-xl active:translate-y-0 active:shadow-lg disabled:hover:translate-y-0 disabled:hover:shadow-lg md:w-auto"
+        className="group/btn relative z-10 min-w-[180px] overflow-hidden rounded-xl bg-gradient-to-r from-secondary via-teal-500 to-secondary px-8 py-4 text-base font-bold text-white shadow-2xl shadow-secondary/40 transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60 hover:scale-105 hover:shadow-[0_0_40px_rgba(20,184,166,0.6)] disabled:hover:scale-100 disabled:hover:shadow-2xl md:w-auto"
         title={disabled ? "Insufficient token balance. Please ensure you have enough tokens before creating the auction." : ""}
       >
-        {submitting ? "Creating..." : disabled ? "Insufficient Balance" : "Create Presale"}
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent opacity-0 transition-opacity duration-500 group-hover/btn:opacity-100"></div>
+        <span className="relative z-10 flex items-center gap-2">
+          {submitting ? (
+            <>
+              <svg className="h-5 w-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Creating...
+            </>
+          ) : disabled ? (
+            <>
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              Insufficient Balance
+            </>
+          ) : (
+            <>
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+              Create Presale
+            </>
+          )}
+        </span>
       </button>
     </div>
   </form>
