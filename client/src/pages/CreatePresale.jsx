@@ -43,6 +43,7 @@ const getInitialValues = () => ({
   maxDecayMultiplier: "1",
   minCommitDuration: "600",
   merkleRoot: "",
+  whitelistCID: "",
   vestingStart: toDateInput(7200), // Will be calculated as startTime + 1 hour in buildAuctionInput
   vestingDuration: "10800", // 3 hours (3 * 60 * 60 = 10800 seconds)
   priceTicks: "1,0.9,0.8",
@@ -209,6 +210,14 @@ const CreatePresale = ({ account, onConnect }) => {
     try {
       if (!window?.ethereum) {
         throw new Error("Wallet not detected. Please install MetaMask.");
+      }
+
+      const hasCID = formValues.whitelistCID && formValues.whitelistCID.trim() !== "";
+      const hasMerkleRoot = formValues.merkleRoot && formValues.merkleRoot.trim() !== "" && 
+                            formValues.merkleRoot.trim() !== "0x0000000000000000000000000000000000000000000000000000000000000000";
+      
+      if (hasCID && !hasMerkleRoot) {
+        throw new Error("Whitelist IPFS CID requires Merkle root. Please provide Merkle root or remove CID.");
       }
 
       setSubmitting(true);
@@ -389,6 +398,29 @@ const CreatePresale = ({ account, onConnect }) => {
       console.log("✓ Presale created atomically with token transfer!");
       console.log("================================");
       showTxSuccess(`Presale created successfully! ${ethers.formatEther(fundingAmount)} tokens transferred atomically.`, { autoClose: 3000 });
+
+      if (formValues.whitelistCID && formValues.whitelistCID.trim() !== "") {
+        try {
+          console.log("Setting whitelistCID:", formValues.whitelistCID);
+          const allAbis = await import("../abi/allAbis.json");
+          const auctionAbi = allAbis.default?.DutchAuction || allAbis.DutchAuction || [];
+          
+          if (auctionAbi.length === 0) {
+            throw new Error("DutchAuction ABI not found");
+          }
+          
+          const auctionWithSigner = new ethers.Contract(auctionAddress, auctionAbi, signer);
+          
+          showTxInfo("Setting whitelist CID...", { autoClose: false });
+          const setCidTx = await auctionWithSigner.setWhitelistCID(formValues.whitelistCID.trim());
+          await setCidTx.wait();
+          console.log("✓ Whitelist CID set successfully!");
+          showTxSuccess("Whitelist CID set successfully!", { autoClose: 3000 });
+        } catch (cidError) {
+          console.warn("Failed to set whitelistCID (you can set it later):", cidError);
+          showTxInfo("Presale created, but whitelist CID setting failed. You can set it later via setWhitelistCID().", { autoClose: 5000 });
+        }
+      }
 
       persistPresale({
         manager: managerAddress,

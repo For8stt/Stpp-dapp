@@ -117,6 +117,7 @@ export const useAuctionData = (auctionContract, managerContract = null, auctionA
         earlyBonusWindow,
         bonusMerkleRoot,
         bonusAllocationsCID,
+        whitelistCID,
       ] = await Promise.all([
         safeContractCall(() => auctionContract.startTime(), 0n),
         safeContractCall(() => auctionContract.commitEndTime(), 0n),
@@ -161,6 +162,19 @@ export const useAuctionData = (auctionContract, managerContract = null, auctionA
         safeContractCall(() => auctionContract.earlyBonusWindow(), 0n),
         safeContractCall(() => auctionContract.bonusMerkleRoot(), ethers.ZeroHash),
         safeContractCall(() => auctionContract.bonusAllocationsCID(), ""),
+        safeContractCall(
+          async () => {
+            try {
+              if (typeof auctionContract.whitelistCID === 'function') {
+                return await auctionContract.whitelistCID();
+              }
+              return "";
+            } catch {
+              return "";
+            }
+          },
+          ""
+        ),
       ]);
 
       const tickLength = Number(priceTicksLength);
@@ -234,6 +248,7 @@ export const useAuctionData = (auctionContract, managerContract = null, auctionA
         earlyBonusWindow: Number(earlyBonusWindow),
         bonusMerkleRoot: bonusMerkleRoot || ethers.ZeroHash,
         bonusAllocationsCID: bonusAllocationsCID || "",
+        whitelistCID: whitelistCID || "",
         auctionAddress: auctionAddress || null,
       });
     } catch (err) {

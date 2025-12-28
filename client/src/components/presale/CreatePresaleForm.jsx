@@ -47,7 +47,7 @@ const Tooltip = ({ children, text }) => {
   );
 };
 
-const Input = ({ label, name, value, onChange, type = "text", placeholder, helper, tooltip, showOwnershipIndicator, userAccount }) => {
+const Input = ({ label, name, value, onChange, type = "text", placeholder, helper, tooltip, showOwnershipIndicator, userAccount, disabled = false }) => {
   const isOwned = useMemo(() => {
     if (!showOwnershipIndicator || !userAccount || !value) return false;
     try {
@@ -83,7 +83,10 @@ const Input = ({ label, name, value, onChange, type = "text", placeholder, helpe
       value={value}
       onChange={(event) => onChange(name, event.target.value)}
       placeholder={placeholder}
-      className="rounded-xl border border-border bg-gradient-to-br from-[#1e293b] to-[#334155] px-4 py-3.5 text-sm text-text shadow-sm outline-none transition-all duration-300 focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-offset-0"
+      disabled={disabled}
+      className={`rounded-xl border border-border bg-gradient-to-br from-[#1e293b] to-[#334155] px-4 py-3.5 text-sm text-text shadow-sm outline-none transition-all duration-300 focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-offset-0 ${
+        disabled ? "opacity-50 cursor-not-allowed" : ""
+      }`}
     />
   </label>
 );
@@ -284,6 +287,17 @@ const CreatePresaleForm = ({ values, onChange, onSubmit, submitting, disabled, u
         onChange={onChange}
         placeholder="0x0000..."
         tooltip="Merkle tree root for whitelist. If specified, only addresses from the whitelist can participate in the auction. If left empty (0x0000...), the auction will be public."
+      />
+      <Input
+        label="Whitelist IPFS CID (optional)"
+        name="whitelistCID"
+        value={values.whitelistCID}
+        onChange={onChange}
+        placeholder="QmaLHnZdsTc1xumK67MTH5Jj6S5yVtytixA6S26ukBRT2R"
+        disabled={!values.merkleRoot || values.merkleRoot.trim() === "" || values.merkleRoot.trim() === "0x0000000000000000000000000000000000000000000000000000000000000000"}
+        tooltip={!values.merkleRoot || values.merkleRoot.trim() === "" || values.merkleRoot.trim() === "0x0000000000000000000000000000000000000000000000000000000000000000"
+          ? "IPFS CID requires Merkle root. Please provide Merkle root first."
+          : "IPFS CID of the whitelist JSON file. This allows users to automatically load their Merkle proof. Leave empty if you don't have the CID yet - you can set it later via setWhitelistCID()."}
       />
       <Input
         label="Vesting start"

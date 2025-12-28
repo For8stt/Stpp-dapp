@@ -85,6 +85,7 @@ contract DutchAuction is IAuction, Ownable, ReentrancyGuard, DutchAuctionEvents,
     address payable public lbpStableRecipient;
 
     bytes32 public merkleRoot;
+    string public whitelistCID; // IPFS CID of whitelist
 
     uint256[] public priceTicks;
     mapping(uint256 => uint256) public priceBucketTotals;
@@ -476,6 +477,30 @@ contract DutchAuction is IAuction, Ownable, ReentrancyGuard, DutchAuctionEvents,
         bonusMerkleRoot = root;
         bonusAllocationsCID = cid;
         emit BonusMerkleRootSet(root, cid);
+    }
+
+    /// @notice Sets the IPFS CID for whitelist JSON file (callable by owner, manager, or manager's owner).
+    /// @param cid The IPFS Content Identifier (CID) of the whitelist JSON file
+    function setWhitelistCID(string calldata cid) external {
+        // Allow owner, manager, or owner of manager to set CID
+        bool isAuctionOwner = msg.sender == owner();
+        bool isManager = msg.sender == presaleManager;
+        bool isManagerOwner = false;
+        
+        if (!isAuctionOwner && !isManager && presaleManager != address(0)) {
+            (bool success, bytes memory data) = presaleManager.staticcall(
+                abi.encodeWithSignature("owner()")
+            );
+            if (success && data.length >= 32) {
+                address managerOwner = abi.decode(data, (address));
+                isManagerOwner = (managerOwner == msg.sender);
+            }
+        }
+        
+        if (!isAuctionOwner && !isManager && !isManagerOwner) revert NotOwner();
+        
+        whitelistCID = cid;
+        emit WhitelistCIDSet(cid);
     }
 
     /// @dev Computes base allocation (without bonus) for a participant.

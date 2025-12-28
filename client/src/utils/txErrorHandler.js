@@ -45,8 +45,10 @@ export const handleTxError = (error, defaultMessage = "Transaction failed") => {
   }
 
   const errorString = JSON.stringify(error || {});
+  const errorMessage = error?.message || "";
+  
   const checkNestedError = (err, depth = 0) => {
-    if (depth > 5) return false; // Prevent infinite recursion
+    if (depth > 5) return false;
     if (!err) return false;
     
     const checks = [
@@ -85,8 +87,62 @@ export const handleTxError = (error, defaultMessage = "Transaction failed") => {
     return;
   }
 
+  // Check for Merkle proof related errors
+  const isInvalidProof = 
+    errorMessage.includes("InvalidProof") ||
+    errorMessage.includes("invalid proof") ||
+    errorMessage.includes("proof") ||
+    errorString.includes("InvalidProof") ||
+    errorString.includes("invalid proof");
+
+  if (isInvalidProof) {
+    toast.error("❌ Invalid Merkle proof. Your address may not be in the whitelist, or the proof is incorrect. Please verify your proof and try again.", {
+      position: "bottom-right",
+      autoClose: 10000,
+      hideProgressBar: false,
+      closeOnClick: true,
+      pauseOnHover: true,
+      draggable: true,
+    });
+    return;
+  }
+
+  // Check for other common auction errors
+  if (errorMessage.includes("AuctionNotActive") || errorMessage.includes("not active")) {
+    toast.error("⏰ Auction is not active. Please check the auction timing.", {
+      position: "bottom-right",
+      autoClose: 7000,
+      hideProgressBar: false,
+      closeOnClick: true,
+      pauseOnHover: true,
+      draggable: true,
+    });
+    return;
+  }
+
+  if (errorMessage.includes("CapExceeded") || errorMessage.includes("cap")) {
+    toast.error("You have exceeded your per-address cap. Please reduce the quantity.", {
+      position: "bottom-right",
+      autoClose: 7000,
+      hideProgressBar: false,
+      closeOnClick: true,
+      pauseOnHover: true,
+      draggable: true,
+    });
+    return;
+  }
+
   if (error?.code === "CALL_EXCEPTION" || error?.message?.includes("missing revert data")) {
-    toast.error(defaultMessage, {
+    let specificMessage = defaultMessage;
+    
+    if (errorMessage && errorMessage.length > 0 && !errorMessage.includes("missing revert data")) {
+      specificMessage = errorMessage;
+    } else if (error?.data) {
+      // Try to decode error data if available
+      specificMessage = "Transaction failed. Please check your inputs and try again.";
+    }
+    
+    toast.error(specificMessage, {
       position: "bottom-right",
       autoClose: 7000,
       hideProgressBar: false,

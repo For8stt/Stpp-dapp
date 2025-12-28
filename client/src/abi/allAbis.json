@@ -2947,6 +2947,19 @@
       "type": "event"
     },
     {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
+          "internalType": "string",
+          "name": "cid",
+          "type": "string"
+        }
+      ],
+      "name": "WhitelistCIDSet",
+      "type": "event"
+    },
+    {
       "inputs": [
         {
           "internalType": "address",
@@ -3985,6 +3998,19 @@
       "type": "function"
     },
     {
+      "inputs": [
+        {
+          "internalType": "string",
+          "name": "cid",
+          "type": "string"
+        }
+      ],
+      "name": "setWhitelistCID",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
       "inputs": [],
       "name": "softCap",
       "outputs": [
@@ -4257,6 +4283,19 @@
           "internalType": "uint256",
           "name": "",
           "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "whitelistCID",
+      "outputs": [
+        {
+          "internalType": "string",
+          "name": "",
+          "type": "string"
         }
       ],
       "stateMutability": "view",

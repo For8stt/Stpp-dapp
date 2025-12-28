@@ -44,7 +44,7 @@ export const useTransaction = () => {
         onError(error);
       }
 
-      throw error;
+      return null;
     }
   }, []);
 

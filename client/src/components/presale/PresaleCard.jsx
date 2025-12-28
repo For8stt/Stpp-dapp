@@ -10,6 +10,7 @@ const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const PresaleCard = ({ presale }) => {
   const { currentTime } = useTime();
   const [vestingCompleted, setVestingCompleted] = useState(false);
+  const [hasWhitelist, setHasWhitelist] = useState(false);
 
   const shortenAddress = (address) => {
     if (!address) return "—";
@@ -60,6 +61,39 @@ const PresaleCard = ({ presale }) => {
 
     checkVestingCompleted();
   }, [presale.lbp, presale.lbpFinalized, currentTime]);
+
+  useEffect(() => {
+    const checkWhitelist = async () => {
+      if (!presale.auction || presale.auction === ZERO_ADDRESS) {
+        setHasWhitelist(false);
+        return;
+      }
+
+      try {
+        if (typeof window === "undefined" || !window.ethereum) {
+          return;
+        }
+
+        const provider = new BrowserProvider(window.ethereum);
+        const dutchAuctionAbi = Array.isArray(allAbis.DutchAuction) 
+          ? allAbis.DutchAuction 
+          : (allAbis.DutchAuction?.abi || allAbis.DutchAuction);
+        
+        if (!dutchAuctionAbi || dutchAuctionAbi.length === 0) {
+          return;
+        }
+
+        const auctionContract = new Contract(presale.auction, dutchAuctionAbi, provider);
+        const merkleRoot = await auctionContract.merkleRoot().catch(() => ethers.ZeroHash);
+        setHasWhitelist(merkleRoot && merkleRoot !== ethers.ZeroHash && merkleRoot !== "0x0000000000000000000000000000000000000000000000000000000000000000");
+      } catch (error) {
+        console.warn("Failed to check whitelist:", error);
+        setHasWhitelist(false);
+      }
+    };
+
+    checkWhitelist();
+  }, [presale.auction]);
 
   const statusConfig = {
     completed: {
@@ -171,9 +205,16 @@ const PresaleCard = ({ presale }) => {
                   <div className="absolute left-1/2 top-1 h-2 w-1 -translate-x-1/2 bg-current"></div>
                 </div>
               </div>
-              <h4 className={`text-sm font-semibold uppercase tracking-wider ${
-                !presale.auction ? 'text-[rgba(100,116,139,0.8)]' : 'text-[rgba(147,51,234,0.9)]'
-              }`}>Auction</h4>
+              <div className="flex items-center gap-2">
+                <h4 className={`text-sm font-semibold uppercase tracking-wider ${
+                  !presale.auction ? 'text-[rgba(100,116,139,0.8)]' : 'text-[rgba(147,51,234,0.9)]'
+                }`}>Auction</h4>
+                {hasWhitelist && (
+                  <span className="inline-flex items-center rounded-full border border-[rgba(34,197,94,0.3)] bg-[rgba(34,197,94,0.15)] px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider text-[#86efac] backdrop-blur-sm">
+                    Whitelist
+                  </span>
+                )}
+              </div>
             </div>
             <p className={`font-mono text-sm leading-snug ${
               !presale.auction ? 'text-[rgba(100,116,139,0.6)]' : 'text-[rgba(248,250,252,0.9)]'

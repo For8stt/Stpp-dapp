@@ -34,7 +34,7 @@ import { useTime } from "../time";
 import { getPhase, getTimeUntil, formatTokenUnits } from "../utils/auctionUtils";
 import { ensureSigner } from "../services/web3/signer";
 import { ensureProvider, setTargetChainIdHex } from "../services/web3/provider";
-import { generateCommitHash, parseMerkleProof, calculateDeposit } from "../utils/commitUtils";
+import { generateCommitHash, parseMerkleProof, calculateDeposit, validateMerkleProof } from "../utils/commitUtils";
 import { REFRESH_INTERVAL_MS, PHASES, DEFAULT_LBP_CONFIG } from "../constants/auction";
 import { deepEqual } from "../utils/objectUtils";
 import { handleTxError } from "../utils/txErrorHandler";
@@ -279,10 +279,66 @@ const AuctionView = () => {
 
     const merkleProof = parseMerkleProof(commitForm.merkleProof);
 
+    const isWhitelistEnabled = auctionData.merkleRoot && 
+      auctionData.merkleRoot !== ethers.ZeroHash && 
+      auctionData.merkleRoot !== "0x0000000000000000000000000000000000000000000000000000000000000000";
+
+    if (isWhitelistEnabled) {
+      if (merkleProof.length === 0) {
+        throw new Error("Merkle proof is required for this whitelisted auction. Please upload the whitelist JSON file or enter your proof manually.");
+      }
+
+      const validation = validateMerkleProof(merkleProof);
+      if (!validation.valid) {
+        throw new Error(`Invalid Merkle proof format: ${validation.error}. Please check your proof and try again.`);
+      }
+    }
+
     await tx.execute(
       async () => {
         const signer = await ensureSigner();
         const auctionWithSigner = auctionContract.connect(signer);
+        try {
+          await auctionWithSigner.commit.estimateGas(commitHash, merkleProof, { value: depositValue });
+        } catch (estimateError) {
+          const errorMessage = estimateError?.message || estimateError?.reason || String(estimateError);
+          const errorString = JSON.stringify(estimateError || {});
+          const errorCode = estimateError?.code;
+          if (
+            errorMessage.includes("InvalidProof") || 
+            errorMessage.includes("invalid proof") || 
+            errorMessage.includes("proof") ||
+            errorString.includes("InvalidProof") ||
+            errorString.includes("invalid proof")
+          ) {
+            const userError = new Error("Invalid Merkle proof. Your address may not be in the whitelist, or the proof is incorrect. Please verify your proof and try again.");
+            userError.name = "InvalidProofError";
+            throw userError;
+          }
+          
+          if (errorMessage.includes("AuctionNotActive") || errorMessage.includes("not active")) {
+            const userError = new Error("Auction is not active. Please check the auction timing.");
+            userError.name = "AuctionNotActiveError";
+            throw userError;
+          }
+          
+          if (errorMessage.includes("CapExceeded") || errorMessage.includes("cap")) {
+            const userError = new Error("You have exceeded your per-address cap. Please reduce the quantity.");
+            userError.name = "CapExceededError";
+            throw userError;
+          }
+          if (errorCode === "CALL_EXCEPTION" || errorMessage.includes("CALL_EXCEPTION") || errorMessage.includes("missing revert data")) {
+            if (isWhitelistEnabled) {
+              const userError = new Error("Invalid Merkle proof. Your address may not be in the whitelist, or the proof is incorrect. Please verify your proof and try again.");
+              userError.name = "InvalidProofError";
+              throw userError;
+            }
+            const userError = new Error("Transaction would fail. Please check your inputs and try again.");
+            userError.name = "TransactionError";
+            throw userError;
+          }
+          console.warn("Gas estimation failed, but proceeding with transaction:", estimateError);
+        }
         return await auctionWithSigner.commit(commitHash, merkleProof, { value: depositValue });
       },
       {
@@ -549,14 +605,9 @@ const AuctionView = () => {
       if (!bonusClaimed && auctionData?.bonusMerkleRoot && 
           auctionData.bonusMerkleRoot !== ethers.ZeroHash && 
           auctionAddress) {
-        // Use IPFS only (no local file fallback)
         const merkleRoot = auctionData.bonusMerkleRoot;
         let bonusAllocation = null;
-        
-        // Get CID from on-chain data
         const ipfsCID = auctionData?.bonusAllocationsCID || null;
-        
-        // Load from IPFS if CID is available
         if (ipfsCID) {
           console.log('📥 [Claim] Loading bonus allocation from IPFS...', { cid: ipfsCID });
           try {
@@ -573,7 +624,6 @@ const AuctionView = () => {
             }
           } catch (ipfsError) {
             console.error('❌ [Claim] Error loading from IPFS:', ipfsError);
-            // Don't fallback to local file - IPFS is the only source
             console.warn('⚠️ [Claim] Cannot load bonus allocation from IPFS. Please ensure CID is set correctly.');
           }
         } else {
@@ -592,7 +642,6 @@ const AuctionView = () => {
             source: 'IPFS'
           });
         } else {
-          // No bonus allocation available - user can still claim base allocation
           console.log('ℹ️ [Claim] No bonus allocation available. User can still claim base allocation.');
           bonusQty = 0n;
           merkleProof = [];
@@ -655,7 +704,6 @@ const AuctionView = () => {
             auctionData.bonusMerkleRoot !== "0x0000000000000000000000000000000000000000000000000000000000000000" &&
             auctionData.bonusMerkleRoot !== ethers.ZeroHash;
 
-          // Check current allocation to see if bonus was already included
           let currentAllocationBonusQty = 0n;
           try {
             const currentAllocation = await auctionContract.accountAllocations(account);
@@ -680,8 +728,6 @@ const AuctionView = () => {
             willClaimBonus: bonusQty > 0n && merkleProof.length >= 0 && !bonusClaimed && bonusMerkleRootSet,
             bonusAlreadyIncluded: currentAllocationBonusQty > 0n && currentAllocationBonusQty === bonusQty
           });
-          
-          // If bonus is already included in allocation, we don't need to claim it again
           if (bonusQty > 0n && !bonusClaimed && bonusMerkleRootSet && currentAllocationBonusQty === 0n) {
             console.log('✅ [Claim] Calling claim WITH bonus:', {
               bonusQty: bonusQty.toString(),
@@ -691,7 +737,6 @@ const AuctionView = () => {
             });
             return await auctionWithSigner.claim(bonusQty, merkleProof);
           } else if (bonusClaimed && currentAllocationBonusQty === 0n) {
-            // Bonus was marked as claimed but not included in allocation - this is an error state
             console.error('❌ [Claim] ERROR: Bonus marked as claimed but not included in allocation!', {
               bonusClaimed,
               currentAllocationBonusQty: currentAllocationBonusQty.toString(),
