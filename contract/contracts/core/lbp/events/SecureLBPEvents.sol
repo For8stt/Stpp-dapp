@@ -17,4 +17,16 @@ abstract contract SecureLBPEvents {
     event PoolRebalancedTo5050(uint256 ethAdded, uint256 tokensAdded);
     event TokensWithdrawn(address to, uint256 amount);
     event PostPauseDecayStarted(uint256 lastUnpauseTime, uint256 initialFeeBP);
+    event LiquidityMigratedToUniswapV3(
+        uint256 ethAmount,
+        uint256 tokenAmount,
+        uint24 feeTier,
+        uint256 positionTokenId
+    );
+    event UniswapV3ConfigSet(
+        address factory,
+        address positionManager,
+        address weth,
+        uint24 defaultFeeTier
+    );
 }

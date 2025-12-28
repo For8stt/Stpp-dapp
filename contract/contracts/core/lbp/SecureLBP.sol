@@ -38,6 +38,79 @@ interface ILBPOracle {
 // Interface for PresaleManager callback (moved from here to avoid duplicate; import from DutchAuction if needed)
 import "../../interfaces/IPresaleManager.sol";
 
+interface IUniswapV3Factory {
+    function createPool(
+        address tokenA,
+        address tokenB,
+        uint24 fee
+    ) external returns (address pool);
+    
+    function getPool(
+        address tokenA,
+        address tokenB,
+        uint24 fee
+    ) external view returns (address pool);
+}
+
+interface INonfungiblePositionManager {
+    struct MintParams {
+        address token0;
+        address token1;
+        uint24 fee;
+        int24 tickLower;
+        int24 tickUpper;
+        uint256 amount0Desired;
+        uint256 amount1Desired;
+        uint256 amount0Min;
+        uint256 amount1Min;
+        address recipient;
+        uint256 deadline;
+    }
+    
+    function createAndInitializePoolIfNecessary(
+        address token0,
+        address token1,
+        uint24 fee,
+        uint160 sqrtPriceX96
+    ) external payable returns (address pool);
+    
+    function mint(MintParams calldata params)
+        external
+        payable
+        returns (
+            uint256 tokenId,
+            uint128 liquidity,
+            uint256 amount0,
+            uint256 amount1
+        );
+    
+    function positions(uint256 tokenId)
+        external
+        view
+        returns (
+            uint96 nonce,
+            address operator,
+            address token0,
+            address token1,
+            uint24 fee,
+            int24 tickLower,
+            int24 tickUpper,
+            uint128 liquidity,
+            uint256 feeGrowthInside0LastX128,
+            uint256 feeGrowthInside1LastX128,
+            uint128 tokensOwed0,
+            uint128 tokensOwed1
+        );
+}
+
+interface IWETH9 {
+    function deposit() external payable;
+    function withdraw(uint256) external;
+    function approve(address spender, uint256 amount) external returns (bool);
+    function transfer(address to, uint256 amount) external returns (bool);
+    function balanceOf(address account) external view returns (uint256);
+}
+
 contract SecureLBP is ReentrancyGuard, Pausable, Ownable, SecureLBPEvents, SecureLBPErrors {
     using SafeERC20 for IERC20;
 
@@ -61,6 +134,12 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable, SecureLBPEvents, Secur
     uint256 public immutable startTime;      // start of trading window
     uint256 public immutable endTime;        // end of the LBP trading window
     address public treasury;                 // destination for collected funds after finalize (pull)
+    
+    // Uniswap V3 configuration (optional, can be set post-deployment)
+    IUniswapV3Factory public uniswapFactory;
+    INonfungiblePositionManager public uniswapPositionManager;
+    IWETH9 public weth;
+    uint24 public defaultFeeTier;            // e.g., 3000 for 0.3%
 
     // Pool params (for dynamic creation)
     uint256 public immutable poolStartWeightToken;
@@ -126,6 +205,9 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable, SecureLBPEvents, Secur
 
     mapping(address => uint256) public totalContributed;     // total ETH provided by user (for caps)
     mapping(address => uint256) public allocations;          // tokens user purchased (in token units)
+
+    uint256 public uniswapPositionTokenId;                   // NFT token ID of Uniswap V3 position
+    bool public uniswapLiquidityCreated;                     // Flag to prevent double migration
 
     constructor(
         address _token,
@@ -722,6 +804,27 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable, SecureLBPEvents, Secur
         emit TreasurySet(_treasury);
     }
 
+    /// @notice Configures Uniswap V3 addresses for liquidity migration (can be set post-deployment)
+    /// @param _factory Uniswap V3 Factory address
+    /// @param _positionManager Uniswap V3 NonfungiblePositionManager address
+    /// @param _weth WETH9 address
+    /// @param _defaultFeeTier Default fee tier (e.g., 3000 for 0.3%)
+    function setUniswapV3Config(
+        address _factory,
+        address _positionManager,
+        address _weth,
+        uint24 _defaultFeeTier
+    ) external onlyOwner {
+        if (_factory == address(0) || _positionManager == address(0) || _weth == address(0)) {
+            revert InvalidUniswapParams();
+        }
+        uniswapFactory = IUniswapV3Factory(_factory);
+        uniswapPositionManager = INonfungiblePositionManager(_positionManager);
+        weth = IWETH9(_weth);
+        defaultFeeTier = _defaultFeeTier;
+        emit UniswapV3ConfigSet(_factory, _positionManager, _weth, _defaultFeeTier);
+    }
+
     // ============ ADMIN / CONFIG ============
     function setMaxContributionPerAddress(uint256 _cap) external onlyOwner {
         maxContributionPerAddress = _cap;
@@ -780,6 +883,132 @@ contract SecureLBP is ReentrancyGuard, Pausable, Ownable, SecureLBPEvents, Secur
 
     function getUserAllocation(address user) external view returns (uint256) {
         return allocations[user];
+    }
+
+    /// @notice Returns Uniswap V3 position information
+    /// @return positionTokenId The NFT token ID of the Uniswap V3 position
+    /// @return liquidityCreated Whether liquidity migration has been completed
+    function getUniswapV3Position() external view returns (uint256 positionTokenId, bool liquidityCreated) {
+        return (uniswapPositionTokenId, uniswapLiquidityCreated);
+    }
+
+    // ============ UNISWAP V3 MIGRATION ============
+    /// @notice Migrates liquidity from SecureLBP to Uniswap V3 after LBP finalization
+    /// @dev This function creates a Uniswap V3 pool (if needed) and mints an LP position NFT
+    /// @param ethAmount Amount of ETH to use for Uniswap V3 liquidity (will be wrapped to WETH)
+    /// @param tokenAmount Amount of tokens to use for Uniswap V3 liquidity
+    /// @param feeTier Uniswap V3 fee tier (e.g., 3000 for 0.3%, 500 for 0.05%, 10000 for 1%)
+    /// @param sqrtPriceX96 Initial sqrt price for the pool (Q64.96 format)
+    /// @param tickLower Lower tick boundary for the position
+    /// @param tickUpper Upper tick boundary for the position
+    /// @param lpRecipient Address to receive the Uniswap V3 LP NFT (typically treasury or multisig)
+    function migrateLiquidityToUniswapV3(
+        uint256 ethAmount,
+        uint256 tokenAmount,
+        uint24 feeTier,
+        uint160 sqrtPriceX96,
+        int24 tickLower,
+        int24 tickUpper,
+        address lpRecipient
+    ) external onlyOwner nonReentrant {
+        if (!finalized) revert NotFinalized();
+        if (block.timestamp <= endTime) revert AuctionActive();
+        if (uniswapLiquidityCreated) revert UniswapLiquidityAlreadyCreated();
+
+        if (address(uniswapFactory) == address(0) || 
+            address(uniswapPositionManager) == address(0) || 
+            address(weth) == address(0)) {
+            revert UniswapV3NotConfigured();
+        }
+
+        if (lpRecipient == address(0)) revert ZeroTreasury();
+
+        if (ethAmount == 0 || tokenAmount == 0) revert ZeroAmounts();
+        if (ethAmount > address(this).balance) revert InsufficientEthForMigration();
+
+        uint256 currentTokenBalance = token.balanceOf(address(this));
+
+        if (tokenAmount > currentTokenBalance) revert InsufficientTokensForMigration();
+
+        if (tickLower >= tickUpper) revert InvalidUniswapParams();
+        
+        //Wrap ETH to WETH
+        weth.deposit{value: ethAmount}();
+
+        address token0;
+        address token1;
+        uint256 amount0Desired;
+        uint256 amount1Desired;
+        
+        if (address(token) < address(weth)) {
+            token0 = address(token);
+            token1 = address(weth);
+            amount0Desired = tokenAmount;
+            amount1Desired = ethAmount;
+        } else {
+            token0 = address(weth);
+            token1 = address(token);
+            amount0Desired = ethAmount;
+            amount1Desired = tokenAmount;
+        }
+
+        token.safeApprove(address(uniswapPositionManager), 0);
+        token.safeApprove(address(uniswapPositionManager), tokenAmount);
+        
+        weth.approve(address(uniswapPositionManager), 0);
+        weth.approve(address(uniswapPositionManager), ethAmount);
+
+        address pool = uniswapFactory.getPool(token0, token1, feeTier);
+        
+        if (pool == address(0)) {
+            try uniswapPositionManager.createAndInitializePoolIfNecessary(
+                token0,
+                token1,
+                feeTier,
+                sqrtPriceX96
+            ) returns (address newPool) {
+                pool = newPool;
+                if (pool == address(0)) revert UniswapPoolCreationFailed();
+            } catch {
+                revert UniswapPoolCreationFailed();
+            }
+        }
+
+        INonfungiblePositionManager.MintParams memory mintParams = INonfungiblePositionManager.MintParams({
+            token0: token0,
+            token1: token1,
+            fee: feeTier,
+            tickLower: tickLower,
+            tickUpper: tickUpper,
+            amount0Desired: amount0Desired,
+            amount1Desired: amount1Desired,
+            amount0Min: 0, // Allow slippage - owner controls this
+            amount1Min: 0, // Allow slippage - owner controls this
+            recipient: lpRecipient,
+            deadline: block.timestamp + 300
+        });
+        
+        uint256 tokenId;
+        try uniswapPositionManager.mint(mintParams) returns (
+            uint256 _tokenId,
+            uint128,
+            uint256,
+            uint256
+        ) {
+            tokenId = _tokenId;
+        } catch {
+            token.safeApprove(address(uniswapPositionManager), 0);
+            weth.approve(address(uniswapPositionManager), 0);
+            revert UniswapMintFailed();
+        }
+
+        uniswapPositionTokenId = tokenId;
+        uniswapLiquidityCreated = true;
+
+        token.safeApprove(address(uniswapPositionManager), 0);
+        weth.approve(address(uniswapPositionManager), 0);
+
+        emit LiquidityMigratedToUniswapV3(ethAmount, tokenAmount, feeTier, tokenId);
     }
 
     // ============ VESTING CLAIMS ============

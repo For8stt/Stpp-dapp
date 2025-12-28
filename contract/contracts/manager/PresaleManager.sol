@@ -355,6 +355,58 @@ contract PresaleManager is Ownable, IPresaleManager, IAutomationCompatible, Pres
         ILBP(record.lbp).withdrawAllTokens();
     }
 
+    /// @notice Configures Uniswap V3 addresses for a specific LBP.
+    /// @param auctionAddress The auction address associated with the LBP.
+    /// @param factory Uniswap V3 Factory address.
+    /// @param positionManager Uniswap V3 NonfungiblePositionManager address.
+    /// @param weth WETH9 address.
+    /// @param defaultFeeTier Default fee tier for Uniswap V3 pools (e.g., 3000 for 0.3%).
+    function setLbpUniswapV3Config(
+        address auctionAddress,
+        address factory,
+        address positionManager,
+        address weth,
+        uint24 defaultFeeTier
+    ) external onlyOwner {
+        AuctionRecord storage record = _records[auctionAddress];
+        if (!isManagedAuction[auctionAddress]) revert UnknownAuction();
+        if (!record.lbpInitialized) revert LbpNotLaunched();
+        ILBP(record.lbp).setUniswapV3Config(factory, positionManager, weth, defaultFeeTier);
+    }
+
+    /// @notice Migrates liquidity from SecureLBP to Uniswap V3.
+    /// @param auctionAddress The auction address associated with the LBP.
+    /// @param ethAmount Amount of ETH to migrate to Uniswap V3.
+    /// @param tokenAmount Amount of tokens to migrate to Uniswap V3.
+    /// @param feeTier Uniswap V3 fee tier (500, 3000, or 10000).
+    /// @param sqrtPriceX96 Initial price in Q64.96 format (only used if pool doesn't exist).
+    /// @param tickLower Lower tick bound for the liquidity position.
+    /// @param tickUpper Upper tick bound for the liquidity position.
+    /// @param lpRecipient Address that will receive the Uniswap V3 LP NFT.
+    function migrateLiquidityToUniswapV3(
+        address auctionAddress,
+        uint256 ethAmount,
+        uint256 tokenAmount,
+        uint24 feeTier,
+        uint160 sqrtPriceX96,
+        int24 tickLower,
+        int24 tickUpper,
+        address lpRecipient
+    ) external onlyOwner {
+        AuctionRecord storage record = _records[auctionAddress];
+        if (!isManagedAuction[auctionAddress]) revert UnknownAuction();
+        if (!record.lbpInitialized) revert LbpNotLaunched();
+        ILBP(record.lbp).migrateLiquidityToUniswapV3(
+            ethAmount,
+            tokenAmount,
+            feeTier,
+            sqrtPriceX96,
+            tickLower,
+            tickUpper,
+            lpRecipient
+        );
+    }
+
     function setLbpOracle(address oracle) external onlyOwner {
         lbpOracle = oracle;
         emit LbpOracleSet(oracle);

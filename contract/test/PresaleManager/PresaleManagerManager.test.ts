@@ -219,11 +219,20 @@ describe("PresaleManager", function () {
         expect(recordAfterFinalize.ethRaisedDuringLBP).to.equal(lbpEthRaised);
         expect(await token.balanceOf(await escrow.getAddress())).to.equal(expectedAllocated);
 
+        // After launchLbp(), ethForTreasury is automatically sent to treasury, so it should be 0
         const withdrawable = await auction.ethForTreasury();
+        expect(withdrawable).to.equal(0n); // ethForTreasury is already 0 after launchLbp()
+        
+        // Verify that treasury received the funds (check balance before and after launchLbp)
+        // Since launchLbp() already sent funds to treasury, withdrawAuctionProceeds should do nothing
+        const treasuryBalanceBefore = await ethers.provider.getBalance(treasury.address);
         await manager.withdrawAuctionProceeds(await auction.getAddress(), treasury.address);
+        const treasuryBalanceAfter = await ethers.provider.getBalance(treasury.address);
+        
         expect(await auction.ethForTreasury()).to.equal(0n);
         expect(await manager.getAuctionRecord(await auction.getAddress())).to.exist;
-        expect(withdrawable).to.be.gt(0n);
+        // Treasury balance should not change (funds were already sent during launchLbp)
+        expect(treasuryBalanceAfter).to.equal(treasuryBalanceBefore);
     });
 
     it("reverts finalizeLbp when escrow token mismatches sale token", async function () {

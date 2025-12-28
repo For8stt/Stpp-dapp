@@ -209,10 +209,18 @@ describe("DutchAuction – 07_launch_lbp", function () {
             const { auction, deployer, expectedStableShare } = ctx;
 
             const treasuryBefore = await auction.ethForTreasury();
+            const treasuryAddress = await auction.treasury();
+            const treasuryBalanceBefore = await ethers.provider.getBalance(treasuryAddress);
+            
             await auction.connect(deployer).launchLbp();
+            
             const treasuryAfter = await auction.ethForTreasury();
-
-            expect(treasuryBefore - treasuryAfter).to.equal(expectedStableShare);
+            const treasuryBalanceAfter = await ethers.provider.getBalance(treasuryAddress);
+            
+            // After launchLbp(), ethForTreasury should be 0 (all remaining ETH sent to treasury)
+            expect(treasuryAfter).to.equal(0n);
+            // Treasury should receive the remaining ETH (treasuryBefore - expectedStableShare)
+            expect(treasuryBalanceAfter - treasuryBalanceBefore).to.equal(treasuryBefore - expectedStableShare);
         });
 
         it("should emit LBPLaunched event", async function () {

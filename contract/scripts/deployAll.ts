@@ -14,6 +14,9 @@ interface DeploymentAddresses {
   lbpAmmImpl: string;
   feeOracle: string;
   testToken: string;
+  uniswapV3Factory?: string;
+  uniswapV3PositionManager?: string;
+  uniswapV3WETH?: string;
 }
 
 interface DeploymentConfig {
@@ -171,6 +174,40 @@ function saveDeploymentJSON(addresses: DeploymentAddresses): void {
 }
 
 /**
+ * Saves Uniswap V3 mock addresses to uniswapV3Addresses.json
+ */
+function saveUniswapV3Addresses(factory: string, positionManager: string, weth: string): void {
+  const uniswapV3AddressesFile = path.resolve(
+    __dirname,
+    "..",
+    "..",
+    "client",
+    "src",
+    "abi",
+    "uniswapV3Addresses.json"
+  );
+
+  ensureDirectory(path.dirname(uniswapV3AddressesFile));
+
+  const networkId = network.config.chainId?.toString() || "31337";
+  const addresses = {
+    [networkId]: {
+      factory,
+      positionManager,
+      weth
+    }
+  };
+
+  try {
+    fs.writeFileSync(uniswapV3AddressesFile, JSON.stringify(addresses, null, 2));
+    console.log(`\n✅ Saved Uniswap V3 addresses to: ${uniswapV3AddressesFile}`);
+  } catch (error) {
+    console.error(`❌ Failed to write ${uniswapV3AddressesFile}:`, error);
+    throw error;
+  }
+}
+
+/**
  * Writes addresses to addresses.json (both src and public)
  */
 function writeAddressesFile(addresses: DeploymentAddresses): void {
@@ -288,6 +325,11 @@ function printSummary(addresses: DeploymentAddresses): void {
   console.log(`  LBPWeightedAMM Implementation: ${addresses.lbpAmmImpl}`);
   console.log(`  LBPOracle (Fee Oracle):       ${addresses.feeOracle}`);
   console.log(`  TestToken:                    ${addresses.testToken}`);
+  if (addresses.uniswapV3Factory && addresses.uniswapV3PositionManager && addresses.uniswapV3WETH) {
+    console.log(`  Uniswap V3 Factory:           ${addresses.uniswapV3Factory}`);
+    console.log(`  Uniswap V3 Position Manager:  ${addresses.uniswapV3PositionManager}`);
+    console.log(`  Uniswap V3 WETH9:            ${addresses.uniswapV3WETH}`);
+  }
   console.log("─".repeat(80));
 
   console.log("\n📁 Configuration Files Updated:");
@@ -295,6 +337,9 @@ function printSummary(addresses: DeploymentAddresses): void {
   console.log(`   client/src/abi/addresses.json`);
   console.log(`   client/public/abi/addresses.json`);
   console.log(`   client/src/abi/allAbis.json`);
+  if (addresses.uniswapV3Factory && addresses.uniswapV3PositionManager && addresses.uniswapV3WETH) {
+    console.log(`   client/src/abi/uniswapV3Addresses.json`);
+  }
 
   console.log("\n🚀 Next Steps:");
   console.log("─".repeat(80));
@@ -410,6 +455,9 @@ async function main() {
     // 7. Set oracle in PublicPresaleFactory (for automatic injection into new clones)
     console.log(`\n🔗 Setting LBP Oracle in PublicPresaleFactory...`);
     try {
+      if (!addresses.publicFactory || !addresses.feeOracle) {
+        throw new Error("Missing required addresses for oracle setup");
+      }
       const factoryContract = await ethers.getContractAt("PublicPresaleFactory", addresses.publicFactory);
       const setOracleTx = await factoryContract.setLbpOracle(addresses.feeOracle);
       await setOracleTx.wait();
@@ -418,7 +466,9 @@ async function main() {
       console.log(`  ✓ All new LBPs created by users will automatically use this oracle`);
     } catch (error) {
       console.error(`  ⚠️  Failed to set oracle in PublicPresaleFactory:`, error);
-      console.log(`  ⚠️  You may need to call PublicPresaleFactory.setLbpOracle(${addresses.feeOracle}) manually`);
+      if (addresses.feeOracle) {
+        console.log(`  ⚠️  You may need to call PublicPresaleFactory.setLbpOracle(${addresses.feeOracle}) manually`);
+      }
     }
 
     // 8. Deploy TestToken (ERC20)
@@ -502,6 +552,26 @@ async function main() {
     );
     addresses.lbpAmmImpl = await lbpAmmImpl.getAddress();
 
+    // 11. Deploy Uniswap V3 Mocks (for localhost/testing)
+    console.log(`\n📦 Deploying Uniswap V3 Mocks...`);
+    const mockFactory = await deploy("MockUniswapV3Factory", [], "MockUniswapV3Factory");
+    addresses.uniswapV3Factory = await mockFactory.getAddress();
+
+    const mockPositionManager = await deploy("MockNonfungiblePositionManager", [], "MockNonfungiblePositionManager");
+    addresses.uniswapV3PositionManager = await mockPositionManager.getAddress();
+
+    const mockWETH = await deploy("MockWETH9", [], "MockWETH9");
+    addresses.uniswapV3WETH = await mockWETH.getAddress();
+
+    // Save Uniswap V3 addresses to separate file
+    if (addresses.uniswapV3Factory && addresses.uniswapV3PositionManager && addresses.uniswapV3WETH) {
+      saveUniswapV3Addresses(
+        addresses.uniswapV3Factory,
+        addresses.uniswapV3PositionManager,
+        addresses.uniswapV3WETH
+      );
+    }
+
     // Ensure all addresses are set
     const completeAddresses: DeploymentAddresses = {
       managerImpl: addresses.managerImpl!,
@@ -513,6 +583,9 @@ async function main() {
       lbpAmmImpl: addresses.lbpAmmImpl!,
       feeOracle: addresses.feeOracle!,
       testToken: addresses.testToken!,
+      uniswapV3Factory: addresses.uniswapV3Factory,
+      uniswapV3PositionManager: addresses.uniswapV3PositionManager,
+      uniswapV3WETH: addresses.uniswapV3WETH,
     };
 
     // Save deployment files

@@ -1274,6 +1274,54 @@
       "inputs": [
         {
           "internalType": "address",
+          "name": "auctionAddress",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "ethAmount",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "tokenAmount",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint24",
+          "name": "feeTier",
+          "type": "uint24"
+        },
+        {
+          "internalType": "uint160",
+          "name": "sqrtPriceX96",
+          "type": "uint160"
+        },
+        {
+          "internalType": "int24",
+          "name": "tickLower",
+          "type": "int24"
+        },
+        {
+          "internalType": "int24",
+          "name": "tickUpper",
+          "type": "int24"
+        },
+        {
+          "internalType": "address",
+          "name": "lpRecipient",
+          "type": "address"
+        }
+      ],
+      "name": "migrateLiquidityToUniswapV3",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
           "name": "auction",
           "type": "address"
         }
@@ -1446,6 +1494,39 @@
         }
       ],
       "name": "setLbpTreasury",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "auctionAddress",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "factory",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "positionManager",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "weth",
+          "type": "address"
+        },
+        {
+          "internalType": "uint24",
+          "name": "defaultFeeTier",
+          "type": "uint24"
+        }
+      ],
+      "name": "setLbpUniswapV3Config",
       "outputs": [],
       "stateMutability": "nonpayable",
       "type": "function"
@@ -4297,7 +4378,17 @@
     },
     {
       "inputs": [],
+      "name": "InsufficientEthForMigration",
+      "type": "error"
+    },
+    {
+      "inputs": [],
       "name": "InsufficientTokens",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "InsufficientTokensForMigration",
       "type": "error"
     },
     {
@@ -4313,6 +4404,11 @@
     {
       "inputs": [],
       "name": "InvalidTimes",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "InvalidUniswapParams",
       "type": "error"
     },
     {
@@ -4408,6 +4504,26 @@
     {
       "inputs": [],
       "name": "TreasuryZero",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "UniswapLiquidityAlreadyCreated",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "UniswapMintFailed",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "UniswapPoolCreationFailed",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "UniswapV3NotConfigured",
       "type": "error"
     },
     {
@@ -4528,6 +4644,37 @@
         }
       ],
       "name": "FullUnwindExecuted",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "ethAmount",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "tokenAmount",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint24",
+          "name": "feeTier",
+          "type": "uint24"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "positionTokenId",
+          "type": "uint256"
+        }
+      ],
+      "name": "LiquidityMigratedToUniswapV3",
       "type": "event"
     },
     {
@@ -4740,6 +4887,37 @@
         {
           "indexed": false,
           "internalType": "address",
+          "name": "factory",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "positionManager",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "weth",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint24",
+          "name": "defaultFeeTier",
+          "type": "uint24"
+        }
+      ],
+      "name": "UniswapV3ConfigSet",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
+          "internalType": "address",
           "name": "account",
           "type": "address"
         }
@@ -4907,6 +5085,19 @@
     },
     {
       "inputs": [],
+      "name": "defaultFeeTier",
+      "outputs": [
+        {
+          "internalType": "uint24",
+          "name": "",
+          "type": "uint24"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
       "name": "endTime",
       "outputs": [
         {
@@ -5004,6 +5195,24 @@
           "internalType": "uint256",
           "name": "priceChangeBP",
           "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "getUniswapV3Position",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "positionTokenId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bool",
+          "name": "liquidityCreated",
+          "type": "bool"
         }
       ],
       "stateMutability": "view",
@@ -5122,6 +5331,49 @@
         }
       ],
       "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "ethAmount",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "tokenAmount",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint24",
+          "name": "feeTier",
+          "type": "uint24"
+        },
+        {
+          "internalType": "uint160",
+          "name": "sqrtPriceX96",
+          "type": "uint160"
+        },
+        {
+          "internalType": "int24",
+          "name": "tickLower",
+          "type": "int24"
+        },
+        {
+          "internalType": "int24",
+          "name": "tickUpper",
+          "type": "int24"
+        },
+        {
+          "internalType": "address",
+          "name": "lpRecipient",
+          "type": "address"
+        }
+      ],
+      "name": "migrateLiquidityToUniswapV3",
+      "outputs": [],
+      "stateMutability": "nonpayable",
       "type": "function"
     },
     {
@@ -5484,6 +5736,34 @@
     {
       "inputs": [
         {
+          "internalType": "address",
+          "name": "_factory",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "_positionManager",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "_weth",
+          "type": "address"
+        },
+        {
+          "internalType": "uint24",
+          "name": "_defaultFeeTier",
+          "type": "uint24"
+        }
+      ],
+      "name": "setUniswapV3Config",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
           "internalType": "uint256",
           "name": "_thresholdLowBP",
           "type": "uint256"
@@ -5619,6 +5899,58 @@
           "internalType": "address",
           "name": "",
           "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "uniswapFactory",
+      "outputs": [
+        {
+          "internalType": "contract IUniswapV3Factory",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "uniswapLiquidityCreated",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "uniswapPositionManager",
+      "outputs": [
+        {
+          "internalType": "contract INonfungiblePositionManager",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "uniswapPositionTokenId",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
         }
       ],
       "stateMutability": "view",
@@ -5832,6 +6164,19 @@
           "internalType": "uint256",
           "name": "",
           "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "weth",
+      "outputs": [
+        {
+          "internalType": "contract IWETH9",
+          "name": "",
+          "type": "address"
         }
       ],
       "stateMutability": "view",

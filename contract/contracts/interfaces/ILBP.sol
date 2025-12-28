@@ -37,5 +37,22 @@ interface ILBP {
 
     function rescueERC20(address erc20, address to, uint256 amount) external;
 
+    function setUniswapV3Config(
+        address _factory,
+        address _positionManager,
+        address _weth,
+        uint24 _defaultFeeTier
+    ) external;
+
+    function migrateLiquidityToUniswapV3(
+        uint256 ethAmount,
+        uint256 tokenAmount,
+        uint24 feeTier,
+        uint160 sqrtPriceX96,
+        int24 tickLower,
+        int24 tickUpper,
+        address lpRecipient
+    ) external;
+
     function token() external view returns (address);
 }

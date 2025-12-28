@@ -9,6 +9,44 @@ import { handleTxError, showTxSuccess, showTxInfo } from "../utils/txErrorHandle
 import { useAuctionData } from "../hooks/useAuctionData";
 import { useTime } from "../time";
 
+// Tooltip component for explanations
+const Tooltip = ({ children, text }) => {
+  const [show, setShow] = useState(false);
+  
+  if (!text) return children;
+  
+  return (
+    <div className="relative inline-block">
+      <div
+        className="inline-flex items-center gap-1.5 cursor-help"
+        onMouseEnter={() => setShow(true)}
+        onMouseLeave={() => setShow(false)}
+      >
+        {children}
+        <svg
+          className="w-4 h-4 text-white/50 hover:text-white/70 transition-colors"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+          />
+        </svg>
+      </div>
+      {show && (
+        <div className="absolute z-50 w-80 p-3 text-xs leading-relaxed text-white bg-gradient-to-br from-slate-900 to-slate-800 border border-white/20 rounded-lg shadow-xl mt-2 left-0 top-full pointer-events-none">
+          {text}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const toDateInput = (secondsFromNow = 0) =>
   new Date((Math.floor(Date.now() / 1000) + secondsFromNow) * 1000).toISOString().slice(0, 16);
 
@@ -69,6 +107,37 @@ const PresalePage = ({ account }) => {
   const [lbpConfig, setLbpConfig] = useState(defaultLbpConfig);
 
   const [auctionContract, setAuctionContract] = useState(null);
+  
+  // Post-LBP Settlement state
+  const [lbpState, setLbpState] = useState({
+    finalized: false,
+    endTime: null,
+    ethBalance: 0n,
+    tokenBalance: 0n,
+    uniswapLiquidityCreated: false,
+    lpBalance: 0n,
+    poolAddress: null,
+    loading: false
+  });
+  const [unwindingLiquidity, setUnwindingLiquidity] = useState(false);
+  const [settlementForm, setSettlementForm] = useState({
+    ethToUniswap: "",
+    tokensToUniswap: "",
+    feeTier: "3000",
+    sqrtPriceX96: "79228162514264337593543950336", // Default: sqrt(1) * 2^96 (1:1 price ratio)
+    tickLower: "",
+    tickUpper: "",
+    useFullRange: true,
+    lpRecipient: "",
+    uniswapFactory: "",
+    uniswapPositionManager: "",
+    weth: ""
+  });
+  const [uniswapConfiguring, setUniswapConfiguring] = useState(false);
+  const [settlementExecuting, setSettlementExecuting] = useState(false);
+  const [settlementStep, setSettlementStep] = useState("");
+  const [settlementResults, setSettlementResults] = useState(null);
+  const [isSettlementPanelExpanded, setIsSettlementPanelExpanded] = useState(false);
 
   useEffect(() => {
     const loadAuctionContract = async () => {
@@ -188,12 +257,690 @@ const PresalePage = ({ account }) => {
     refreshInfo();
   }, [refreshInfo]);
 
+  // Load LBP state for Post-LBP Settlement panel
+  useEffect(() => {
+    const loadLbpState = async () => {
+      if (!info?.lbp || info.lbp === ethers.ZeroAddress || !isOwner) {
+        setLbpState({
+          finalized: false,
+          endTime: null,
+          ethBalance: 0n,
+          tokenBalance: 0n,
+          uniswapLiquidityCreated: false,
+          lpBalance: 0n,
+          poolAddress: null,
+          loading: false
+        });
+        return;
+      }
+
+      try {
+        setLbpState(prev => ({ ...prev, loading: true }));
+        const allAbis = await import("../abi/allAbis.json");
+        const { ensureProvider } = await import("../services/web3/provider");
+        const provider = ensureProvider();
+        const lbpAbi = allAbis.SecureLBP || [];
+        
+        if (lbpAbi.length === 0) {
+          setLbpState(prev => ({ ...prev, loading: false }));
+          return;
+        }
+
+        const { Contract } = await import("ethers");
+        const lbpContract = new Contract(info.lbp, lbpAbi, provider);
+        
+        const [finalized, endTime, ethBalance, tokenAddress, uniswapLiquidityCreated] = await Promise.all([
+          lbpContract.finalized().catch(() => false),
+          lbpContract.endTime().catch(() => null),
+          provider.getBalance(info.lbp).catch(() => 0n),
+          lbpContract.token().catch(() => ethers.ZeroAddress),
+          lbpContract.uniswapLiquidityCreated().catch(() => false)
+        ]);
+
+        let tokenBalance = 0n;
+        if (tokenAddress !== ethers.ZeroAddress) {
+          const tokenAbi = allAbis.ERC20 || allAbis.TestToken || [];
+          if (tokenAbi.length > 0) {
+            const tokenContract = new Contract(tokenAddress, tokenAbi, provider);
+            tokenBalance = await tokenContract.balanceOf(info.lbp).catch(() => 0n);
+          }
+        }
+
+        // Check LP balance in pool
+        let lpBalance = 0n;
+        let poolAddress = null;
+        try {
+          const poolInit = await lbpContract.poolInitialized().catch(() => false);
+          if (poolInit) {
+            poolAddress = await lbpContract.pool().catch(() => ethers.ZeroAddress);
+            if (poolAddress !== ethers.ZeroAddress) {
+              const poolAbi = allAbis.LBPWeightedAMM || [];
+              if (poolAbi.length > 0) {
+                const poolContract = new Contract(poolAddress, poolAbi, provider);
+                lpBalance = await poolContract.balanceLP(info.lbp).catch(() => 0n);
+              }
+            }
+          }
+        } catch (lpErr) {
+          console.warn("Failed to check LP balance:", lpErr);
+        }
+
+        console.log("=== LBP State Loaded ===", {
+          finalized,
+          endTime: endTime ? Number(endTime) : null,
+          currentTime,
+          hasEnded: endTime ? currentTime > Number(endTime) : null,
+          ethBalance: ethers.formatEther(ethBalance ?? 0n),
+          tokenBalance: ethers.formatEther(tokenBalance ?? 0n),
+          lpBalance: ethers.formatEther(lpBalance ?? 0n),
+          poolAddress,
+          uniswapLiquidityCreated
+        });
+
+        setLbpState({
+          finalized,
+          endTime: endTime ? Number(endTime) : null,
+          ethBalance,
+          tokenBalance,
+          uniswapLiquidityCreated,
+          lpBalance,
+          poolAddress,
+          loading: false
+        });
+
+        // Set default LP recipient to treasury if available (only once)
+        if (!settlementForm.lpRecipient || settlementForm.lpRecipient === "") {
+          try {
+            const treasury = await lbpContract.treasury().catch(() => ethers.ZeroAddress);
+            if (treasury !== ethers.ZeroAddress) {
+              setSettlementForm(prev => {
+                if (!prev.lpRecipient || prev.lpRecipient === "") {
+                  return { ...prev, lpRecipient: treasury };
+                }
+                return prev;
+              });
+            }
+          } catch {}
+        }
+
+        // Load Uniswap V3 addresses from file if available (for localhost)
+        if ((!settlementForm.uniswapFactory || !settlementForm.uniswapPositionManager || !settlementForm.weth)) {
+          try {
+            const uniswapAddresses = await import("../abi/uniswapV3Addresses.json").catch(() => null);
+            if (uniswapAddresses?.default) {
+              // Try to get chainId from window.ethereum
+              let chainId = "31337"; // Default to localhost
+              try {
+                if (window.ethereum) {
+                  const chainIdHex = await window.ethereum.request({ method: "eth_chainId" });
+                  chainId = parseInt(chainIdHex, 16).toString();
+                }
+              } catch {
+                // Keep default chainId
+              }
+              
+              const addresses = uniswapAddresses.default[chainId] || uniswapAddresses.default["31337"] || uniswapAddresses.default["localhost"];
+              if (addresses) {
+                console.log("Loading Uniswap V3 addresses from file:", addresses);
+                setSettlementForm(prev => ({
+                  ...prev,
+                  // Force update if addresses are empty or different
+                  uniswapFactory: (!prev.uniswapFactory || prev.uniswapFactory === "") ? (addresses.factory || "") : prev.uniswapFactory,
+                  uniswapPositionManager: (!prev.uniswapPositionManager || prev.uniswapPositionManager === "") ? (addresses.positionManager || "") : prev.uniswapPositionManager,
+                  weth: (!prev.weth || prev.weth === "") ? (addresses.weth || "") : prev.weth
+                }));
+              }
+            }
+          } catch (err) {
+            // File doesn't exist or can't be loaded - that's okay
+            console.log("Uniswap V3 addresses file not found, user will need to enter addresses manually");
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to load LBP state:", err);
+        setLbpState(prev => ({ ...prev, loading: false }));
+      }
+    };
+
+    loadLbpState();
+  }, [info?.lbp, isOwner, info?.lbpFinalized, currentTime]);
+
+  // Debug: Log settlement results when they change
+  useEffect(() => {
+    if (settlementResults) {
+      console.log("=== Settlement Results Updated ===", settlementResults);
+    }
+  }, [settlementResults]);
+
   const handleAuctionFormChange = (name, value) => {
     setAuctionForm((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleLbpConfigChange = (name, value) => {
     setLbpConfig((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleSettlementFormChange = (name, value) => {
+    setSettlementForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleSetMax = (type) => {
+    if (type === "eth") {
+      const balance = lbpState.ethBalance ?? 0n;
+      if (balance === 0n) return;
+      const maxEth = ethers.formatEther(balance);
+      handleSettlementFormChange("ethToUniswap", maxEth);
+    } else if (type === "tokens") {
+      const balance = lbpState.tokenBalance ?? 0n;
+      if (balance === 0n) return;
+      const maxTokens = ethers.formatEther(balance);
+      handleSettlementFormChange("tokensToUniswap", maxTokens);
+    }
+  };
+
+  const handleSetPercentage = (type, percentage) => {
+    if (type === "eth") {
+      const balance = lbpState.ethBalance ?? 0n;
+      if (balance === 0n) return;
+      const amount = (balance * BigInt(Math.floor(percentage * 100))) / 10000n;
+      handleSettlementFormChange("ethToUniswap", ethers.formatEther(amount));
+    } else if (type === "tokens") {
+      const balance = lbpState.tokenBalance ?? 0n;
+      if (balance === 0n) return;
+      const amount = (balance * BigInt(Math.floor(percentage * 100))) / 10000n;
+      handleSettlementFormChange("tokensToUniswap", ethers.formatEther(amount));
+    }
+  };
+
+  const handleUnwindLiquidity = useCallback(async () => {
+    if (!managerContract || !info?.auction || !isOwner) {
+      handleTxError(new Error("Invalid state for unwinding liquidity."));
+      return;
+    }
+
+    if ((lbpState.lpBalance ?? 0n) === 0n) {
+      handleTxError(new Error("No liquidity to unwind. LP balance is zero."));
+      return;
+    }
+
+    try {
+      setUnwindingLiquidity(true);
+      const { BrowserProvider } = await import("ethers");
+      if (!window.ethereum) {
+        throw new Error("No wallet provider");
+      }
+      const provider = new BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const allAbis = await import("../abi/allAbis.json");
+      const managerAbi = allAbis.PresaleManager || [];
+      const managerContractWithSigner = new ethers.Contract(address, managerAbi, signer);
+
+      showTxInfo("Please confirm liquidity unwinding in your wallet", { autoClose: false });
+      const unwindTx = await managerContractWithSigner.unwindLbpAll(info.auction, { gasLimit: 500000 });
+      showTxInfo("Unwind submitted to the network", { autoClose: 3000 });
+      setTxStatus({ status: "pending", message: "Unwinding liquidity…", hash: unwindTx.hash });
+      await unwindTx.wait();
+      showTxSuccess("Liquidity unwound successfully! Refreshing balances...", { autoClose: 2000 });
+
+      // Refresh LBP state after unwinding
+      await new Promise(resolve => setTimeout(resolve, 2000)); // Wait for block confirmation
+      const lbpAbi = allAbis.SecureLBP || [];
+      const { Contract } = await import("ethers");
+      const lbpContract = new Contract(info.lbp, lbpAbi, provider);
+      
+      const [finalized, endTime, newEthBalance, tokenAddress, uniswapLiquidityCreated] = await Promise.all([
+        lbpContract.finalized().catch(() => false),
+        lbpContract.endTime().catch(() => null),
+        provider.getBalance(info.lbp).catch(() => 0n),
+        lbpContract.token().catch(() => ethers.ZeroAddress),
+        lbpContract.uniswapLiquidityCreated().catch(() => false)
+      ]);
+
+      let newTokenBalance = 0n;
+      if (tokenAddress !== ethers.ZeroAddress) {
+        const tokenAbi = allAbis.ERC20 || allAbis.TestToken || [];
+        if (tokenAbi.length > 0) {
+          const tokenContract = new Contract(tokenAddress, tokenAbi, provider);
+          newTokenBalance = await tokenContract.balanceOf(info.lbp).catch(() => 0n);
+        }
+      }
+
+      // Check LP balance after unwinding
+      let newLpBalance = 0n;
+      let newPoolAddress = null;
+      try {
+        const poolInit = await lbpContract.poolInitialized().catch(() => false);
+        if (poolInit) {
+          newPoolAddress = await lbpContract.pool().catch(() => ethers.ZeroAddress);
+          if (newPoolAddress !== ethers.ZeroAddress) {
+            const poolAbi = allAbis.LBPWeightedAMM || [];
+            if (poolAbi.length > 0) {
+              const poolContract = new Contract(newPoolAddress, poolAbi, provider);
+              newLpBalance = await poolContract.balanceLP(info.lbp).catch(() => 0n);
+            }
+          }
+        }
+      } catch (lpErr) {
+        console.warn("Failed to check LP balance after unwind:", lpErr);
+      }
+
+      setLbpState({
+        finalized,
+        endTime: endTime ? Number(endTime) : null,
+        ethBalance: newEthBalance,
+        tokenBalance: newTokenBalance,
+        uniswapLiquidityCreated,
+        lpBalance: newLpBalance,
+        poolAddress: newPoolAddress,
+        loading: false
+      });
+
+      setTxStatus({ status: "success", message: "Liquidity unwound successfully!" });
+      showTxSuccess(`Unwound liquidity! New balances: ${ethers.formatEther(newEthBalance)} ETH, ${ethers.formatEther(newTokenBalance)} tokens`, { autoClose: 5000 });
+    } catch (err) {
+      console.error("Error in handleUnwindLiquidity:", err);
+      if (err?.code === "ACTION_REJECTED" || err?.reason === "rejected" || err?.message?.includes("user rejected") || err?.message?.includes("user cancel") || err?.message?.includes("Transaction cancelled")) {
+        setTxStatus({ status: "error", message: "Transaction cancelled by user" });
+        showTxInfo("Transaction cancelled by user", { autoClose: 3000 });
+        return;
+      }
+      let errorMessage = err?.message || "Failed to unwind liquidity";
+      if (err?.reason) {
+        errorMessage = err.reason;
+      } else if (err?.data?.message) {
+        errorMessage = err.data.message;
+      } else if (err?.error?.message) {
+        errorMessage = err.error.message;
+      }
+      handleTxError(err, errorMessage);
+      setTxStatus({ status: "error", message: errorMessage });
+    } finally {
+      setUnwindingLiquidity(false);
+    }
+  }, [managerContract, info?.auction, info?.lbp, isOwner, lbpState.lpBalance, address]);
+
+  const handleConfigureUniswapV3 = useCallback(async () => {
+    if (!managerContract || !info?.auction || !isOwner) {
+      handleTxError(new Error("Invalid state for configuring Uniswap V3."));
+      return;
+    }
+
+    if (!settlementForm.uniswapFactory || !settlementForm.uniswapPositionManager || !settlementForm.weth) {
+      handleTxError(new Error("All Uniswap V3 addresses are required: Factory, Position Manager, and WETH."));
+      return;
+    }
+
+    try {
+      setUniswapConfiguring(true);
+      const { BrowserProvider } = await import("ethers");
+      if (!window.ethereum) {
+        throw new Error("No wallet provider");
+      }
+      const provider = new BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const allAbis = await import("../abi/allAbis.json");
+      const managerAbi = allAbis.PresaleManager || [];
+      const managerContractWithSigner = new ethers.Contract(address, managerAbi, signer);
+
+      showTxInfo("Please confirm Uniswap V3 configuration in your wallet", { autoClose: false });
+      const configTx = await managerContractWithSigner.setLbpUniswapV3Config(
+        info.auction,
+        settlementForm.uniswapFactory,
+        settlementForm.uniswapPositionManager,
+        settlementForm.weth,
+        parseInt(settlementForm.feeTier)
+      );
+      setTxStatus({ status: "pending", message: "Configuring Uniswap V3…", hash: configTx.hash });
+      showTxInfo("Configuration submitted to the network", { autoClose: 3000 });
+      await configTx.wait();
+      showTxSuccess("Uniswap V3 configured successfully!", { autoClose: 3000 });
+      setTxStatus({ status: "success", message: "Uniswap V3 configured!" });
+    } catch (err) {
+      console.error("Error in handleConfigureUniswapV3:", err);
+      if (err?.code === "ACTION_REJECTED" || err?.reason === "rejected" || err?.message?.includes("user rejected") || err?.message?.includes("user cancel") || err?.message?.includes("Transaction cancelled")) {
+        setTxStatus({ status: "error", message: "Transaction cancelled by user" });
+        showTxInfo("Transaction cancelled by user", { autoClose: 3000 });
+        return;
+      }
+      let errorMessage = err?.message || "Failed to configure Uniswap V3";
+      if (err?.reason) {
+        errorMessage = err.reason;
+      } else if (err?.data?.message) {
+        errorMessage = err.data.message;
+      } else if (err?.error?.message) {
+        errorMessage = err.error.message;
+      }
+      handleTxError(err, errorMessage);
+      setTxStatus({ status: "error", message: errorMessage });
+    } finally {
+      setUniswapConfiguring(false);
+    }
+  }, [managerContract, info?.auction, isOwner, settlementForm.uniswapFactory, settlementForm.uniswapPositionManager, settlementForm.weth, settlementForm.feeTier, address]);
+
+  const handleExecuteSettlement = async () => {
+    if (!info?.lbp || !isOwner || !managerContract) {
+      handleTxError(new Error("Missing required data"));
+      return;
+    }
+
+    // Validation
+    if (!lbpState.finalized) {
+      handleTxError(new Error("LBP must be finalized first"));
+      return;
+    }
+
+    if (currentTime <= (lbpState.endTime || 0)) {
+      handleTxError(new Error("LBP must have ended first"));
+      return;
+    }
+
+    const ethToUniswap = settlementForm.ethToUniswap ? ethers.parseEther(settlementForm.ethToUniswap) : 0n;
+    const tokensToUniswap = settlementForm.tokensToUniswap ? ethers.parseEther(settlementForm.tokensToUniswap) : 0n;
+
+    const ethBalance = lbpState.ethBalance ?? 0n;
+    const tokenBalance = lbpState.tokenBalance ?? 0n;
+
+    if (ethToUniswap > ethBalance) {
+      handleTxError(new Error(`ETH amount (${ethers.formatEther(ethToUniswap)}) exceeds available balance (${ethers.formatEther(ethBalance)})`));
+      return;
+    }
+
+    if (tokensToUniswap > tokenBalance) {
+      handleTxError(new Error(`Token amount (${ethers.formatEther(tokensToUniswap)}) exceeds available balance (${ethers.formatEther(tokenBalance)})`));
+      return;
+    }
+
+    if (lbpState.uniswapLiquidityCreated && (ethToUniswap > 0n || tokensToUniswap > 0n)) {
+      handleTxError(new Error("Uniswap liquidity migration has already been completed. Cannot migrate again."));
+      return;
+    }
+
+    const ethToTreasury = ethBalance - ethToUniswap;
+    const tokensToTreasury = tokenBalance - tokensToUniswap;
+
+    // Initialize settlement results
+    const results = {
+      timestamp: new Date().toISOString(),
+      unwind: null,
+      migrate: null,
+      withdrawEth: null,
+      withdrawTokens: null,
+      finalBalances: {
+        eth: null,
+        tokens: null,
+        lp: null
+      }
+    };
+
+    try {
+      setSettlementExecuting(true);
+      setSettlementResults(null); // Clear previous results
+      const { BrowserProvider } = await import("ethers");
+      if (!window.ethereum) {
+        throw new Error("No wallet provider");
+      }
+      const provider = new BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      
+      const allAbis = await import("../abi/allAbis.json");
+      const lbpAbi = allAbis.SecureLBP || [];
+      const managerAbi = allAbis.PresaleManager || [];
+      const lbpContract = new ethers.Contract(info.lbp, lbpAbi, signer);
+      const managerContractWithSigner = new ethers.Contract(address, managerAbi, signer);
+
+      // Step 1: Check if liquidity needs to be unwound
+      setSettlementStep("Checking liquidity state…");
+      const poolInitialized = await lbpContract.poolInitialized().catch(() => false);
+      let needsUnwind = false;
+      
+      if (poolInitialized) {
+        const poolAddress = await lbpContract.pool().catch(() => ethers.ZeroAddress);
+        if (poolAddress !== ethers.ZeroAddress) {
+          const poolAbi = allAbis.LBPWeightedAMM || [];
+          if (poolAbi.length > 0) {
+            const poolContract = new ethers.Contract(poolAddress, poolAbi, provider);
+            const lpBalance = await poolContract.balanceLP(info.lbp).catch(() => 0n);
+            needsUnwind = lpBalance > 0n;
+          }
+        }
+      }
+
+      if (needsUnwind) {
+        setSettlementStep("Unwinding liquidity…");
+        showTxInfo("Unwinding LBP liquidity…", { autoClose: false });
+        const unwindTx = await managerContractWithSigner.unwindLbpAll(info.auction, { gasLimit: 500000 });
+        setTxStatus({ status: "pending", message: "Unwinding liquidity…", hash: unwindTx.hash });
+        showTxInfo("Unwind submitted to the network", { autoClose: 3000 });
+        const unwindReceipt = await unwindTx.wait();
+        showTxSuccess("Liquidity unwound successfully!", { autoClose: 2000 });
+        
+        results.unwind = {
+          hash: unwindTx.hash,
+          blockNumber: unwindReceipt.blockNumber,
+          status: "success"
+        };
+        
+        // Refresh balances after unwinding
+        const newEthBalance = await provider.getBalance(info.lbp);
+        setLbpState(prev => ({ ...prev, ethBalance: newEthBalance }));
+      }
+
+      // Step 2: Migrate to Uniswap V3 (if amounts specified)
+      if (ethToUniswap > 0n && tokensToUniswap > 0n) {
+        // Check if Uniswap V3 is configured
+        setSettlementStep("Checking Uniswap V3 configuration…");
+        try {
+          const uniswapFactory = await lbpContract.uniswapFactory().catch(() => ethers.ZeroAddress);
+          const uniswapPositionManager = await lbpContract.uniswapPositionManager().catch(() => ethers.ZeroAddress);
+          const weth = await lbpContract.weth().catch(() => ethers.ZeroAddress);
+          
+          if (uniswapFactory === ethers.ZeroAddress || uniswapPositionManager === ethers.ZeroAddress || weth === ethers.ZeroAddress) {
+            throw new Error("Uniswap V3 is not configured. Please configure Uniswap V3 addresses first using setLbpUniswapV3Config function. For localhost, you may need to deploy Uniswap V3 contracts or use mock addresses.");
+          }
+        } catch (configErr) {
+          if (configErr.message.includes("not configured")) {
+            throw configErr;
+          }
+          console.warn("Could not check Uniswap V3 config, proceeding anyway:", configErr);
+        }
+
+        if (!settlementForm.lpRecipient || settlementForm.lpRecipient === ethers.ZeroAddress) {
+          throw new Error("LP recipient address is required for Uniswap migration");
+        }
+
+        if (!settlementForm.sqrtPriceX96) {
+          throw new Error("Initial price (sqrtPriceX96) is required for Uniswap migration");
+        }
+
+        const sqrtPriceX96 = BigInt(settlementForm.sqrtPriceX96);
+        let tickLower = -887272; // Full range default
+        let tickUpper = 887272;  // Full range default
+
+        if (!settlementForm.useFullRange) {
+          if (!settlementForm.tickLower || !settlementForm.tickUpper) {
+            throw new Error("Tick range is required when not using full range");
+          }
+          tickLower = parseInt(settlementForm.tickLower);
+          tickUpper = parseInt(settlementForm.tickUpper);
+          if (tickLower >= tickUpper) {
+            throw new Error("tickLower must be less than tickUpper");
+          }
+        }
+
+        const feeTier = parseInt(settlementForm.feeTier);
+
+        setSettlementStep("Migrating to Uniswap V3…");
+        showTxInfo("Please confirm Uniswap V3 migration in your wallet", { autoClose: false });
+        const migrateTx = await managerContractWithSigner.migrateLiquidityToUniswapV3(
+          info.auction,
+          ethToUniswap,
+          tokensToUniswap,
+          feeTier,
+          sqrtPriceX96,
+          tickLower,
+          tickUpper,
+          settlementForm.lpRecipient,
+          { gasLimit: 1000000 }
+        );
+        setTxStatus({ status: "pending", message: "Migrating to Uniswap V3…", hash: migrateTx.hash });
+        showTxInfo("Migration submitted to the network", { autoClose: 3000 });
+        const migrateReceipt = await migrateTx.wait();
+        showTxSuccess(`Migrated ${ethers.formatEther(ethToUniswap)} ETH and ${ethers.formatEther(tokensToUniswap)} tokens to Uniswap V3!`, { autoClose: 3000 });
+        
+        results.migrate = {
+          hash: migrateTx.hash,
+          blockNumber: migrateReceipt.blockNumber,
+          status: "success",
+          ethAmount: ethers.formatEther(ethToUniswap),
+          tokenAmount: ethers.formatEther(tokensToUniswap),
+          lpRecipient: settlementForm.lpRecipient,
+          feeTier: settlementForm.feeTier
+        };
+        
+        // Refresh balances after migration
+        const newEthBalance = await provider.getBalance(info.lbp);
+        const tokenAddress = await lbpContract.token().catch(() => ethers.ZeroAddress);
+        let newTokenBalance = 0n;
+        if (tokenAddress !== ethers.ZeroAddress) {
+          const tokenAbi = allAbis.ERC20 || allAbis.TestToken || [];
+          if (tokenAbi.length > 0) {
+            const tokenContract = new ethers.Contract(tokenAddress, tokenAbi, provider);
+            newTokenBalance = await tokenContract.balanceOf(info.lbp).catch(() => 0n);
+          }
+        }
+        setLbpState(prev => ({ 
+          ...prev, 
+          ethBalance: newEthBalance, 
+          tokenBalance: newTokenBalance,
+          uniswapLiquidityCreated: true
+        }));
+      }
+
+      // Step 3: Withdraw remaining ETH to treasury
+      if (ethToTreasury > 0n) {
+        setSettlementStep("Withdrawing ETH to treasury…");
+        showTxInfo("Please confirm ETH withdrawal in your wallet", { autoClose: false });
+        const withdrawEthTx = await managerContractWithSigner.withdrawLbpEth(info.auction, ethToTreasury);
+        setTxStatus({ status: "pending", message: "Withdrawing ETH…", hash: withdrawEthTx.hash });
+        showTxInfo("ETH withdrawal submitted to the network", { autoClose: 3000 });
+        const withdrawEthReceipt = await withdrawEthTx.wait();
+        showTxSuccess(`Withdrew ${ethers.formatEther(ethToTreasury)} ETH to treasury!`, { autoClose: 2000 });
+        
+        results.withdrawEth = {
+          hash: withdrawEthTx.hash,
+          blockNumber: withdrawEthReceipt.blockNumber,
+          status: "success",
+          amount: ethers.formatEther(ethToTreasury)
+        };
+      }
+
+      // Step 4: Withdraw remaining tokens to treasury
+      // Only withdraw if we didn't migrate (or if there are tokens left after migration)
+      if (tokensToTreasury > 0n) {
+        // Check current token balance after migration (if migration happened)
+        const tokenAddressForWithdraw = await lbpContract.token().catch(() => ethers.ZeroAddress);
+        let currentTokenBalance = 0n;
+        if (tokenAddressForWithdraw !== ethers.ZeroAddress) {
+          const tokenAbi = allAbis.ERC20 || allAbis.TestToken || [];
+          if (tokenAbi.length > 0) {
+            const tokenContract = new ethers.Contract(tokenAddressForWithdraw, tokenAbi, provider);
+            currentTokenBalance = await tokenContract.balanceOf(info.lbp).catch(() => 0n);
+          }
+        }
+        
+        // Only withdraw if there are actually tokens remaining
+        // If migration happened, tokens should have been used, so only withdraw what's left
+        if (currentTokenBalance > 0n) {
+          setSettlementStep("Withdrawing tokens to treasury…");
+          showTxInfo("Please confirm token withdrawal in your wallet", { autoClose: false });
+          // Use withdrawLbpAllTokens to withdraw all remaining tokens (should match tokensToTreasury)
+          const withdrawTokensTx = await managerContractWithSigner.withdrawLbpAllTokens(info.auction);
+          setTxStatus({ status: "pending", message: "Withdrawing tokens…", hash: withdrawTokensTx.hash });
+          showTxInfo("Token withdrawal submitted to the network", { autoClose: 3000 });
+          const withdrawTokensReceipt = await withdrawTokensTx.wait();
+          showTxSuccess(`Withdrew ${ethers.formatEther(currentTokenBalance)} tokens to treasury!`, { autoClose: 2000 });
+          
+          results.withdrawTokens = {
+            hash: withdrawTokensTx.hash,
+            blockNumber: withdrawTokensReceipt.blockNumber,
+            status: "success",
+            amount: ethers.formatEther(currentTokenBalance)
+          };
+        }
+      }
+
+      setSettlementStep("");
+      setTxStatus({ status: "success", message: "Post-LBP Settlement completed!" });
+      showTxSuccess("All settlement actions completed successfully!", { autoClose: 5000 });
+      
+      // Refresh LBP state
+      const [finalized, endTime, newEthBalance, tokenAddress, uniswapLiquidityCreated] = await Promise.all([
+        lbpContract.finalized().catch(() => false),
+        lbpContract.endTime().catch(() => null),
+        provider.getBalance(info.lbp).catch(() => 0n),
+        lbpContract.token().catch(() => ethers.ZeroAddress),
+        lbpContract.uniswapLiquidityCreated().catch(() => false)
+      ]);
+
+      let newTokenBalance = 0n;
+      if (tokenAddress !== ethers.ZeroAddress) {
+        const tokenAbi = allAbis.ERC20 || allAbis.TestToken || [];
+        if (tokenAbi.length > 0) {
+          const tokenContract = new ethers.Contract(tokenAddress, tokenAbi, provider);
+          newTokenBalance = await tokenContract.balanceOf(info.lbp).catch(() => 0n);
+        }
+      }
+
+      // Check LP balance after settlement
+      let newLpBalance = 0n;
+      let newPoolAddress = null;
+      try {
+        const poolInit = await lbpContract.poolInitialized().catch(() => false);
+        if (poolInit) {
+          newPoolAddress = await lbpContract.pool().catch(() => ethers.ZeroAddress);
+          if (newPoolAddress !== ethers.ZeroAddress) {
+            const poolAbi = allAbis.LBPWeightedAMM || [];
+            if (poolAbi.length > 0) {
+              const poolContract = new ethers.Contract(newPoolAddress, poolAbi, provider);
+              newLpBalance = await poolContract.balanceLP(info.lbp).catch(() => 0n);
+            }
+          }
+        }
+      } catch (lpErr) {
+        console.warn("Failed to check LP balance after settlement:", lpErr);
+      }
+
+      setLbpState(prev => ({
+        ...prev,
+        finalized,
+        endTime: endTime ? Number(endTime) : null,
+        ethBalance: newEthBalance,
+        tokenBalance: newTokenBalance,
+        uniswapLiquidityCreated,
+        lpBalance: newLpBalance,
+        poolAddress: newPoolAddress,
+        loading: false
+      }));
+
+      // Store final balances in results
+      results.finalBalances = {
+        eth: ethers.formatEther(newEthBalance),
+        tokens: ethers.formatEther(newTokenBalance),
+        lp: ethers.formatEther(newLpBalance)
+      };
+
+      // Save results
+      console.log("=== Settlement Results ===", results);
+      setSettlementResults(results);
+      console.log("Settlement results saved to state");
+
+    } catch (err) {
+      console.error("Error in settlement execution:", err);
+      setSettlementStep("");
+      handleTxError(err, "Failed to execute settlement");
+    } finally {
+      setSettlementExecuting(false);
+    }
   };
 
   const launchLbpConfig = useMemo(
@@ -977,6 +1724,72 @@ const PresalePage = ({ account }) => {
         () => managerContract.finalizeLbp(info.auction, vestingEscrowToUse !== ethers.ZeroAddress ? vestingEscrowToUse : ethers.ZeroAddress),
         null
       );
+      
+      // Refresh info and LBP state after successful finalize
+      await refreshInfo();
+      
+      // Refresh LBP state after successful finalize
+      if (info.lbp && info.lbp !== ethers.ZeroAddress) {
+        try {
+          const allAbis = await import("../abi/allAbis.json");
+          const { ensureProvider } = await import("../services/web3/provider");
+          const provider = ensureProvider();
+          const lbpAbi = allAbis.SecureLBP || [];
+          if (lbpAbi.length > 0) {
+            const { Contract } = await import("ethers");
+            const lbpContract = new Contract(info.lbp, lbpAbi, provider);
+            const [finalized, endTime, ethBalance, tokenAddress, uniswapLiquidityCreated] = await Promise.all([
+              lbpContract.finalized().catch(() => false),
+              lbpContract.endTime().catch(() => null),
+              provider.getBalance(info.lbp).catch(() => 0n),
+              lbpContract.token().catch(() => ethers.ZeroAddress),
+              lbpContract.uniswapLiquidityCreated().catch(() => false)
+            ]);
+
+            let tokenBalance = 0n;
+            if (tokenAddress !== ethers.ZeroAddress) {
+              const tokenAbi = allAbis.ERC20 || allAbis.TestToken || [];
+              if (tokenAbi.length > 0) {
+                const tokenContract = new Contract(tokenAddress, tokenAbi, provider);
+                tokenBalance = await tokenContract.balanceOf(info.lbp).catch(() => 0n);
+              }
+            }
+
+            // Check LP balance in pool
+            let lpBalance = 0n;
+            let poolAddress = null;
+            try {
+              const poolInit = await lbpContract.poolInitialized().catch(() => false);
+              if (poolInit) {
+                poolAddress = await lbpContract.pool().catch(() => ethers.ZeroAddress);
+                if (poolAddress !== ethers.ZeroAddress) {
+                  const poolAbi = allAbis.LBPWeightedAMM || [];
+                  if (poolAbi.length > 0) {
+                    const poolContract = new Contract(poolAddress, poolAbi, provider);
+                    lpBalance = await poolContract.balanceLP(info.lbp).catch(() => 0n);
+                  }
+                }
+              }
+            } catch (lpErr) {
+              console.warn("Failed to check LP balance after finalize:", lpErr);
+            }
+
+            setLbpState({
+              finalized,
+              endTime: endTime ? Number(endTime) : null,
+              ethBalance,
+              tokenBalance,
+              uniswapLiquidityCreated,
+              lpBalance,
+              poolAddress,
+              loading: false
+            });
+          }
+        } catch (refreshErr) {
+          console.warn("Failed to refresh LBP state after finalize:", refreshErr);
+        }
+      }
+      
       if (vestingEscrowToUse && vestingEscrowToUse !== ethers.ZeroAddress) {
         try {
           await new Promise(resolve => setTimeout(resolve, 2000)); // Wait for block confirmation
@@ -1426,6 +2239,597 @@ const PresalePage = ({ account }) => {
               currentTime={currentTime}
             />
           </div>
+
+          {/* Post-LBP Settlement Panel (Owner Only, After Finalization) */}
+          {isOwner && info?.lbp && info.lbp !== ethers.ZeroAddress && lbpState.finalized && (
+            <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-slate-950/90 to-slate-900/85 p-8 shadow-[0_20px_50px_rgba(0,0,0,0.3),0_0_0_1px_rgba(255,255,255,0.05)_inset] backdrop-blur-[20px] transition-all duration-300 hover:border-white/15 hover:shadow-[0_25px_60px_rgba(0,0,0,0.4),0_0_0_1px_rgba(255,255,255,0.08)_inset] sm:p-6 sm:p-5">
+              <div className="mb-6 flex items-center justify-between">
+                <h2 className="text-2xl font-bold text-white">Post-LBP Settlement</h2>
+                <button
+                  onClick={() => setIsSettlementPanelExpanded(!isSettlementPanelExpanded)}
+                  className="rounded-lg border border-white/20 bg-white/5 px-4 py-2 text-sm font-medium text-white/70 hover:bg-white/10 transition-colors flex items-center gap-2"
+                  title={isSettlementPanelExpanded ? "Collapse panel" : "Expand panel"}
+                >
+                  <span className="text-lg">{isSettlementPanelExpanded ? "▼" : "▶"}</span>
+                  <span>{isSettlementPanelExpanded ? "Collapse" : "Expand"}</span>
+                </button>
+              </div>
+              
+              {isSettlementPanelExpanded && (
+              <>
+              {(() => {
+                const isFinalized = lbpState.finalized;
+                const hasEnded = lbpState.endTime ? currentTime > lbpState.endTime : true;
+                // Panel is only shown if finalized, so content should always be visible
+                const shouldShowContent = true;
+                
+                if (!shouldShowContent) {
+                  console.log("Post-LBP Settlement panel conditions:", {
+                    isOwner,
+                    hasLbp: !!info?.lbp,
+                    lbpAddress: info?.lbp,
+                    finalized: isFinalized,
+                    endTime: lbpState.endTime,
+                    currentTime,
+                    hasEnded,
+                    shouldShowContent
+                  });
+                }
+                
+                return !shouldShowContent ? (
+                <div className="rounded-2xl border border-yellow-500/30 bg-yellow-500/10 p-6 text-yellow-100">
+                  <p className="m-0 text-base font-medium">
+                    {!lbpState.finalized 
+                      ? "Finalize LBP to unlock post-sale actions"
+                      : `LBP has not ended yet. End time: ${lbpState.endTime ? new Date(lbpState.endTime * 1000).toLocaleString() : "N/A"}, Current time: ${new Date(currentTime * 1000).toLocaleString()}`
+                    }
+                  </p>
+                  {lbpState.loading && (
+                    <p className="mt-2 text-sm text-yellow-200/70">Loading LBP state...</p>
+                  )}
+                </div>
+                ) : (
+                <>
+                  {/* 1. Read-Only Status Section */}
+                  <div className="mb-6 rounded-2xl border border-white/10 bg-slate-900/50 p-6">
+                    <h3 className="mb-4 text-lg font-semibold text-white">Status</h3>
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                      <div>
+                        <span className="text-sm text-white/70">SecureLBP ETH Balance:</span>
+                        <p className="m-0 mt-1 font-mono text-base font-medium text-white">
+                          {ethers.formatEther(lbpState.ethBalance ?? 0n)} ETH
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-sm text-white/70">SecureLBP Token Balance:</span>
+                        <p className="m-0 mt-1 font-mono text-base font-medium text-white">
+                          {ethers.formatEther(lbpState.tokenBalance ?? 0n)} tokens
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-sm text-white/70">Finalized:</span>
+                        <p className="m-0 mt-1 font-mono text-base font-medium text-white">
+                          {lbpState.finalized ? "Yes" : "No"}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-sm text-white/70">End Time:</span>
+                        <p className="m-0 mt-1 font-mono text-base font-medium text-white">
+                          {lbpState.endTime ? new Date(lbpState.endTime * 1000).toLocaleString() : "N/A"}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-sm text-white/70">Current Time:</span>
+                        <p className="m-0 mt-1 font-mono text-base font-medium text-white">
+                          {new Date(currentTime * 1000).toLocaleString()}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-sm text-white/70">Uniswap Migration:</span>
+                        <p className="m-0 mt-1 font-mono text-base font-medium text-white">
+                          {lbpState.uniswapLiquidityCreated ? "Completed" : "Not started"}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-sm text-white/70">LP Balance in Pool:</span>
+                        <p className="m-0 mt-1 font-mono text-base font-medium text-white">
+                          {ethers.formatEther(lbpState.lpBalance ?? 0n)} LP tokens
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Unwind Liquidity Section */}
+                  {(lbpState.lpBalance ?? 0n) > 0n && (
+                    <div className="mb-6 rounded-2xl border border-orange-500/30 bg-orange-500/10 p-6">
+                      <h3 className="mb-3 text-lg font-semibold text-white">Unwind Liquidity</h3>
+                      <p className="mb-4 text-sm text-white/70">
+                        You have {ethers.formatEther(lbpState.lpBalance ?? 0n)} LP tokens in the LBP pool. 
+                        Unwind them first to retrieve ETH and tokens before migration or withdrawal.
+                      </p>
+                      <button
+                        onClick={handleUnwindLiquidity}
+                        disabled={unwindingLiquidity || settlementExecuting}
+                        className="w-full rounded-xl border-0 bg-gradient-to-r from-orange-500 via-red-500 to-pink-500 px-6 py-4 text-base font-semibold text-white shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:scale-[1.02] hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:scale-100"
+                      >
+                        {unwindingLiquidity ? "Unwinding Liquidity…" : "Unwind Liquidity from Pool"}
+                      </button>
+                    </div>
+                  )}
+
+                  {/* 2. Split Configuration Section */}
+                  <div className="mb-6 rounded-2xl border border-white/10 bg-slate-900/50 p-6">
+                    <h3 className="mb-4 text-lg font-semibold text-white">Asset Split</h3>
+                    
+                    {/* ETH Split */}
+                    <div className="mb-4">
+                      <label className="mb-2 block text-sm font-medium text-white/90">
+                        ETH to Uniswap
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          step="any"
+                          min="0"
+                          value={settlementForm.ethToUniswap}
+                          onChange={(e) => handleSettlementFormChange("ethToUniswap", e.target.value)}
+                          placeholder="0.0"
+                          disabled={settlementExecuting || lbpState.uniswapLiquidityCreated}
+                          className="w-full rounded-xl border border-white/10 bg-slate-800/50 px-4 py-3 pr-24 text-white placeholder-white/40 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        />
+                        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleSetPercentage("eth", 25)}
+                            disabled={settlementExecuting || lbpState.uniswapLiquidityCreated}
+                            className="px-2 py-1 text-xs font-medium text-white/70 hover:text-white bg-white/5 hover:bg-white/10 rounded border border-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          >
+                            25%
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSetPercentage("eth", 50)}
+                            disabled={settlementExecuting || lbpState.uniswapLiquidityCreated}
+                            className="px-2 py-1 text-xs font-medium text-white/70 hover:text-white bg-white/5 hover:bg-white/10 rounded border border-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          >
+                            50%
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSetPercentage("eth", 75)}
+                            disabled={settlementExecuting || lbpState.uniswapLiquidityCreated}
+                            className="px-2 py-1 text-xs font-medium text-white/70 hover:text-white bg-white/5 hover:bg-white/10 rounded border border-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          >
+                            75%
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSetMax("eth")}
+                            disabled={settlementExecuting || lbpState.uniswapLiquidityCreated}
+                            className="px-2 py-1 text-xs font-semibold text-white hover:text-cyan-400 bg-cyan-500/20 hover:bg-cyan-500/30 rounded border border-cyan-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          >
+                            Max
+                          </button>
+                        </div>
+                      </div>
+                      <p className="mt-2 text-sm text-white/60">
+                        ETH to Treasury: {ethers.formatEther(
+                          (lbpState.ethBalance ?? 0n) - (settlementForm.ethToUniswap ? ethers.parseEther(settlementForm.ethToUniswap) : 0n)
+                        )} ETH
+                      </p>
+                    </div>
+
+                    {/* Token Split */}
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-white/90">
+                        Tokens to Uniswap
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          step="any"
+                          min="0"
+                          value={settlementForm.tokensToUniswap}
+                          onChange={(e) => handleSettlementFormChange("tokensToUniswap", e.target.value)}
+                          placeholder="0.0"
+                          disabled={settlementExecuting || lbpState.uniswapLiquidityCreated}
+                          className="w-full rounded-xl border border-white/10 bg-slate-800/50 px-4 py-3 pr-24 text-white placeholder-white/40 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        />
+                        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleSetPercentage("tokens", 25)}
+                            disabled={settlementExecuting || lbpState.uniswapLiquidityCreated}
+                            className="px-2 py-1 text-xs font-medium text-white/70 hover:text-white bg-white/5 hover:bg-white/10 rounded border border-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          >
+                            25%
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSetPercentage("tokens", 50)}
+                            disabled={settlementExecuting || lbpState.uniswapLiquidityCreated}
+                            className="px-2 py-1 text-xs font-medium text-white/70 hover:text-white bg-white/5 hover:bg-white/10 rounded border border-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          >
+                            50%
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSetPercentage("tokens", 75)}
+                            disabled={settlementExecuting || lbpState.uniswapLiquidityCreated}
+                            className="px-2 py-1 text-xs font-medium text-white/70 hover:text-white bg-white/5 hover:bg-white/10 rounded border border-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          >
+                            75%
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSetMax("tokens")}
+                            disabled={settlementExecuting || lbpState.uniswapLiquidityCreated}
+                            className="px-2 py-1 text-xs font-semibold text-white hover:text-cyan-400 bg-cyan-500/20 hover:bg-cyan-500/30 rounded border border-cyan-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          >
+                            Max
+                          </button>
+                        </div>
+                      </div>
+                      <p className="mt-2 text-sm text-white/60">
+                        Tokens to Treasury: {ethers.formatEther(
+                          (lbpState.tokenBalance ?? 0n) - (settlementForm.tokensToUniswap ? ethers.parseEther(settlementForm.tokensToUniswap) : 0n)
+                        )} tokens
+                      </p>
+                      {((settlementForm.ethToUniswap && parseFloat(settlementForm.ethToUniswap) > 0 && (!settlementForm.tokensToUniswap || parseFloat(settlementForm.tokensToUniswap) === 0)) ||
+                        (settlementForm.tokensToUniswap && parseFloat(settlementForm.tokensToUniswap) > 0 && (!settlementForm.ethToUniswap || parseFloat(settlementForm.ethToUniswap) === 0))) && (
+                        <p className="mt-2 text-sm text-yellow-400">
+                          ⚠️ Uniswap V3 migration requires both ETH and tokens. Enter both amounts to migrate, or leave both empty to withdraw everything to treasury.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Uniswap V3 Configuration Section */}
+                  {(() => {
+                    // Check if Uniswap V3 needs to be configured
+                    const needsUniswapConfig = settlementForm.ethToUniswap && settlementForm.tokensToUniswap &&
+                      parseFloat(settlementForm.ethToUniswap) > 0 && parseFloat(settlementForm.tokensToUniswap) > 0 &&
+                      !lbpState.uniswapLiquidityCreated;
+                    
+                    if (!needsUniswapConfig) return null;
+
+                    return (
+                      <div className="mb-6 rounded-2xl border border-blue-500/30 bg-blue-500/10 p-6">
+                        <h3 className="mb-4 text-lg font-semibold text-white">Uniswap V3 Configuration</h3>
+                        <p className="mb-4 text-sm text-white/70">
+                          Before migrating to Uniswap V3, you need to configure the Uniswap V3 contract addresses. 
+                          For localhost, you may need to deploy Uniswap V3 contracts or use mock addresses.
+                        </p>
+                        
+                        <div className="mb-4">
+                          <label className="mb-2 block text-sm font-medium text-white/90">
+                            Uniswap V3 Factory Address
+                          </label>
+                          <input
+                            type="text"
+                            value={settlementForm.uniswapFactory}
+                            onChange={(e) => handleSettlementFormChange("uniswapFactory", e.target.value)}
+                            placeholder="0x..."
+                            disabled={uniswapConfiguring || settlementExecuting}
+                            className="w-full rounded-xl border border-white/10 bg-slate-800/50 px-4 py-3 font-mono text-sm text-white placeholder-white/40 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50"
+                          />
+                        </div>
+
+                        <div className="mb-4">
+                          <label className="mb-2 block text-sm font-medium text-white/90">
+                            Uniswap V3 Position Manager Address
+                          </label>
+                          <input
+                            type="text"
+                            value={settlementForm.uniswapPositionManager}
+                            onChange={(e) => handleSettlementFormChange("uniswapPositionManager", e.target.value)}
+                            placeholder="0x..."
+                            disabled={uniswapConfiguring || settlementExecuting}
+                            className="w-full rounded-xl border border-white/10 bg-slate-800/50 px-4 py-3 font-mono text-sm text-white placeholder-white/40 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50"
+                          />
+                        </div>
+
+                        <div className="mb-4">
+                          <label className="mb-2 block text-sm font-medium text-white/90">
+                            WETH9 Address
+                          </label>
+                          <input
+                            type="text"
+                            value={settlementForm.weth}
+                            onChange={(e) => handleSettlementFormChange("weth", e.target.value)}
+                            placeholder="0x..."
+                            disabled={uniswapConfiguring || settlementExecuting}
+                            className="w-full rounded-xl border border-white/10 bg-slate-800/50 px-4 py-3 font-mono text-sm text-white placeholder-white/40 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50"
+                          />
+                        </div>
+
+                        <button
+                          onClick={handleConfigureUniswapV3}
+                          disabled={uniswapConfiguring || settlementExecuting || !settlementForm.uniswapFactory || !settlementForm.uniswapPositionManager || !settlementForm.weth}
+                          className="w-full rounded-xl border-0 bg-gradient-to-r from-blue-500 via-cyan-500 to-teal-500 px-6 py-4 text-base font-semibold text-white shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:scale-[1.02] hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:scale-100"
+                        >
+                          {uniswapConfiguring ? "Configuring…" : "Configure Uniswap V3"}
+                        </button>
+                      </div>
+                    );
+                  })()}
+
+                  {/* 3. Uniswap Parameters Section */}
+                  {settlementForm.ethToUniswap && settlementForm.tokensToUniswap &&
+                   parseFloat(settlementForm.ethToUniswap) > 0 && parseFloat(settlementForm.tokensToUniswap) > 0 &&
+                   !lbpState.uniswapLiquidityCreated && (
+                    <div className="mb-6 rounded-2xl border border-white/10 bg-slate-900/50 p-6">
+                      <h3 className="mb-4 text-lg font-semibold text-white">Uniswap V3 Parameters</h3>
+                      
+                      <div className="mb-4">
+                        <label className="mb-2 block text-sm font-medium text-white/90">
+                          <Tooltip text="Fee Tier: The trading fee percentage for this Uniswap V3 pool. Lower fees (0.05%) are better for stable pairs, higher fees (1%) for volatile pairs. 0.3% is the most common choice for most tokens.">
+                            Fee Tier
+                          </Tooltip>
+                        </label>
+                        <select
+                          value={settlementForm.feeTier}
+                          onChange={(e) => handleSettlementFormChange("feeTier", e.target.value)}
+                          disabled={settlementExecuting}
+                          className="w-full rounded-xl border border-white/10 bg-slate-800/50 px-4 py-3 text-white focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50"
+                        >
+                          <option value="500">0.05% (500) - Best for stable pairs</option>
+                          <option value="3000">0.3% (3000) - Recommended for most tokens</option>
+                          <option value="10000">1% (10000) - Best for volatile pairs</option>
+                        </select>
+                      </div>
+
+                      <div className="mb-4">
+                        <label className="mb-2 flex items-center gap-2 text-sm font-medium text-white/90">
+                          <input
+                            type="checkbox"
+                            checked={settlementForm.useFullRange}
+                            onChange={(e) => handleSettlementFormChange("useFullRange", e.target.checked)}
+                            disabled={settlementExecuting}
+                            className="rounded"
+                          />
+                          <Tooltip text="Use Full Range: When checked, liquidity covers the entire price range (-887272 to 887272 ticks). This is recommended for most cases as it ensures your liquidity is always active regardless of price movement. Uncheck only if you want to concentrate liquidity in a specific price range.">
+                            Use Full Range (Recommended)
+                          </Tooltip>
+                        </label>
+                      </div>
+
+                      {!settlementForm.useFullRange && (
+                        <div className="mb-4 grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="mb-2 block text-sm font-medium text-white/90">
+                              <Tooltip text="Tick Lower: The lower bound of the price range for your liquidity position. Ticks are discrete price points in Uniswap V3. Lower tick = lower price bound. Must be less than Tick Upper. Full range is -887272.">
+                                Tick Lower
+                              </Tooltip>
+                            </label>
+                            <input
+                              type="number"
+                              value={settlementForm.tickLower}
+                              onChange={(e) => handleSettlementFormChange("tickLower", e.target.value)}
+                              placeholder="-887272"
+                              disabled={settlementExecuting}
+                              className="w-full rounded-xl border border-white/10 bg-slate-800/50 px-4 py-3 text-white placeholder-white/40 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50"
+                            />
+                          </div>
+                          <div>
+                            <label className="mb-2 block text-sm font-medium text-white/90">
+                              <Tooltip text="Tick Upper: The upper bound of the price range for your liquidity position. Ticks are discrete price points in Uniswap V3. Upper tick = upper price bound. Must be greater than Tick Lower. Full range is 887272.">
+                                Tick Upper
+                              </Tooltip>
+                            </label>
+                            <input
+                              type="number"
+                              value={settlementForm.tickUpper}
+                              onChange={(e) => handleSettlementFormChange("tickUpper", e.target.value)}
+                              placeholder="887272"
+                              disabled={settlementExecuting}
+                              className="w-full rounded-xl border border-white/10 bg-slate-800/50 px-4 py-3 text-white placeholder-white/40 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50"
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="mb-4">
+                        <label className="mb-2 block text-sm font-medium text-white/90">
+                          <Tooltip text="Initial Price (sqrtPriceX96): The square root of the initial price ratio (token1/token0) multiplied by 2^96, in Q64.96 fixed-point format. This is used ONLY when creating a new pool that doesn't exist yet. If the pool already exists, this value is ignored. Calculate: sqrt(price) * 2^96, where price = amount of token1 per token0. Example: For 1 ETH = 1000 tokens, price = 1000, sqrt(1000) ≈ 31.62, sqrtPriceX96 ≈ 79228162514264337593543950336.">
+                            Initial Price (sqrtPriceX96)
+                          </Tooltip>
+                        </label>
+                        <input
+                          type="text"
+                          value={settlementForm.sqrtPriceX96}
+                          onChange={(e) => handleSettlementFormChange("sqrtPriceX96", e.target.value)}
+                          placeholder="79228162514264337593543950336"
+                          disabled={settlementExecuting}
+                          className="w-full rounded-xl border border-white/10 bg-slate-800/50 px-4 py-3 font-mono text-sm text-white placeholder-white/40 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50"
+                        />
+                        <p className="mt-1 text-xs text-white/60">
+                          Used only if pool does not exist. Format: Q64.96 fixed-point. Leave empty if pool already exists.
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className="mb-2 block text-sm font-medium text-white/90">
+                          <Tooltip text="LP Recipient Address: The Ethereum address that will receive the Uniswap V3 LP position NFT (Non-Fungible Token). This NFT represents your liquidity position and can be used to manage, collect fees, or remove liquidity later. Typically, this should be your treasury address or a wallet you control. The NFT will be minted to this address after successful migration.">
+                            LP Recipient Address
+                          </Tooltip>
+                        </label>
+                        <input
+                          type="text"
+                          value={settlementForm.lpRecipient}
+                          onChange={(e) => handleSettlementFormChange("lpRecipient", e.target.value)}
+                          placeholder="0x..."
+                          disabled={settlementExecuting}
+                          className="w-full rounded-xl border border-white/10 bg-slate-800/50 px-4 py-3 font-mono text-sm text-white placeholder-white/40 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 4. Action Button */}
+                  <div className="flex items-center gap-4">
+                    <button
+                      onClick={handleExecuteSettlement}
+                      disabled={
+                        settlementExecuting ||
+                        !lbpState.finalized ||
+                        (lbpState.endTime && currentTime <= lbpState.endTime) ||
+                        (() => {
+                          const ethToUniswap = settlementForm.ethToUniswap ? parseFloat(settlementForm.ethToUniswap) : 0;
+                          const tokensToUniswap = settlementForm.tokensToUniswap ? parseFloat(settlementForm.tokensToUniswap) : 0;
+                          const wantsMigration = ethToUniswap > 0 && tokensToUniswap > 0; // Both must be > 0 for migration
+                          
+                          if (wantsMigration) {
+                            // If migration is wanted, check all required fields
+                            return !settlementForm.sqrtPriceX96 || !settlementForm.lpRecipient || lbpState.uniswapLiquidityCreated;
+                          }
+                          // If no migration, just check if there's something to withdraw
+                          const ethToTreasury = parseFloat(ethers.formatEther(lbpState.ethBalance ?? 0n)) - ethToUniswap;
+                          const tokensToTreasury = parseFloat(ethers.formatEther(lbpState.tokenBalance ?? 0n)) - tokensToUniswap;
+                          return ethToTreasury <= 0 && tokensToTreasury <= 0;
+                        })()
+                      }
+                      className="flex-1 rounded-xl border-0 bg-gradient-to-r from-indigo-500 via-cyan-400 to-green-400 px-6 py-4 text-base font-semibold text-white shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:scale-[1.02] hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:scale-100"
+                    >
+                      {settlementExecuting 
+                        ? (settlementStep || "Executing…")
+                        : "Execute Post-LBP Settlement"
+                      }
+                    </button>
+                  </div>
+
+                  {settlementStep && (
+                    <div className="mt-4 rounded-xl border border-blue-500/30 bg-blue-500/10 p-4 text-blue-100">
+                      <p className="m-0 text-sm font-medium">{settlementStep}</p>
+                    </div>
+                  )}
+
+                  {/* Settlement Results */}
+                  {settlementResults && (
+                    <div className="mt-6 rounded-2xl border border-green-500/30 bg-gradient-to-br from-green-900/20 to-green-800/10 p-6 shadow-lg">
+                      <div className="mb-4 flex items-center justify-between">
+                        <h3 className="text-lg font-semibold text-green-400">
+                          ✅ Settlement Completed Successfully
+                        </h3>
+                        <button
+                          onClick={() => setSettlementResults(null)}
+                          className="rounded-lg border border-white/20 bg-white/5 px-3 py-1.5 text-xs font-medium text-white/70 hover:bg-white/10 transition-colors"
+                        >
+                          Close
+                        </button>
+                      </div>
+                      
+                      <div className="space-y-4">
+                        <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-white/60">
+                            Execution Time
+                          </p>
+                          <p className="font-mono text-sm text-white">
+                            {new Date(settlementResults.timestamp).toLocaleString()}
+                          </p>
+                        </div>
+
+                        {settlementResults.unwind && (
+                          <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-4">
+                            <div className="mb-2 flex items-center gap-2">
+                              <span className="text-lg">🔄</span>
+                              <p className="text-sm font-semibold text-blue-300">Liquidity Unwound</p>
+                            </div>
+                            <div className="space-y-1 text-xs text-blue-100">
+                              <p className="font-mono">Tx: {settlementResults.unwind.hash.slice(0, 10)}...{settlementResults.unwind.hash.slice(-8)}</p>
+                              <p>Block: {settlementResults.unwind.blockNumber?.toString()}</p>
+                            </div>
+                          </div>
+                        )}
+
+                        {settlementResults.migrate && (
+                          <div className="rounded-xl border border-purple-500/30 bg-purple-500/10 p-4">
+                            <div className="mb-2 flex items-center gap-2">
+                              <span className="text-lg">🚀</span>
+                              <p className="text-sm font-semibold text-purple-300">Migrated to Uniswap V3</p>
+                            </div>
+                            <div className="space-y-2 text-xs text-purple-100">
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <p className="text-white/60">ETH Amount:</p>
+                                  <p className="font-mono font-semibold">{settlementResults.migrate.ethAmount} ETH</p>
+                                </div>
+                                <div>
+                                  <p className="text-white/60">Token Amount:</p>
+                                  <p className="font-mono font-semibold">{settlementResults.migrate.tokenAmount} tokens</p>
+                                </div>
+                              </div>
+                              <div>
+                                <p className="text-white/60">LP Recipient:</p>
+                                <p className="font-mono break-all">{settlementResults.migrate.lpRecipient}</p>
+                              </div>
+                              <div>
+                                <p className="text-white/60">Fee Tier:</p>
+                                <p className="font-mono">{settlementResults.migrate.feeTier} ({Number(settlementResults.migrate.feeTier) / 10000}%)</p>
+                              </div>
+                              <p className="font-mono text-white/80">Tx: {settlementResults.migrate.hash.slice(0, 10)}...{settlementResults.migrate.hash.slice(-8)}</p>
+                              <p className="text-white/80">Block: {settlementResults.migrate.blockNumber?.toString()}</p>
+                            </div>
+                          </div>
+                        )}
+
+                        {settlementResults.withdrawEth && (
+                          <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-4">
+                            <div className="mb-2 flex items-center gap-2">
+                              <span className="text-lg">💰</span>
+                              <p className="text-sm font-semibold text-cyan-300">ETH Withdrawn to Treasury</p>
+                            </div>
+                            <div className="space-y-1 text-xs text-cyan-100">
+                              <p className="font-mono font-semibold text-base">{settlementResults.withdrawEth.amount} ETH</p>
+                              <p className="font-mono">Tx: {settlementResults.withdrawEth.hash.slice(0, 10)}...{settlementResults.withdrawEth.hash.slice(-8)}</p>
+                              <p>Block: {settlementResults.withdrawEth.blockNumber?.toString()}</p>
+                            </div>
+                          </div>
+                        )}
+
+                        {settlementResults.withdrawTokens && (
+                          <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-4">
+                            <div className="mb-2 flex items-center gap-2">
+                              <span className="text-lg">🪙</span>
+                              <p className="text-sm font-semibold text-yellow-300">Tokens Withdrawn to Treasury</p>
+                            </div>
+                            <div className="space-y-1 text-xs text-yellow-100">
+                              <p className="font-mono font-semibold text-base">{settlementResults.withdrawTokens.amount} tokens</p>
+                              <p className="font-mono">Tx: {settlementResults.withdrawTokens.hash.slice(0, 10)}...{settlementResults.withdrawTokens.hash.slice(-8)}</p>
+                              <p>Block: {settlementResults.withdrawTokens.blockNumber?.toString()}</p>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="rounded-xl border border-white/20 bg-white/5 p-4">
+                          <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-white/60">
+                            Final Balances (SecureLBP)
+                          </p>
+                          <div className="grid grid-cols-3 gap-3 text-xs">
+                            <div>
+                              <p className="text-white/60">ETH:</p>
+                              <p className="font-mono font-semibold text-white">{settlementResults.finalBalances.eth} ETH</p>
+                            </div>
+                            <div>
+                              <p className="text-white/60">Tokens:</p>
+                              <p className="font-mono font-semibold text-white">{settlementResults.finalBalances.tokens} tokens</p>
+                            </div>
+                            <div>
+                              <p className="text-white/60">LP:</p>
+                              <p className="font-mono font-semibold text-white">{settlementResults.finalBalances.lp} LP</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </>
+                );
+              })()}
+              </>
+              )}
+            </div>
+          )}
 
           {/* Early Incentives Management (Owner Only) */}
           {isOwner && auctionContract && info?.auction && (

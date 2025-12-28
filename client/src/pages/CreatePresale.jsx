@@ -26,7 +26,7 @@ const getTestTokenAddress = () => {
 
 const getInitialValues = () => ({
   saleToken: getTestTokenAddress(),
-  treasury: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+  treasury: "0x1CBd3b2770909D4e10f157cABC84C7264073C9Ec",
   tokensForSale: "100000",
   bonusReserve: "5000",
   perAddressCap: "1000",

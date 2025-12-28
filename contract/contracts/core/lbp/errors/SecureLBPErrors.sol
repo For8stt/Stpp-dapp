@@ -48,4 +48,11 @@ abstract contract SecureLBPErrors {
     error FeeNotConfigured();
     error InvalidInitialFeePreset();
     error InvalidFeeDecayDurationPreset();
+    error UniswapV3NotConfigured();
+    error UniswapLiquidityAlreadyCreated();
+    error InsufficientEthForMigration();
+    error InsufficientTokensForMigration();
+    error InvalidUniswapParams();
+    error UniswapPoolCreationFailed();
+    error UniswapMintFailed();
 }
