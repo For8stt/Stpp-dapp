@@ -281,57 +281,134 @@ const PresaleDeploy = () => {
 
   if (!latestEntry) {
     return (
-      <section className="flex flex-col gap-6">
-        <div className="rounded-[12px] bg-surface p-6 shadow-card">
-          <h2 className="m-0 mb-2 text-2xl font-semibold text-text">No deployment history found</h2>
-          <p className="m-0 text-text-muted">Run the on-chain deploy script to initialize the permissionless presale system.</p>
+      <section className="relative overflow-hidden py-16 sm:py-20">
+        <div className="absolute inset-0">
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(99,102,241,0.02),transparent_70%)]"></div>
+        </div>
+        <div className="container relative mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-6xl">
+            <div className="group relative overflow-hidden rounded-3xl border-2 border-primary/60 bg-gradient-to-br from-surface via-surface to-surface p-[2px] backdrop-blur-xl shadow-2xl shadow-primary/30 transition-all duration-700 hover:border-primary/80 hover:shadow-[0_12px_48px_rgba(99,102,241,0.6),0_0_0_1px_rgba(99,102,241,0.5)]">
+              <div className="absolute inset-0 rounded-3xl bg-gradient-to-r from-primary/80 via-indigo-500/80 via-purple-500/80 to-secondary/80 opacity-80 transition-opacity duration-700 group-hover:opacity-100"></div>
+              <div className="absolute inset-0 rounded-3xl bg-[linear-gradient(rgba(99,102,241,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(99,102,241,0.05)_1px,transparent_1px)] bg-[size:20px_20px] opacity-60"></div>
+              <div className="relative z-0 overflow-hidden rounded-3xl bg-gradient-to-br from-surface via-surface to-surface p-8 sm:p-10">
+                <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-indigo-500/12 to-secondary/20 opacity-70 transition-opacity duration-700 group-hover:opacity-100"></div>
+                <div className="absolute top-0 left-0 h-16 w-16 border-t-2 border-l-2 border-primary/40 rounded-tl-3xl"></div>
+                <div className="absolute top-0 right-0 h-16 w-16 border-t-2 border-r-2 border-secondary/40 rounded-tr-3xl"></div>
+                <div className="relative z-10">
+                  <h2 className="mb-4 bg-gradient-to-br from-text via-text to-text/80 bg-clip-text text-3xl font-bold text-transparent sm:text-4xl">No deployment history found</h2>
+                  <p className="text-lg text-text-muted sm:text-xl">Run the on-chain deploy script to initialize the permissionless presale system.</p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
     );
   }
 
   return (
-    <section className="flex flex-col gap-6">
-      <div className="rounded-[12px] bg-surface p-6 shadow-card">
-        <h1 className="m-0 mb-2 text-3xl font-bold text-text">Presale Deployment Console</h1>
-        <p className="m-0 text-text-muted">Interact with the permissionless presale factory deployed on-chain.</p>
+    <section className="relative overflow-hidden py-16 sm:py-20">
+      <div className="absolute inset-0">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(99,102,241,0.02),transparent_70%)]"></div>
       </div>
-
-      <div className="rounded-[12px] bg-surface p-6 shadow-card">
-        <div className="flex items-center justify-between gap-4 flex-wrap">
-          <div>
-            <h2 className="m-0 mb-2 text-2xl font-semibold text-text">Wallet</h2>
-            <p className="m-0 mb-1 text-text-muted">Address: {walletAddress || "Not connected"}</p>
-            <p className="m-0 text-text-muted">Network: {networkName || "Unknown"}</p>
+      <div className="container relative mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-6xl space-y-8">
+                    <div className="group relative overflow-hidden rounded-3xl border-2 border-primary/60 bg-gradient-to-br from-surface via-surface to-surface p-[2px] backdrop-blur-xl shadow-2xl shadow-primary/30 transition-all duration-700 hover:border-primary/80 hover:shadow-[0_12px_48px_rgba(99,102,241,0.6),0_0_0_1px_rgba(99,102,241,0.5)]">
+            <div className="absolute inset-0 rounded-3xl bg-gradient-to-r from-primary/80 via-indigo-500/80 via-purple-500/80 to-secondary/80 opacity-80 transition-opacity duration-700 group-hover:opacity-100"></div>
+            <div className="absolute inset-0 rounded-3xl bg-[linear-gradient(rgba(99,102,241,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(99,102,241,0.05)_1px,transparent_1px)] bg-[size:20px_20px] opacity-60"></div>
+            <div className="relative z-0 overflow-hidden rounded-3xl bg-gradient-to-br from-surface via-surface to-surface p-8 sm:p-10">
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-indigo-500/12 to-secondary/20 opacity-70 transition-opacity duration-700 group-hover:opacity-100"></div>
+              <div className="absolute top-0 left-0 h-16 w-16 border-t-2 border-l-2 border-primary/40 rounded-tl-3xl"></div>
+              <div className="absolute top-0 right-0 h-16 w-16 border-t-2 border-r-2 border-secondary/40 rounded-tr-3xl"></div>
+              <div className="relative z-10">
+                <h1 className="mb-4 bg-gradient-to-br from-text via-text to-text/80 bg-clip-text text-4xl font-bold text-transparent sm:text-5xl lg:text-6xl">Presale Deployment Console</h1>
+                <p className="text-lg text-text-muted sm:text-xl">Interact with the permissionless presale factory deployed on-chain.</p>
+              </div>
+            </div>
           </div>
-          <button
-            className="cursor-pointer rounded-lg border-0 bg-primary px-6 py-3 text-base font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-            onClick={connectWallet}
-            disabled={initializing}
-          >
-            {walletAddress ? "Reconnect" : "Connect Wallet"}
-          </button>
-        </div>
-      </div>
 
-      <div className="rounded-[12px] bg-surface p-6 shadow-card">
-        <h2 className="m-0 mb-4 text-2xl font-semibold text-text">Deployed Contracts</h2>
-        <div className="flex flex-wrap gap-4">
-          {infoCards.map((card) => (
-            <PresaleInfoCard key={card.name} title={card.name} address={resolveAddressValue(card.keys)} />
-          ))}
-        </div>
-      </div>
+                    <div className="group relative overflow-hidden rounded-3xl border-2 border-primary/60 bg-gradient-to-br from-surface via-surface to-surface p-[2px] backdrop-blur-xl shadow-2xl shadow-primary/30 transition-all duration-700 hover:border-primary/80 hover:shadow-[0_12px_48px_rgba(99,102,241,0.6),0_0_0_1px_rgba(99,102,241,0.5)]">
+            <div className="absolute inset-0 rounded-3xl bg-gradient-to-r from-primary/80 via-indigo-500/80 via-purple-500/80 to-secondary/80 opacity-80 transition-opacity duration-700 group-hover:opacity-100"></div>
+            <div className="absolute inset-0 rounded-3xl bg-[linear-gradient(rgba(99,102,241,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(99,102,241,0.05)_1px,transparent_1px)] bg-[size:20px_20px] opacity-60"></div>
+            <div className="relative z-0 overflow-hidden rounded-3xl bg-gradient-to-br from-surface via-surface to-surface p-8 sm:p-10">
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-indigo-500/12 to-secondary/20 opacity-70 transition-opacity duration-700 group-hover:opacity-100"></div>
+              <div className="absolute top-0 left-0 h-16 w-16 border-t-2 border-l-2 border-primary/40 rounded-tl-3xl"></div>
+              <div className="absolute top-0 right-0 h-16 w-16 border-t-2 border-r-2 border-secondary/40 rounded-tr-3xl"></div>
+              <div className="relative z-10">
+                <div className="mb-4 flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary/30 to-primary/15 text-primary shadow-lg">
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                    </svg>
+                  </div>
+                  <h2 className="bg-gradient-to-r from-text via-primary to-text bg-clip-text text-2xl font-bold text-transparent">Wallet</h2>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3 rounded-xl border-2 border-border/50 bg-gradient-to-br from-surface/90 to-surface/80 p-4 shadow-lg">
+                    <span className="text-sm font-semibold text-text-muted">Address:</span>
+                    <span className="font-mono text-base font-bold text-text">{walletAddress || "Not connected"}</span>
+                  </div>
+                  <div className="flex items-center gap-3 rounded-xl border-2 border-border/50 bg-gradient-to-br from-surface/90 to-surface/80 p-4 shadow-lg">
+                    <span className="text-sm font-semibold text-text-muted">Network:</span>
+                    <span className="text-base font-bold text-text">{networkName || "Unknown"}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
 
-      <div className="rounded-[12px] bg-surface p-6 shadow-card">
-        <h2 className="m-0 mb-4 text-2xl font-semibold text-text">Existing Presales</h2>
-        {!factoryAvailable ? (
-          <p className="m-0 text-text-muted">Factory not deployed, no presales to display.</p>
-        ) : loading ? (
-          <p className="m-0 text-text-muted">Loading presales…</p>
-        ) : (
-          <PresaleList items={userPresales} />
-        )}
+                    <div className="group relative overflow-hidden rounded-3xl border-2 border-primary/60 bg-gradient-to-br from-surface via-surface to-surface p-[2px] backdrop-blur-xl shadow-2xl shadow-primary/30 transition-all duration-700 hover:border-primary/80 hover:shadow-[0_12px_48px_rgba(99,102,241,0.6),0_0_0_1px_rgba(99,102,241,0.5)]">
+            <div className="absolute inset-0 rounded-3xl bg-gradient-to-r from-primary/80 via-indigo-500/80 via-purple-500/80 to-secondary/80 opacity-80 transition-opacity duration-700 group-hover:opacity-100"></div>
+            <div className="absolute inset-0 rounded-3xl bg-[linear-gradient(rgba(99,102,241,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(99,102,241,0.05)_1px,transparent_1px)] bg-[size:20px_20px] opacity-60"></div>
+            <div className="relative z-0 overflow-hidden rounded-3xl bg-gradient-to-br from-surface via-surface to-surface p-8 sm:p-10">
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-indigo-500/12 to-secondary/20 opacity-70 transition-opacity duration-700 group-hover:opacity-100"></div>
+              <div className="absolute top-0 left-0 h-16 w-16 border-t-2 border-l-2 border-primary/40 rounded-tl-3xl"></div>
+              <div className="absolute top-0 right-0 h-16 w-16 border-t-2 border-r-2 border-secondary/40 rounded-tr-3xl"></div>
+              <div className="relative z-10">
+                <div className="mb-6 flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary/30 to-primary/15 text-primary shadow-lg">
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  </div>
+                  <h2 className="bg-gradient-to-r from-text via-primary to-text bg-clip-text text-2xl font-bold text-transparent">Deployed Contracts</h2>
+                </div>
+                <div className="flex flex-wrap gap-4">
+                  {infoCards.map((card) => (
+                    <PresaleInfoCard key={card.name} title={card.name} address={resolveAddressValue(card.keys)} />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+                    <div className="group relative overflow-hidden rounded-3xl border-2 border-primary/60 bg-gradient-to-br from-surface via-surface to-surface p-[2px] backdrop-blur-xl shadow-2xl shadow-primary/30 transition-all duration-700 hover:border-primary/80 hover:shadow-[0_12px_48px_rgba(99,102,241,0.6),0_0_0_1px_rgba(99,102,241,0.5)]">
+            <div className="absolute inset-0 rounded-3xl bg-gradient-to-r from-primary/80 via-indigo-500/80 via-purple-500/80 to-secondary/80 opacity-80 transition-opacity duration-700 group-hover:opacity-100"></div>
+            <div className="absolute inset-0 rounded-3xl bg-[linear-gradient(rgba(99,102,241,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(99,102,241,0.05)_1px,transparent_1px)] bg-[size:20px_20px] opacity-60"></div>
+            <div className="relative z-0 overflow-hidden rounded-3xl bg-gradient-to-br from-surface via-surface to-surface p-8 sm:p-10">
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-indigo-500/12 to-secondary/20 opacity-70 transition-opacity duration-700 group-hover:opacity-100"></div>
+              <div className="absolute top-0 left-0 h-16 w-16 border-t-2 border-l-2 border-primary/40 rounded-tl-3xl"></div>
+              <div className="absolute top-0 right-0 h-16 w-16 border-t-2 border-r-2 border-secondary/40 rounded-tr-3xl"></div>
+              <div className="relative z-10">
+                <div className="mb-6 flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary/30 to-primary/15 text-primary shadow-lg">
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+                    </svg>
+                  </div>
+                  <h2 className="bg-gradient-to-r from-text via-primary to-text bg-clip-text text-2xl font-bold text-transparent">Existing Presales</h2>
+                </div>
+                {!factoryAvailable ? (
+                  <p className="text-base text-text-muted">Factory not deployed, no presales to display.</p>
+                ) : loading ? (
+                  <p className="text-base text-text-muted">Loading presales…</p>
+                ) : (
+                  <PresaleList items={userPresales} />
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
   );
