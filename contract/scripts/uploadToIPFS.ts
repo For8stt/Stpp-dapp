@@ -166,7 +166,7 @@ async function uploadToIPFS(filePath: string): Promise<string | null> {
         throw new Error(`File not found: ${filePath}`);
     }
 
-    console.log(`\n📤 Uploading to IPFS: ${filePath}\n`);
+    console.log(`\n[INFO] Uploading to IPFS: ${filePath}\n`);
 
     // Try HTTP API first (fastest if daemon is running)
     if (isIPFSDaemonRunning()) {
@@ -218,7 +218,7 @@ async function main() {
     }
 
     if (!filePath) {
-        console.error("❌ Error: File path is required\n");
+        console.error("[ERROR] File path is required\n");
         console.error("Usage (method 1 - environment variable):");
         console.error("  WHITELIST_JSON=whitelist-merkle-ipfs.json npx hardhat run scripts/uploadToIPFS.ts\n");
         console.error("Usage (method 2 - direct argument):");
@@ -242,20 +242,20 @@ async function main() {
             throw new Error("Upload failed - no CID returned");
         }
 
-        console.log(`\n✅ Upload successful!\n`);
-        console.log(`📊 Details:`);
+        console.log(`\n[SUCCESS] Upload successful!\n`);
+        console.log(`[DETAILS]`);
         console.log(`   File: ${filePath}`);
         console.log(`   CID: ${cid}`);
         console.log(`   IPFS URL: https://ipfs.io/ipfs/${cid}`);
         console.log(`   Gateway URL: https://gateway.ipfs.io/ipfs/${cid}\n`);
-        console.log(`📝 Next Steps:`);
+        console.log(`[NEXT STEPS]`);
         console.log(`   1. Use this CID in setWhitelistCID() function:`);
         console.log(`      await auctionContract.setWhitelistCID("${cid}");`);
         console.log(`   2. Or call it via PresaleManager if you have owner access\n`);
         
         return cid;
     } catch (error: any) {
-        console.error(`❌ Error: ${error.message}\n`);
+        console.error(`[ERROR] ${error.message}\n`);
         console.error("Troubleshooting:");
         console.error("  1. Make sure IPFS daemon is running: npx ipfs daemon");
         console.error("  2. Or install IPFS CLI globally: npm install -g ipfs");

@@ -281,7 +281,12 @@ const CommitForm = ({
             {autoProofStatus === 'loading' && (
               <div className="mb-3 rounded-lg border border-[rgba(59,130,246,0.3)] bg-[rgba(59,130,246,0.1)] p-3">
                 <p className="text-xs font-semibold text-[rgb(59,130,246)]">
-                  🔄 Loading whitelist proof from IPFS...
+                  <span className="flex items-center gap-2">
+                    <svg className="h-4 w-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Loading whitelist proof from IPFS...
+                  </span>
                 </p>
               </div>
             )}
@@ -296,8 +301,11 @@ const CommitForm = ({
             
             {autoProofStatus === 'not-found' && !hasProof && (
               <div className="mb-3 rounded-lg border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.1)] p-3">
-                <p className="text-xs font-semibold text-[rgb(239,68,68)]">
-                  ⚠️ You are not whitelisted for this auction
+                <p className="flex items-center gap-2 text-xs font-semibold text-[rgb(239,68,68)]">
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  You are not whitelisted for this auction
                 </p>
                 <p className="mt-1 text-xs text-[rgba(255,255,255,0.7)]">
                   Your address is not in the whitelist. Please contact the auction organizer or enter the Merkle proof manually.
@@ -338,8 +346,11 @@ const CommitForm = ({
                     disabled={false}
                   />
                   {proofValidation.error && form.merkleProof && (
-                    <p className="mt-2 text-xs font-semibold text-[rgb(239,68,68)]">
-                      ⚠️ {proofValidation.error}
+                    <p className="mt-2 flex items-center gap-2 text-xs font-semibold text-[rgb(239,68,68)]">
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      {proofValidation.error}
                     </p>
                   )}
                 </div>
@@ -373,7 +384,12 @@ const CommitForm = ({
                   Remaining: {formatToken((auctionData.perAddressCap || 0n) - (userData.committedQty || 0n), 18)}
                 </p>
                 {(userData.committedQty || 0n) >= (auctionData.perAddressCap || 0n) && (
-                  <p className="mt-2 text-xs font-semibold text-[rgb(239,68,68)]">⚠️ Cap reached</p>
+                  <p className="mt-2 flex items-center gap-2 text-xs font-semibold text-[rgb(239,68,68)]">
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    Cap reached
+                  </p>
                 )}
               </>
             )}

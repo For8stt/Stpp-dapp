@@ -227,7 +227,12 @@ const PostLbpSettlement = ({
               {((settlementForm.ethToUniswap && parseFloat(settlementForm.ethToUniswap) > 0 && (!settlementForm.tokensToUniswap || parseFloat(settlementForm.tokensToUniswap) === 0)) ||
                 (settlementForm.tokensToUniswap && parseFloat(settlementForm.tokensToUniswap) > 0 && (!settlementForm.ethToUniswap || parseFloat(settlementForm.ethToUniswap) === 0))) && (
                 <p className="mt-2 text-sm text-yellow-400">
-                  ⚠️ Uniswap V3 migration requires both ETH and tokens. Enter both amounts to migrate, or leave both empty to withdraw everything to treasury.
+                  <span className="flex items-center gap-2">
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    Uniswap V3 migration requires both ETH and tokens. Enter both amounts to migrate, or leave both empty to withdraw everything to treasury.
+                  </span>
                 </p>
               )}
             </div>
@@ -476,7 +481,12 @@ const PostLbpSettlement = ({
             <div className="mt-6 rounded-2xl border border-green-500/30 bg-gradient-to-br from-green-900/20 to-green-800/10 p-6 shadow-lg">
               <div className="mb-4 flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-green-400">
-                  ✅ Settlement Completed Successfully
+                  <span className="flex items-center gap-2">
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Settlement Completed Successfully
+                  </span>
                 </h3>
                 <button
                   onClick={onCloseResults}
@@ -499,7 +509,9 @@ const PostLbpSettlement = ({
                 {settlementResults.unwind && (
                   <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-4">
                     <div className="mb-2 flex items-center gap-2">
-                      <span className="text-lg">🔄</span>
+                      <svg className="h-5 w-5 text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
                       <p className="text-sm font-semibold text-blue-300">Liquidity Unwound</p>
                     </div>
                     <div className="space-y-1 text-xs text-blue-100">
@@ -512,7 +524,9 @@ const PostLbpSettlement = ({
                 {settlementResults.migrate && (
                   <div className="rounded-xl border border-purple-500/30 bg-purple-500/10 p-4">
                     <div className="mb-2 flex items-center gap-2">
-                      <span className="text-lg">🚀</span>
+                      <svg className="h-5 w-5 text-purple-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
                       <p className="text-sm font-semibold text-purple-300">Migrated to Uniswap V3</p>
                     </div>
                     <div className="space-y-2 text-xs text-purple-100">
@@ -543,7 +557,9 @@ const PostLbpSettlement = ({
                 {settlementResults.withdrawEth && (
                   <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-4">
                     <div className="mb-2 flex items-center gap-2">
-                      <span className="text-lg">💰</span>
+                      <svg className="h-5 w-5 text-cyan-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
                       <p className="text-sm font-semibold text-cyan-300">ETH Withdrawn to Treasury</p>
                     </div>
                     <div className="space-y-1 text-xs text-cyan-100">

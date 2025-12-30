@@ -1,6 +1,7 @@
 import React from "react";
 import { useAccount } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { PauseIcon } from "../common/Icons";
 
 const BidForm = ({
   lbpData,
@@ -61,8 +62,9 @@ const BidForm = ({
         )}
         {isPaused && timeUntilPauseEnd && (
           <div className="mt-4 rounded-lg border border-[rgba(239,68,68,0.5)] bg-[rgba(239,68,68,0.15)] p-4">
-            <p className="mb-2 text-center text-sm font-semibold text-[rgb(239,68,68)]">
-              ⛔ Trading Paused by Oracle
+            <p className="mb-2 flex items-center justify-center gap-2 text-center text-sm font-semibold text-[rgb(239,68,68)]">
+              <PauseIcon className="h-5 w-5" />
+              Trading Paused by Oracle
             </p>
             <p className="text-center text-xs text-white">
               Trading will resume in: {timeUntilPauseEnd.minutes}m {timeUntilPauseEnd.seconds}s

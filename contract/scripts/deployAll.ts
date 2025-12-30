@@ -38,10 +38,10 @@ function ensureDirectory(dirPath: string): void {
   try {
     if (!fs.existsSync(dirPath)) {
       fs.mkdirSync(dirPath, { recursive: true });
-      console.log(`📁 Created directory: ${dirPath}`);
+      console.log(`[INFO] Created directory: ${dirPath}`);
     }
   } catch (error) {
-    console.error(`❌ Failed to create directory ${dirPath}:`, error);
+    console.error(`[ERROR] Failed to create directory ${dirPath}:`, error);
     throw error;
   }
 }
@@ -168,7 +168,7 @@ function saveDeploymentJSON(addresses: DeploymentAddresses): void {
     fs.writeFileSync(deploymentsFile, JSON.stringify(config, null, 2));
     console.log(`\n Saved deployment config to: ${deploymentsFile}`);
   } catch (error) {
-    console.error(`❌ Failed to write ${deploymentsFile}:`, error);
+    console.error(`[ERROR] Failed to write ${deploymentsFile}:`, error);
     throw error;
   }
 }
@@ -200,9 +200,9 @@ function saveUniswapV3Addresses(factory: string, positionManager: string, weth: 
 
   try {
     fs.writeFileSync(uniswapV3AddressesFile, JSON.stringify(addresses, null, 2));
-    console.log(`\n✅ Saved Uniswap V3 addresses to: ${uniswapV3AddressesFile}`);
+    console.log(`\n[SUCCESS] Saved Uniswap V3 addresses to: ${uniswapV3AddressesFile}`);
   } catch (error) {
-    console.error(`❌ Failed to write ${uniswapV3AddressesFile}:`, error);
+    console.error(`[ERROR] Failed to write ${uniswapV3AddressesFile}:`, error);
     throw error;
   }
 }
@@ -314,7 +314,7 @@ function printSummary(addresses: DeploymentAddresses): void {
   console.log("=".repeat(80));
   console.log(`\n🌐 Network: ${network.name} (Chain ID: ${network.config.chainId || "31337"})`);
   
-  console.log("\n📋 Deployed Contract Addresses:");
+  console.log("\n[INFO] Deployed Contract Addresses:");
   console.log("─".repeat(80));
   console.log(`  PresaleManager Implementation: ${addresses.managerImpl}`);
   console.log(`  PublicPresaleFactory:         ${addresses.publicFactory}`);
@@ -421,7 +421,7 @@ async function main() {
     addresses.feeOracle = await lbpOracle.getAddress();
     
     // Configure oracle parameters (protocol-level configuration)
-    console.log(`\n⚙️  Configuring LBPOracle parameters...`);
+    console.log(`\n[INFO] Configuring LBPOracle parameters...`);
     try {
       // Set fee parameters (baseFeeBP: 1%, maxFeeBP: 10%)
       const setFeeTx = await lbpOracle.setFeeBP(100, 1000);
@@ -448,8 +448,8 @@ async function main() {
       await setCooldownTx.wait();
       console.log(`  ✓ Cooldown configured (1 minute)`);
     } catch (error) {
-      console.error(`  ⚠️  Failed to configure oracle parameters:`, error);
-      console.log(`  ⚠️  You may need to configure oracle parameters manually`);
+      console.error(`  [WARNING] Failed to configure oracle parameters:`, error);
+      console.log(`  [WARNING] You may need to configure oracle parameters manually`);
     }
 
     // 7. Set oracle in PublicPresaleFactory (for automatic injection into new clones)
@@ -465,9 +465,9 @@ async function main() {
       console.log(`  ✓ All new PresaleManager clones will automatically receive this oracle`);
       console.log(`  ✓ All new LBPs created by users will automatically use this oracle`);
     } catch (error) {
-      console.error(`  ⚠️  Failed to set oracle in PublicPresaleFactory:`, error);
+      console.error(`  [WARNING] Failed to set oracle in PublicPresaleFactory:`, error);
       if (addresses.feeOracle) {
-      console.log(`  ⚠️  You may need to call PublicPresaleFactory.setLbpOracle(${addresses.feeOracle}) manually`);
+      console.log(`  [WARNING] You may need to call PublicPresaleFactory.setLbpOracle(${addresses.feeOracle}) manually`);
       }
     }
 
@@ -491,7 +491,7 @@ async function main() {
     } catch (error) {
       console.error(` Failed to transfer tokens to owner wallet:`, error);
       // Don't fail the deployment if transfer fails - user can do it manually
-      console.log(`️You may need to transfer tokens manually to ${ownerAddress}`);
+      console.log(`[WARNING] You may need to transfer tokens manually to ${ownerAddress}`);
     }
 
     // 8. Deploy SecureLBP implementation (with dummy parameters for frontend reference)
@@ -598,7 +598,7 @@ async function main() {
     // Print summary
     printSummary(completeAddresses);
   } catch (error) {
-    console.error("\n❌ Deployment failed:", error);
+    console.error("\n[ERROR] Deployment failed:", error);
     process.exitCode = 1;
     throw error;
   }

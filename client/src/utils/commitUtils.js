@@ -159,43 +159,6 @@ export const verifyMerkleProof = (proof, merkleRoot, address) => {
 };
 
 /**
- * Loads Merkle proof for an address from a whitelist JSON file
- * @param {File} file - JSON file containing whitelist Merkle tree data
- * @param {string} address - Ethereum address (checksummed or lowercase)
- * @returns {Promise<{merkleRoot: string, proof: string[]}>} Merkle root and proof array
- */
-export const loadMerkleProofFromFile = async (file, address) => {
-  try {
-    const text = await file.text();
-    const data = JSON.parse(text);
-    
-    if (!data.merkleRoot) {
-      throw new Error("Invalid whitelist file: missing merkleRoot");
-    }
-    
-    if (!data.proofs || typeof data.proofs !== "object") {
-      throw new Error("Invalid whitelist file: missing proofs object");
-    }
-    const normalizedAddress = address.toLowerCase();
-    const proof = data.proofs[normalizedAddress];
-    
-    if (!proof || !Array.isArray(proof)) {
-      throw new Error(`No proof found for address ${address}`);
-    }
-    
-    return {
-      merkleRoot: data.merkleRoot,
-      proof: proof
-    };
-  } catch (error) {
-    if (error instanceof SyntaxError) {
-      throw new Error("Invalid JSON file format");
-    }
-    throw error;
-  }
-};
-
-/**
  * Calculates required ETH deposit for a commit
  * @param quantity - Token quantity. Can be a string (e.g., "1.5") or BigInt in wei.
  * @param referencePrice - Reference price in wei (ETH per token, 18 decimals)

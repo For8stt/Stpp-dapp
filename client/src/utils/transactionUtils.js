@@ -48,22 +48,6 @@ export const handleTransactionError = (err, defaultMessage, setTxStatus) => {
 };
 
 /**
- * Створення підписувача контракту
- */
-export const getContractSigner = async (contractAddress, abiName) => {
-  const { BrowserProvider } = await import("ethers");
-  if (!window.ethereum) {
-    throw new Error("No wallet provider");
-  }
-  const provider = new BrowserProvider(window.ethereum);
-  const signer = await provider.getSigner();
-  const allAbis = await import("../abi/allAbis.json");
-  const abi = allAbis[abiName] || [];
-  const { Contract } = await import("ethers");
-  return new Contract(contractAddress, abi, signer);
-};
-
-/**
  * Виконання транзакції з обробкою статусу
  */
 export const executeTransaction = async ({

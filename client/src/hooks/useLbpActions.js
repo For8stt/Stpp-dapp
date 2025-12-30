@@ -257,7 +257,7 @@ export const useLbpActions = (lbpAddress, lbpData, poolData, account, weights, r
             
             handleTxError(
               new Error(`OraclePausedError`),
-              `⛔ Trading is paused by Oracle due to rapid price movement. Please wait ${minutes}m ${seconds}s before placing another bid.`
+              `Trading is paused by Oracle due to rapid price movement. Please wait ${minutes}m ${seconds}s before placing another bid.`
             );
             return;
           }
@@ -351,9 +351,9 @@ export const useLbpActions = (lbpAddress, lbpData, poolData, account, weights, r
               const minutes = Math.floor(remaining / 60);
               const seconds = remaining % 60;
               if (pausedUntil > 0 && remaining > 0) {
-                oraclePauseMessage = `⛔ Trading is paused by Oracle due to rapid price movement. Please wait ${minutes}m ${seconds}s before placing another bid.`;
+                oraclePauseMessage = `Trading is paused by Oracle due to rapid price movement. Please wait ${minutes}m ${seconds}s before placing another bid.`;
               } else {
-                oraclePauseMessage = `⛔ Trading is paused by Oracle due to rapid price movement. Please wait for the pause to end before placing another bid.`;
+                oraclePauseMessage = `Trading is paused by Oracle due to rapid price movement. Please wait for the pause to end before placing another bid.`;
               }
             }
           }
@@ -373,7 +373,7 @@ export const useLbpActions = (lbpAddress, lbpData, poolData, account, weights, r
         
         handleTxError(
           err,
-          oraclePauseMessage || "⛔ Trading is paused by Oracle due to rapid price movement. Please wait for the pause to end before placing another bid."
+          oraclePauseMessage || "Trading is paused by Oracle due to rapid price movement. Please wait for the pause to end before placing another bid."
         );
         return;
       }
@@ -417,7 +417,7 @@ export const useLbpActions = (lbpAddress, lbpData, poolData, account, weights, r
               const oracleContract = new Contract(lbpData.oracle, oracleAbi, provider);
               const paused = await oracleContract.isPaused(poolAddr);
               if (paused || hasOraclePausedInString) {
-                let pauseMessage = "⛔ Trading is paused by Oracle due to rapid price movement. Please wait for the pause to end before placing another bid.";
+                let pauseMessage = "Trading is paused by Oracle due to rapid price movement. Please wait for the pause to end before placing another bid.";
                 if (paused) {
                   try {
                     const pausedUntilBigInt = await oracleContract.pausedUntilForPool(poolAddr);
@@ -428,7 +428,7 @@ export const useLbpActions = (lbpAddress, lbpData, poolData, account, weights, r
                     if (remaining > 0) {
                       const minutes = Math.floor(remaining / 60);
                       const seconds = remaining % 60;
-                      pauseMessage = `⛔ Trading is paused by Oracle due to rapid price movement. Please wait ${minutes}m ${seconds}s before placing another bid.`;
+                      pauseMessage = `Trading is paused by Oracle due to rapid price movement. Please wait ${minutes}m ${seconds}s before placing another bid.`;
                     }
                   } catch (pauseTimeErr) {
                   }
@@ -439,7 +439,7 @@ export const useLbpActions = (lbpAddress, lbpData, poolData, account, weights, r
             }
           } catch (oracleCheckErr) {
             if (hasOraclePausedInString) {
-              handleTxError(err, "⛔ Trading is paused by Oracle due to rapid price movement. Please wait for the pause to end before placing another bid.");
+              handleTxError(err, "Trading is paused by Oracle due to rapid price movement. Please wait for the pause to end before placing another bid.");
               return;
             }
           }

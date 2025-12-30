@@ -95,7 +95,12 @@ const LBPHeader = ({ lbpAddress, lbpData, status, timeUntilEnd, timeUntilPauseEn
           <h3 className="relative z-10 mb-2 text-[0.8125rem] font-semibold uppercase tracking-wider text-[rgb(148,163,184)]">Oracle Pause</h3>
           {timeUntilPauseEnd ? (
             <div>
-              <p className="relative z-10 text-sm font-bold text-[rgb(239,68,68)] mb-1">⛔ Yes</p>
+              <p className="relative z-10 flex items-center gap-2 text-sm font-bold text-[rgb(239,68,68)] mb-1">
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Yes
+              </p>
               <p className="relative z-10 text-base font-bold text-white">
                 Resumes in: {timeUntilPauseEnd.hours}h {timeUntilPauseEnd.minutes}m {timeUntilPauseEnd.seconds}s
               </p>

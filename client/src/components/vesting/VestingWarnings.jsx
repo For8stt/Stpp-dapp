@@ -1,5 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
+import { WarningIcon, ClockIcon } from "../common/Icons";
 
 const VestingWarnings = ({
   escrowAddress,
@@ -28,8 +29,9 @@ const VestingWarnings = ({
     <div className="mb-8 space-y-4">
       {hasEscrowMismatch && (
         <div className="rounded-2xl border border-red-500/50 bg-gradient-to-br from-red-500/20 to-red-500/10 p-6">
-          <h3 className="mb-4 text-lg font-bold text-red-400">
-            ⚠️ Wrong Vesting Escrow Detected
+          <h3 className="mb-4 flex items-center gap-2 text-lg font-bold text-red-400">
+            <WarningIcon className="h-6 w-6" />
+            Wrong Vesting Escrow Detected
           </h3>
           <p className="mb-4 text-white/90">
             The LBP contract is linked to a different vesting escrow than the one you're viewing.
@@ -52,8 +54,9 @@ const VestingWarnings = ({
       
       {hasAuctionAllocationButNoLBP && (
         <div className="rounded-2xl border border-orange-500/50 bg-gradient-to-br from-orange-500/20 to-orange-500/10 p-6">
-          <h3 className="mb-4 text-lg font-bold text-orange-400">
-            ⚠️ Tokens Purchased in Auction, Not LBP
+          <h3 className="mb-4 flex items-center gap-2 text-lg font-bold text-orange-400">
+            <WarningIcon className="h-6 w-6" />
+            Tokens Purchased in Auction, Not LBP
           </h3>
           <p className="mb-4 text-white/90">
             You have {userAllocationFromAuction ? `${(Number(userAllocationFromAuction) / 1e18).toFixed(4)} tokens` : "tokens"} allocated in the Dutch Auction, but this vesting escrow only tracks tokens purchased in the LBP (Liquidity Bootstrap Pool).
@@ -73,8 +76,9 @@ const VestingWarnings = ({
       
       {hasCliffNotPassed && (
         <div className="rounded-2xl border border-yellow-500/50 bg-gradient-to-br from-yellow-500/20 to-yellow-500/10 p-6">
-          <h3 className="mb-4 text-lg font-bold text-yellow-400">
-            ⏳ Cliff Period Not Passed Yet
+          <h3 className="mb-4 flex items-center gap-2 text-lg font-bold text-yellow-400">
+            <ClockIcon className="h-6 w-6" />
+            Cliff Period Not Passed Yet
           </h3>
           <p className="mb-4 text-white/90">
             Tokens are in the escrow, but the vesting cliff period has not passed yet. You cannot claim tokens until the cliff period ends.

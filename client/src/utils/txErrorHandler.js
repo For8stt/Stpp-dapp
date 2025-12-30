@@ -74,7 +74,7 @@ export const handleTxError = (error, defaultMessage = "Transaction failed") => {
     toast.error(
       defaultMessage?.includes("Oracle") || defaultMessage?.includes("paused by Oracle")
         ? defaultMessage
-        : "⛔ Trading is paused by Oracle due to rapid price movement. Please wait for the pause to end before placing another bid.",
+        : "Trading is paused by Oracle due to rapid price movement. Please wait for the pause to end before placing another bid.",
       {
         position: "bottom-right",
         autoClose: 12000,
@@ -96,7 +96,7 @@ export const handleTxError = (error, defaultMessage = "Transaction failed") => {
     errorString.includes("invalid proof");
 
   if (isInvalidProof) {
-    toast.error("❌ Invalid Merkle proof. Your address may not be in the whitelist, or the proof is incorrect. Please verify your proof and try again.", {
+    toast.error("Invalid Merkle proof. Your address may not be in the whitelist, or the proof is incorrect. Please verify your proof and try again.", {
       position: "bottom-right",
       autoClose: 10000,
       hideProgressBar: false,

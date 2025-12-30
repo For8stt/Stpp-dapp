@@ -215,36 +215,7 @@ export const loadBonusAllocationFromIPFS = async (
     }
 };
 
-/**
- * Clears cache for a specific auction
- * @param {string} auctionAddress - Auction contract address
- * @param {string} merkleRoot - Merkle root (optional, clears all if not provided)
- */
-export const clearBonusAllocationCache = (auctionAddress, merkleRoot = null) => {
-    if (typeof window === 'undefined' || !window.localStorage) {
-        return;
-    }
-
-    try {
-        if (merkleRoot) {
-            const cacheKey = getCacheKey(auctionAddress, merkleRoot);
-            window.localStorage.removeItem(cacheKey);
-        } else {
-            const prefix = `${CACHE_PREFIX}${auctionAddress.toLowerCase()}:`;
-            for (let i = window.localStorage.length - 1; i >= 0; i--) {
-                const key = window.localStorage.key(i);
-                if (key && key.startsWith(prefix)) {
-                    window.localStorage.removeItem(key);
-                }
-            }
-        }
-    } catch (error) {
-        console.warn('[IPFS Bonus] Error clearing cache:', error);
-    }
-};
-
 export default {
     loadBonusAllocationFromIPFS,
-    clearBonusAllocationCache,
 };
 

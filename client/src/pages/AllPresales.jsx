@@ -189,7 +189,9 @@ const AllPresales = () => {
               <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 via-transparent to-transparent"></div>
               <div className="relative z-10">
                 <div className="mb-4 inline-flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-2">
-                  <span className="text-xl">⚠️</span>
+                  <svg className="h-5 w-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
                   <p className="text-lg font-semibold text-red-400">Error Loading Presales</p>
                 </div>
                 <p className="mb-6 text-base leading-relaxed text-red-300">{error}</p>
@@ -228,8 +230,10 @@ const AllPresales = () => {
             <div className="group relative mx-auto max-w-7xl overflow-hidden rounded-2xl border border-border/40 bg-gradient-to-br from-surface/70 to-surface/50 p-16 text-center backdrop-blur-sm transition-all duration-500 hover:border-primary/60 hover:from-surface/90 hover:to-surface/70">
               <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent"></div>
               <div className="relative z-10">
-                <div className="mb-6 inline-flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-primary/10 text-4xl shadow-lg shadow-primary/25">
-                  📦
+                <div className="mb-6 inline-flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-primary/10 shadow-lg shadow-primary/25">
+                  <svg className="h-10 w-10 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                  </svg>
                   <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/20 to-transparent"></div>
                 </div>
                 <h3 className="mb-3 text-3xl font-bold text-text">No presales deployed yet</h3>

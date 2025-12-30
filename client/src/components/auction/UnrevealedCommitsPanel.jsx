@@ -36,7 +36,10 @@ const UnrevealedCommitsPanel = ({
       
       {auctionData.successful && penaltyBps > 0n && (
         <div className="mb-4 rounded-xl border border-[rgba(245,158,11,0.4)] bg-[rgba(245,158,11,0.1)] p-4">
-          <p className="mb-2 text-sm font-semibold text-[rgb(251,191,36)]">⚠️ Penalty Notice</p>
+          <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-[rgb(251,191,36)]">
+            <WarningIcon className="h-5 w-5" />
+            Penalty Notice
+          </p>
           <p className="text-sm text-[rgba(255,255,255,0.8)]">
             Since the auction was successful, a penalty of {penaltyPercent}% will be applied to each unrevealed commit withdrawal.
           </p>

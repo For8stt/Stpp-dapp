@@ -79,7 +79,12 @@ const RevealForm = ({
                   Remaining: {formatToken((auctionData.perAddressCap || 0n) - (userData.revealedQty || 0n), 18)}
                 </p>
                 {(userData.revealedQty || 0n) >= (auctionData.perAddressCap || 0n) && (
-                  <p className="mt-2 text-xs font-semibold text-[rgb(239,68,68)]">⚠️ Cap reached</p>
+                  <p className="mt-2 flex items-center gap-2 text-xs font-semibold text-[rgb(239,68,68)]">
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    Cap reached
+                  </p>
                 )}
               </>
             )}
@@ -87,7 +92,12 @@ const RevealForm = ({
         )}
         {auctionData.nonRevealPenaltyBps > 0n && (
           <div className="mb-4 rounded-xl border border-[rgba(245,158,11,0.4)] bg-[rgba(245,158,11,0.1)] p-4">
-            <p className="mb-2 text-sm font-semibold text-[rgb(251,191,36)]">⚠️ Non-Reveal Penalty</p>
+            <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-[rgb(251,191,36)]">
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              Non-Reveal Penalty
+            </p>
             <p className="text-xs text-[rgba(255,255,255,0.8)]">
               If you commit but don't reveal, and the auction succeeds, a penalty of {(Number(auctionData.nonRevealPenaltyBps) / 100).toFixed(2)}% 
               will be applied when withdrawing your unrevealed commit deposit.

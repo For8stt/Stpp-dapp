@@ -1,9 +1,8 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { ToastContainer, toast } from "react-toastify";
-import { useAccount, useDisconnect } from "wagmi";
+import { useAccount } from "wagmi";
 
 import AppRouter from "./router";
-import { clearConnectionState, resetConnection } from "./services/web3/contract";
 import "./styles/globals.css";
 import "./styles/theme.css";
 import "./styles/tailwind.css";
@@ -11,7 +10,6 @@ import "react-toastify/dist/ReactToastify.css";
 
 const App = () => {
   const { address, isConnected, isConnecting } = useAccount();
-  const { disconnect } = useDisconnect();
   const [refreshKey, setRefreshKey] = useState(0);
   const [initializing, setInitializing] = useState(true);
 
@@ -35,13 +33,6 @@ const App = () => {
     },
     [triggerRefresh, address]
   );
-
-  const handleDisconnect = useCallback(() => {
-    disconnect();
-    clearConnectionState();
-    triggerRefresh();
-    toast.info("Wallet disconnected");
-  }, [disconnect, triggerRefresh]);
 
   useEffect(() => {
     const initialize = async () => {
@@ -73,9 +64,6 @@ const App = () => {
       <AppRouter
         account={address}
         onConnect={handleConnected}
-        onDisconnect={handleDisconnect}
-        onWalletChange={() => {}}
-        selectedWalletId={null}
         refreshKey={refreshKey}
         onActionComplete={triggerRefresh}
         initializing={initializing}

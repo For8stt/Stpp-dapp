@@ -4,14 +4,18 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "npx hardhat test",
     "test:securelbp": "npx hardhat test test/SecureLBP/deployment.test.ts test/SecureLBP/pool.test.ts test/SecureLBP/core.test.ts test/SecureLBP/oracle.test.ts test/SecureLBP/admin.test.ts test/SecureLBP/flow.test.ts test/SecureLBP/security.test.ts test/SecureLBP/gas.test.ts",
     "test:weightedamm": "npx hardhat test test/test-WeightedAMM/WeightedAMM.economic.test.ts test/test-WeightedAMM/WeightedAMM.gas.test.ts test/test-WeightedAMM/WeightedAMM.property.test.ts test/test-WeightedAMM/WeightedAMM.test.ts",
     "test:dutchauction": "npx hardhat test test/DutchAuction/CommitRevealFlow.test.ts test/DutchAuction/ExtendedBehaviors.test.ts",
     "test:presalemanager": "npx hardhat test test/PresaleManager/PresaleManagerManager.test.ts",
-    "deploy:test-token": "npx hardhat run scripts/deployTestToken.ts --network localhost",
+    "test:lbp": "npx hardhat test test/LBPWeightedAMM.test.ts",
+    "test:vesting": "npx hardhat test test/TokenVestingEscrow",
+    "test:scenarios": "npx hardhat test test/Scenarios",
     "deploy:all": "npx hardhat run scripts/deployAll.ts --network localhost",
-    "bonus:compute": "npx hardhat run scripts/computeAndCopyBonusAllocations.ts --network localhost"
+    "bonus:compute": "npx hardhat run scripts/computeBonusAllocations.ts --network localhost",
+    "whitelist:generate": "npx hardhat run scripts/generateWhitelistMerkle.ts",
+    "whitelist:upload": "npx hardhat run scripts/uploadToIPFS.ts"
   },
   "keywords": [],
   "author": "",

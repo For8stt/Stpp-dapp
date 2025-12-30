@@ -1,4 +1,5 @@
 import React from "react";
+import { CheckIcon, XIcon, WarningIcon } from "../common/Icons";
 import { ethers } from "ethers";
 import { formatEther, formatToken } from "../../utils/formatUtils";
 
@@ -199,7 +200,12 @@ const PoolStateOverview = ({
         {/* Debug Panel for Post-Pause Decay - Show if we have any debug data or postPauseDecayFeeBP */}
         {(lbpData?.postPauseDecayDebug || (lbpData?.postPauseDecayFeeBP && Number(lbpData.postPauseDecayFeeBP) > 0)) && (
             <div className="relative z-10 mt-3 p-3 bg-[rgba(0,0,0,0.3)] rounded border border-[rgba(255,255,255,0.1)]">
-              <p className="text-xs font-semibold text-yellow-400 mb-2">🔍 Post-Pause Decay Debug:</p>
+              <p className="mb-2 flex items-center gap-2 text-xs font-semibold text-yellow-400">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                Post-Pause Decay Debug:
+              </p>
               <div className="text-xs text-[rgb(148,163,184)] space-y-1">
                 {lbpData?.postPauseDecayDebug ? (
                   <>
@@ -227,7 +233,10 @@ const PoolStateOverview = ({
                     </div>
                     {lbpData.postPauseDecayDebug.lastUnpauseTime && Number(lbpData.postPauseDecayDebug.lastUnpauseTime) > 0 ? (
                       <div className="mt-2 pt-2 border-t border-[rgba(255,255,255,0.1)]">
-                        <div className="text-yellow-300">✅ Decay Active</div>
+                        <div className="flex items-center gap-2 text-yellow-300">
+                          <CheckIcon className="h-4 w-4" />
+                          Decay Active
+                        </div>
                         <div>Time since unpause: {Math.floor(Number(lbpData.postPauseDecayDebug.elapsedTime || 0) / 60)}m {Number(lbpData.postPauseDecayDebug.elapsedTime || 0) % 60}s</div>
                         {lbpData.postPauseDecayDebug.lastPausedUntil && Number(lbpData.postPauseDecayDebug.lastPausedUntil) > 0 && (
                           <div className="mt-1 text-[rgb(100,116,139)]">
@@ -237,7 +246,10 @@ const PoolStateOverview = ({
                       </div>
                     ) : (
                       <div className="mt-2 pt-2 border-t border-[rgba(255,255,255,0.1)]">
-                        <div className="text-red-300">❌ Decay NOT Active</div>
+                        <div className="flex items-center gap-2 text-red-300">
+                          <XIcon className="h-4 w-4" />
+                          Decay NOT Active
+                        </div>
                         <div className="text-[rgb(100,116,139)]">lastUnpauseTime is 0 - decay not initialized</div>
                         {lbpData.postPauseDecayDebug.lastPausedUntil && Number(lbpData.postPauseDecayDebug.lastPausedUntil) > 0 && (
                           <div className="mt-1 text-[rgb(100,116,139)]">
@@ -254,7 +266,10 @@ const PoolStateOverview = ({
                   </>
                 ) : (
                   <div>
-                    <div className="text-red-300">⚠️ Debug data not available</div>
+                    <div className="flex items-center gap-2 text-red-300">
+                      <WarningIcon className="h-4 w-4" />
+                      Debug data not available
+                    </div>
                     <div className="text-[rgb(100,116,139)] mt-1">
                       postPauseDecayFeeBP: {lbpData?.postPauseDecayFeeBP ? (Number(lbpData.postPauseDecayFeeBP) / 100).toFixed(2) + "%" : "0%"}
                     </div>

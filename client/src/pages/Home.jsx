@@ -1,43 +1,44 @@
 import React from "react";
 import { NavLink } from "react-router-dom";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { TargetIcon, ShieldIcon, PackageIcon, DropletIcon, ClockIcon, LockIcon, LightningIcon, GlobeIcon } from "../components/common/Icons";
 
 const Home = ({ account }) => {
   const features = [
     {
       title: "Dutch Auction",
       description: "Commit-reveal price discovery mechanism ensures fair and transparent token pricing through sealed bids.",
-      icon: "🎯",
+      icon: TargetIcon,
       color: "primary",
     },
     {
       title: "Merkle Whitelist",
       description: "Optional access control with efficient Merkle tree verification for early participants.",
-      icon: "🔐",
+      icon: LockIcon,
       color: "primary",
     },
     {
       title: "IPFS Integration",
       description: "Decentralized storage for whitelist Merkle roots and bonus token allocations via IPFS, ensuring immutable and verifiable data.",
-      icon: "📦",
+      icon: PackageIcon,
       color: "secondary",
     },
     {
       title: "Liquidity Bootstrapping Pool",
       description: "Dynamic price discovery through weighted AMM pools that gradually shift token distribution.",
-      icon: "💧",
+      icon: DropletIcon,
       color: "secondary",
     },
     {
       title: "Vesting & Distribution",
       description: "Automated token vesting with configurable cliffs and linear release schedules.",
-      icon: "⏳",
+      icon: ClockIcon,
       color: "primary",
     },
     {
       title: "Security & Trustless",
       description: "Non-custodial design with auditable smart contracts and transparent on-chain operations.",
-      icon: "🛡️",
+      icon: ShieldIcon,
       color: "primary",
     },
   ];
@@ -174,12 +175,12 @@ const Home = ({ account }) => {
                 }`}></div>
                 
                 
-                <div className={`relative mb-6 inline-flex h-20 w-20 items-center justify-center rounded-2xl text-5xl transition-all duration-500 group-hover:scale-110 group-hover:rotate-3 ${
+                <div className={`relative mb-6 inline-flex h-20 w-20 items-center justify-center rounded-2xl transition-all duration-500 group-hover:scale-110 group-hover:rotate-3 ${
                   feature.color === 'primary' 
                     ? 'bg-primary/20 shadow-lg shadow-primary/30 group-hover:bg-primary/25 group-hover:shadow-primary/40' 
                     : 'bg-secondary/20 shadow-lg shadow-secondary/30 group-hover:bg-secondary/25 group-hover:shadow-secondary/40'
                 }`}>
-                  {feature.icon}
+                  {React.createElement(feature.icon, { className: "h-10 w-10 text-current" })}
                   
                   <div className={`absolute inset-0 rounded-2xl opacity-30 blur-xl transition-opacity duration-500 group-hover:opacity-50 ${
                     feature.color === 'primary' ? 'bg-primary' : 'bg-secondary'
@@ -341,8 +342,8 @@ const Home = ({ account }) => {
                 <div className="absolute -right-4 -top-4 h-24 w-24 rounded-full bg-primary/12 blur-2xl opacity-40 transition-opacity duration-500 group-hover:opacity-60"></div>
                 
                 
-                <div className="relative mb-6 inline-flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-primary/10 text-4xl shadow-lg shadow-primary/25 transition-all duration-500 group-hover:scale-110 group-hover:shadow-xl group-hover:shadow-primary/40">
-                  🔒
+                <div className="relative mb-6 inline-flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-primary/10 shadow-lg shadow-primary/25 transition-all duration-500 group-hover:scale-110 group-hover:shadow-xl group-hover:shadow-primary/40">
+                  <LockIcon className="h-10 w-10 text-current" />
                   <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/20 to-transparent"></div>
                   <div className="absolute -inset-1 rounded-2xl bg-primary/15 blur-md opacity-60"></div>
                 </div>
@@ -367,8 +368,10 @@ const Home = ({ account }) => {
                 <div className="absolute -right-4 -top-4 h-24 w-24 rounded-full bg-primary/12 blur-2xl opacity-40 transition-opacity duration-500 group-hover:opacity-60"></div>
                 
                 
-                <div className="relative mb-6 inline-flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-primary/10 text-4xl shadow-lg shadow-primary/25 transition-all duration-500 group-hover:scale-110 group-hover:shadow-xl group-hover:shadow-primary/40">
-                  📋
+                <div className="relative mb-6 inline-flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-primary/10 shadow-lg shadow-primary/25 transition-all duration-500 group-hover:scale-110 group-hover:shadow-xl group-hover:shadow-primary/40">
+                  <svg className="h-10 w-10 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
                   <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/20 to-transparent"></div>
                   <div className="absolute -inset-1 rounded-2xl bg-primary/15 blur-md opacity-60"></div>
                 </div>
@@ -393,8 +396,8 @@ const Home = ({ account }) => {
                 <div className="absolute -right-4 -top-4 h-24 w-24 rounded-full bg-secondary/12 blur-2xl opacity-40 transition-opacity duration-500 group-hover:opacity-60"></div>
                 
                 
-                <div className="relative mb-6 inline-flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-secondary/20 to-secondary/10 text-4xl shadow-lg shadow-secondary/25 transition-all duration-500 group-hover:scale-110 group-hover:shadow-xl group-hover:shadow-secondary/40">
-                  ⚡
+                <div className="relative mb-6 inline-flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-secondary/20 to-secondary/10 shadow-lg shadow-secondary/25 transition-all duration-500 group-hover:scale-110 group-hover:shadow-xl group-hover:shadow-secondary/40">
+                  <LightningIcon className="h-10 w-10 text-current" />
                   <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/20 to-transparent"></div>
                   <div className="absolute -inset-1 rounded-2xl bg-secondary/15 blur-md opacity-60"></div>
                 </div>
@@ -419,8 +422,8 @@ const Home = ({ account }) => {
                 <div className="absolute -right-4 -top-4 h-24 w-24 rounded-full bg-secondary/12 blur-2xl opacity-40 transition-opacity duration-500 group-hover:opacity-60"></div>
                 
                 
-                <div className="relative mb-6 inline-flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-secondary/20 to-secondary/10 text-4xl shadow-lg shadow-secondary/25 transition-all duration-500 group-hover:scale-110 group-hover:shadow-xl group-hover:shadow-secondary/40">
-                  🌐
+                <div className="relative mb-6 inline-flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-secondary/20 to-secondary/10 shadow-lg shadow-secondary/25 transition-all duration-500 group-hover:scale-110 group-hover:shadow-xl group-hover:shadow-secondary/40">
+                  <GlobeIcon className="h-10 w-10 text-current" />
                   <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/20 to-transparent"></div>
                   <div className="absolute -inset-1 rounded-2xl bg-secondary/15 blur-md opacity-60"></div>
                 </div>

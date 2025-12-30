@@ -580,7 +580,7 @@ const AuctionView = () => {
     let bonusQty = 0n;
     let merkleProof = [];
 
-    console.log('🚀 [Claim] Starting claim process:', {
+    console.log('[Claim] Starting claim process:', {
       auctionAddress,
       userAddress: account,
       hasAuctionContract: !!auctionContract,
@@ -593,12 +593,12 @@ const AuctionView = () => {
       if (auctionContract && account) {
         try {
           bonusClaimed = await auctionContract.bonusClaimed(account);
-          console.log('✅ [Claim] Bonus claim status checked:', {
+          console.log('[Claim] Bonus claim status checked:', {
             bonusClaimed,
             userAddress: account
           });
         } catch (err) {
-          console.warn('⚠️ [Claim] Could not check bonusClaimed:', err);
+          console.warn('[Claim] Could not check bonusClaimed:', err);
         }
       }
 
@@ -609,7 +609,7 @@ const AuctionView = () => {
         let bonusAllocation = null;
         const ipfsCID = auctionData?.bonusAllocationsCID || null;
         if (ipfsCID) {
-          console.log('📥 [Claim] Loading bonus allocation from IPFS...', { cid: ipfsCID });
+          console.log('[Claim] Loading bonus allocation from IPFS...', { cid: ipfsCID });
           try {
             bonusAllocation = await loadBonusAllocationFromIPFS(
               ipfsCID,
@@ -618,23 +618,23 @@ const AuctionView = () => {
               merkleRoot
             );
             if (bonusAllocation) {
-              console.log('✅ [Claim] Bonus allocation loaded from IPFS');
+              console.log('[Claim] Bonus allocation loaded from IPFS');
             } else {
-              console.warn('⚠️ [Claim] No bonus allocation found in IPFS for this address');
+              console.warn('[Claim] No bonus allocation found in IPFS for this address');
             }
           } catch (ipfsError) {
-            console.error('❌ [Claim] Error loading from IPFS:', ipfsError);
-            console.warn('⚠️ [Claim] Cannot load bonus allocation from IPFS. Please ensure CID is set correctly.');
+            console.error('[Claim] Error loading from IPFS:', ipfsError);
+            console.warn('[Claim] Cannot load bonus allocation from IPFS. Please ensure CID is set correctly.');
           }
         } else {
-          console.warn('⚠️ [Claim] No IPFS CID found for this auction. Bonus allocation cannot be loaded.');
+          console.warn('[Claim] No IPFS CID found for this auction. Bonus allocation cannot be loaded.');
           console.warn('   Owner should set the IPFS CID in BonusMerkleManager component.');
         }
         
         if (bonusAllocation) {
           bonusQty = BigInt(bonusAllocation.bonusQty);
           merkleProof = bonusAllocation.merkleProof || [];
-          console.log('✅ [Claim] Bonus allocation ready:', {
+          console.log('[Claim] Bonus allocation ready:', {
             bonusQty: bonusQty.toString(),
             bonusQtyFormatted: `${Number(bonusQty) / 1e18} tokens`,
             proofLength: merkleProof.length,
@@ -642,18 +642,18 @@ const AuctionView = () => {
             source: 'IPFS'
           });
         } else {
-          console.log('ℹ️ [Claim] No bonus allocation available. User can still claim base allocation.');
+          console.log('[Claim] No bonus allocation available. User can still claim base allocation.');
           bonusQty = 0n;
           merkleProof = [];
         }
       } else if (bonusClaimed) {
-        console.log('ℹ️ [Claim] Bonus already claimed:', {
+        console.log('[Claim] Bonus already claimed:', {
           bonusClaimed,
           currentBonusQty: userData?.allocation?.bonusQty?.toString() || '0'
         });
       }
     } catch (bonusError) {
-      console.error('❌ [Claim] Error loading bonus allocation:', {
+      console.error('[Claim] Error loading bonus allocation:', {
         error: bonusError,
         message: bonusError?.message,
         stack: bonusError?.stack
@@ -708,17 +708,17 @@ const AuctionView = () => {
           try {
             const currentAllocation = await auctionContract.accountAllocations(account);
             currentAllocationBonusQty = BigInt(currentAllocation.bonusQty?.toString() || '0');
-            console.log('📊 [Claim] Current allocation on-chain:', {
+            console.log('[Claim] Current allocation on-chain:', {
               totalQty: currentAllocation.totalQty?.toString() || '0',
               bonusQty: currentAllocationBonusQty.toString(),
               paymentDue: currentAllocation.paymentDue?.toString() || '0',
               computed: currentAllocation.computed
             });
           } catch (allocError) {
-            console.warn('⚠️ [Claim] Could not read current allocation:', allocError);
+            console.warn('[Claim] Could not read current allocation:', allocError);
           }
 
-          console.log('📞 [Claim] Calling claim function:', {
+          console.log('[Claim] Calling claim function:', {
             bonusQty: bonusQty.toString(),
             bonusQtyFormatted: `${Number(bonusQty) / 1e18} tokens`,
             merkleProofLength: merkleProof.length,
@@ -729,7 +729,7 @@ const AuctionView = () => {
             bonusAlreadyIncluded: currentAllocationBonusQty > 0n && currentAllocationBonusQty === bonusQty
           });
           if (bonusQty > 0n && !bonusClaimed && bonusMerkleRootSet && currentAllocationBonusQty === 0n) {
-            console.log('✅ [Claim] Calling claim WITH bonus:', {
+            console.log('[Claim] Calling claim WITH bonus:', {
               bonusQty: bonusQty.toString(),
               bonusQtyFormatted: `${Number(bonusQty) / 1e18} tokens`,
               proofLength: merkleProof.length,
@@ -737,17 +737,17 @@ const AuctionView = () => {
             });
             return await auctionWithSigner.claim(bonusQty, merkleProof);
           } else if (bonusClaimed && currentAllocationBonusQty === 0n) {
-            console.error('❌ [Claim] ERROR: Bonus marked as claimed but not included in allocation!', {
+            console.error('[Claim] ERROR: Bonus marked as claimed but not included in allocation!', {
               bonusClaimed,
               currentAllocationBonusQty: currentAllocationBonusQty.toString(),
               expectedBonusQty: bonusQty.toString()
             });
             throw new Error('Bonus was marked as claimed but not included in allocation. This may require manual intervention.');
           } else if (currentAllocationBonusQty > 0n && currentAllocationBonusQty === bonusQty) {
-            console.log('ℹ️ [Claim] Bonus already included in allocation, claiming base tokens only');
+            console.log('[Claim] Bonus already included in allocation, claiming base tokens only');
             return await auctionWithSigner.claim(0, []);
           } else {
-            console.log('ℹ️ [Claim] Calling claim WITHOUT bonus', {
+            console.log('[Claim] Calling claim WITHOUT bonus', {
               reason: bonusClaimed ? 'Bonus already claimed' : 
                       !bonusMerkleRootSet ? 'Merkle root not set' :
                       bonusQty === 0n ? 'No bonus allocation found' :
@@ -1032,7 +1032,12 @@ const AuctionView = () => {
       {/* Early Bonus Info Panel */}
       {auctionData?.bonusReserve > 0n && auctionData?.earlyBonusPct > 0n && (
         <div className="mb-8 rounded-2xl border border-[rgba(251,191,36,0.3)] bg-gradient-to-br from-[rgba(251,191,36,0.1)] to-[rgba(217,119,6,0.05)] p-6 shadow-lg">
-          <h3 className="mb-4 text-xl font-bold text-[rgb(251,191,36)]">🎁 Early Incentives</h3>
+          <h3 className="mb-4 flex items-center gap-2 text-xl font-bold text-[rgb(251,191,36)]">
+            <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
+            </svg>
+            Early Incentives
+          </h3>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div>
               <p className="mb-1 text-sm text-[rgba(255,255,255,0.7)]">Bonus Percentage</p>

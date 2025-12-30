@@ -177,7 +177,7 @@ function readAddressesFromFile(filePath: string): string[] {
         // Check for duplicates
         const uniqueCount = new Set(addresses.map(a => a.toLowerCase())).size;
         if (uniqueCount < addresses.length) {
-            console.warn(`⚠️  Warning: Found ${addresses.length - uniqueCount} duplicate address(es). They will be deduplicated.`);
+            console.warn(`[WARNING] Found ${addresses.length - uniqueCount} duplicate address(es). They will be deduplicated.`);
         }
 
         return addresses;
@@ -199,29 +199,29 @@ function generateWhitelistMerkle(
     addressesFile: string,
     outputPath?: string
 ): WhitelistOutput {
-    console.log(`\n🌳 Generating Whitelist Merkle Tree\n`);
-    console.log(`📂 Reading addresses from: ${addressesFile}\n`);
+    console.log(`\n[INFO] Generating Whitelist Merkle Tree\n`);
+    console.log(`[INFO] Reading addresses from: ${addressesFile}\n`);
 
     const addresses = readAddressesFromFile(addressesFile);
     const uniqueAddresses = Array.from(new Set(addresses.map(a => a.toLowerCase())))
         .map(a => ethers.getAddress(a));
 
-    console.log(`📋 Found ${addresses.length} address(es) (${uniqueAddresses.length} unique)\n`);
+    console.log(`[INFO] Found ${addresses.length} address(es) (${uniqueAddresses.length} unique)\n`);
 
     if (uniqueAddresses.length === 0) {
         throw new Error("No valid addresses found");
     }
 
-    console.log(`🔨 Building Merkle tree...\n`);
+    console.log(`[INFO] Building Merkle tree...\n`);
     const { root, proofs } = buildMerkleTree(uniqueAddresses);
 
-    console.log(`✅ Merkle tree generated successfully!\n`);
-    console.log(`📊 Summary:`);
+    console.log(`[SUCCESS] Merkle tree generated successfully!\n`);
+    console.log(`[SUMMARY]`);
     console.log(`   Total Addresses: ${uniqueAddresses.length}`);
     console.log(`   Merkle Root: ${root}\n`);
 
     // Verify proofs
-    console.log(`🔍 Verifying proofs...\n`);
+    console.log(`[INFO] Verifying proofs...\n`);
     let verifiedCount = 0;
     for (const address of uniqueAddresses) {
         const proof = proofs[address.toLowerCase()];
@@ -244,36 +244,32 @@ function generateWhitelistMerkle(
         verifiedCount++;
     }
 
-    console.log(`✅ Verified ${verifiedCount} proof(s)\n`);
+    console.log(`[SUCCESS] Verified ${verifiedCount} proof(s)\n`);
 
-    const output: WhitelistOutput = {
-        merkleRoot: root,
-        proofs: proofs,
-        addresses: uniqueAddresses,
-        totalAddresses: uniqueAddresses.length
-    };
-
-    const finalOutputPath = outputPath || join(process.cwd(), "whitelist-merkle.json");
-    writeFileSync(finalOutputPath, JSON.stringify(output, null, 2));
-    console.log(`💾 Full output written to: ${finalOutputPath}\n`);
-    
-    // Also create IPFS-ready format (proofs with optional merkleRoot for validation)
-    const ipfsFormat = {
+    // Create IPFS-ready format (proofs with optional merkleRoot for validation)
+    const ipfsFormat: IPFSWhitelistFormat = {
         merkleRoot: root, // Include for validation
         proofs: proofs
     };
-    const ipfsOutputPath = finalOutputPath.replace('.json', '-ipfs.json');
-    writeFileSync(ipfsOutputPath, JSON.stringify(ipfsFormat, null, 2));
-    console.log(`📤 IPFS-ready format written to: ${ipfsOutputPath}\n`);
-    console.log(`   Upload this file to IPFS and use the CID in setWhitelistCID()\n`);
+    
+    const finalOutputPath = outputPath || join(process.cwd(), "whitelist-merkle-ipfs.json");
+    writeFileSync(finalOutputPath, JSON.stringify(ipfsFormat, null, 2));
+    console.log(`[SUCCESS] IPFS-ready format written to: ${finalOutputPath}\n`);
+    console.log(`[INFO] Upload this file to IPFS and use the CID in setWhitelistCID()\n`);
 
-    console.log(`📝 Usage Instructions:`);
+    console.log(`[USAGE] Instructions:`);
     console.log(`   1. Use the merkleRoot value when creating the auction`);
     console.log(`   2. Upload whitelist-merkle-ipfs.json to IPFS`);
     console.log(`   3. Call setWhitelistCID() with the IPFS CID`);
     console.log(`   4. Frontend will automatically load proofs for whitelisted addresses\n`);
 
-    return output;
+    // Return output in the old format for backwards compatibility
+    return {
+        merkleRoot: root,
+        proofs: proofs,
+        addresses: uniqueAddresses,
+        totalAddresses: uniqueAddresses.length
+    };
 }
 
 async function main() {
@@ -307,11 +303,11 @@ async function main() {
     }
 
     if (!addressesFile) {
-        console.error("❌ Error: Addresses file is required\n");
+        console.error("[ERROR] Addresses file is required\n");
         console.error("Usage (method 1 - environment variables):");
-        console.error("  WHITELIST_FILE=whitelist.txt OUTPUT_FILE=whitelist-merkle.json npx hardhat run scripts/generateWhitelistMerkle.ts\n");
+        console.error("  WHITELIST_FILE=whitelist.txt OUTPUT_FILE=whitelist-merkle-ipfs.json npx hardhat run scripts/generateWhitelistMerkle.ts\n");
         console.error("Usage (method 2 - direct arguments, may not work with Hardhat):");
-        console.error("  npx hardhat run scripts/generateWhitelistMerkle.ts whitelist.txt whitelist-merkle.json\n");
+        console.error("  npx hardhat run scripts/generateWhitelistMerkle.ts whitelist.txt whitelist-merkle-ipfs.json\n");
         console.error("Input file format (whitelist.txt):");
         console.error("  One address per line (checksummed or lowercase)");
         console.error("  Example:");
@@ -325,7 +321,7 @@ async function main() {
     try {
         generateWhitelistMerkle(addressesFile, outputFile);
     } catch (error: any) {
-        console.error(`❌ Error: ${error.message}\n`);
+        console.error(`[ERROR] ${error.message}\n`);
         process.exit(1);
     }
 }

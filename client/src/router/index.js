@@ -2,7 +2,6 @@ import React from "react";
 import { BrowserRouter, NavLink, Route, Routes } from "react-router-dom";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 
-import Dashboard from "../pages/Dashboard";
 import Home from "../pages/Home";
 import PresaleDeploy from "../pages/PresaleDeploy";
 import CreatePresale from "../pages/CreatePresale";
@@ -32,7 +31,6 @@ const NavItem = ({ to, end, children, onClick }) => (
 const AppRouter = ({
   account,
   onConnect,
-  onDisconnect,
   refreshKey,
   onActionComplete,
   initializing
@@ -61,7 +59,6 @@ const AppRouter = ({
             
             <nav className="hidden items-center gap-0.5 md:flex">
               <NavItem to="/" end>Home</NavItem>
-              <NavItem to="/dashboard">Dashboard</NavItem>
               <NavItem to="/all">All Presales</NavItem>
               <NavItem to="/create">Create</NavItem>
               <NavItem to="/deploy">Deploy</NavItem>
@@ -98,7 +95,6 @@ const AppRouter = ({
             <div className="border-t border-border/50 bg-surface/95 backdrop-blur-xl md:hidden">
               <nav className="flex flex-col gap-1 p-4">
                 <NavItem to="/" end onClick={() => setMobileMenuOpen(false)}>Home</NavItem>
-                <NavItem to="/dashboard" onClick={() => setMobileMenuOpen(false)}>Dashboard</NavItem>
                 <NavItem to="/all" onClick={() => setMobileMenuOpen(false)}>All Presales</NavItem>
                 <NavItem to="/create" onClick={() => setMobileMenuOpen(false)}>Create</NavItem>
                 <NavItem to="/deploy" onClick={() => setMobileMenuOpen(false)}>Deploy</NavItem>
@@ -128,10 +124,6 @@ const AppRouter = ({
                   account={account}
                 />
               }
-            />
-            <Route
-              path="/dashboard"
-              element={<Dashboard account={account} refreshKey={refreshKey} onActionComplete={onActionComplete} />}
             />
             <Route path="/deploy" element={<PresaleDeploy />} />
             <Route path="/create" element={<CreatePresale account={account} onConnect={onConnect} />} />

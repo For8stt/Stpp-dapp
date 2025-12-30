@@ -132,7 +132,10 @@ const AuctionControls = ({
       {isOwner && auctionAddress && auctionData && (
         <div className="rounded-2xl border border-amber-500/20 bg-gradient-to-br from-amber-900/20 to-amber-800/10 p-6 shadow-[0_4px_12px_rgba(245,158,11,0.1),inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-[10px]">
           <div className="mb-4">
-            <p className="mb-2 flex items-center gap-2 text-base font-semibold text-amber-200 before:content-['⚡'] before:text-lg">
+            <p className="mb-2 flex items-center gap-2 text-base font-semibold text-amber-200">
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
               Accelerate Auction (Low Demand)
             </p>
             <p className="text-xs text-white/60 leading-relaxed">
@@ -185,7 +188,13 @@ const AuctionControls = ({
       )}
 
       <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/80 to-slate-800/60 p-6 shadow-[0_4px_12px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-[10px]">
-        <p className="mb-4 mt-0 flex items-center gap-2 text-sm font-semibold text-white before:content-['⚙️'] before:text-base">LBP config override</p>
+        <p className="mb-4 mt-0 flex items-center gap-2 text-sm font-semibold text-white">
+          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          LBP config override
+        </p>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Input
             label="Start time"

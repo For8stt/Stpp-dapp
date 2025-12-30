@@ -372,7 +372,7 @@ contract DutchAuction is IAuction, Ownable, ReentrancyGuard, DutchAuctionEvents,
 
         _determineClearingPrice();
 
-        if (tokensSold == 0 || totalRaised < softCap) {
+        if (tokensSold == 0 || totalDepositsRevealed < softCap) {
             successful = false;
             finalized = true;
             clearingPrice = 0;

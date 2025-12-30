@@ -6,6 +6,7 @@ import { useTime } from "../../time";
 import { loadBonusAllocationFromIPFS } from "../../utils/ipfsBonusAllocations";
 import { safeContractCall } from "../../utils/contractUtils";
 import { isValidCID, getIPFSURL } from "../../services/ipfs/ipfsService";
+import { MoneyIcon, LightBulbIcon, CheckIcon, ChartIcon, GiftIcon, InfoIcon, WarningIcon } from "../common/Icons";
 
 const BPS_DENOMINATOR = 10000n;
 
@@ -341,7 +342,10 @@ const ClaimPanel = ({
       {/* Show refund available message when vesting hasn't started */}
       {claimableInfo.vestingStartsAt && refundAmount > 0n && !refundAlreadyClaimed && (
         <div className="mb-4 rounded-xl border border-[rgba(16,185,129,0.3)] bg-[rgba(16,185,129,0.1)] p-4">
-          <p className="mb-2 text-sm font-semibold text-[rgb(110,231,183)]">💰 Refund Available</p>
+          <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-[rgb(110,231,183)]">
+            <MoneyIcon className="h-5 w-5" />
+            Refund Available
+          </p>
           <p className="text-sm text-[rgba(255,255,255,0.8)]">
             You can claim your refund of {formatEth(refundAmount)} ETH now, even though token vesting hasn't started yet.
           </p>
@@ -350,7 +354,10 @@ const ClaimPanel = ({
 
       {claimableInfo.isVestingActive && claimableInfo.claimableTokens === 0n && !refundAlreadyClaimed && refundAmount > 0n && (
         <div className="mb-4 rounded-xl border border-[rgba(100,116,139,0.4)] bg-[rgba(100,116,139,0.1)] p-4">
-          <p className="mb-2 text-sm font-semibold text-[rgba(255,255,255,0.9)]">ℹ️ No Tokens Unlocked Yet</p>
+          <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-[rgba(255,255,255,0.9)]">
+            <InfoIcon className="h-5 w-5" />
+            No Tokens Unlocked Yet
+          </p>
           <p className="text-sm text-[rgba(255,255,255,0.8)]">
             {claimableInfo.unlockedPercent > 0 
               ? `You have already claimed all unlocked tokens (${claimableInfo.unlockedPercent.toFixed(2)}% unlocked).`
@@ -364,7 +371,10 @@ const ClaimPanel = ({
       {/* Show warning if vesting might have ended but UI shows it hasn't */}
       {vestingEnd !== null && mightBeVestingComplete && claimableInfo.claimableTokens === 0n && !refundAlreadyClaimed && (
         <div className="mb-4 rounded-xl border border-[rgba(16,185,129,0.4)] bg-[rgba(16,185,129,0.1)] p-4">
-          <p className="mb-2 text-sm font-semibold text-[rgb(110,231,183)]">💡 Vesting May Have Ended</p>
+          <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-[rgb(110,231,183)]">
+            <LightBulbIcon className="h-5 w-5" />
+            Vesting May Have Ended
+          </p>
           <p className="text-sm text-[rgba(255,255,255,0.8)]">
             Based on the vesting schedule, tokens may now be unlocked. The contract will verify the exact blockchain time when you claim.
             {vestingDebug && (
@@ -377,7 +387,10 @@ const ClaimPanel = ({
       {/* Only show "Nothing to Claim" if refund is already claimed AND no tokens available AND vesting definitely hasn't ended */}
       {refundAlreadyClaimed && claimableInfo.claimableTokens === 0n && !hasUnclaimedTokens && (
         <div className="mb-4 rounded-xl border border-[rgba(100,116,139,0.4)] bg-[rgba(100,116,139,0.1)] p-4">
-          <p className="mb-2 text-sm font-semibold text-[rgba(255,255,255,0.9)]">ℹ️ Nothing to Claim</p>
+          <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-[rgba(255,255,255,0.9)]">
+            <InfoIcon className="h-5 w-5" />
+            Nothing to Claim
+          </p>
           <p className="text-sm text-[rgba(255,255,255,0.8)]">
             Your refund has already been claimed, and no tokens are available to claim at this time.
             {claimableInfo.isVestingActive && ` Check back when more tokens unlock (${claimableInfo.unlockedPercent.toFixed(2)}% unlocked).`}
@@ -389,7 +402,10 @@ const ClaimPanel = ({
       {/* Show message if vesting might have ended but UI shows it hasn't */}
       {hasUnclaimedTokens && claimableInfo.claimableTokens === 0n && vestingEnd !== null && (
         <div className="mb-4 rounded-xl border border-[rgba(16,185,129,0.4)] bg-[rgba(16,185,129,0.1)] p-4">
-          <p className="mb-2 text-sm font-semibold text-[rgb(110,231,183)]">💡 Try Claiming Tokens</p>
+          <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-[rgb(110,231,183)]">
+            <LightBulbIcon className="h-5 w-5" />
+            Try Claiming Tokens
+          </p>
           <p className="text-sm text-[rgba(255,255,255,0.8)]">
             You have {formatTokenUnits(totalTokens - (userData?.tokensClaimed || 0n))} unclaimed tokens. 
             {vestingEnd && (
@@ -402,7 +418,10 @@ const ClaimPanel = ({
 
       {claimableInfo.isVestingActive && claimableInfo.claimableTokens > 0n && (
         <div className="mb-4 rounded-xl border border-[rgba(16,185,129,0.3)] bg-[rgba(16,185,129,0.1)] p-4">
-          <p className="mb-2 text-sm font-semibold text-[rgb(110,231,183)]">✅ Tokens Available</p>
+          <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-[rgb(110,231,183)]">
+            <CheckIcon className="h-5 w-5" />
+            Tokens Available
+          </p>
           <p className="text-sm text-[rgba(255,255,255,0.8)]">
             {formatTokenUnits(claimableInfo.claimableTokens)} tokens are available to claim 
             ({claimableInfo.unlockedPercent.toFixed(2)}% of total unlocked).
@@ -413,7 +432,10 @@ const ClaimPanel = ({
       {/* Debug info - show revealed vs allocated */}
       {userData && (
         <div className="mb-4 rounded-xl border border-[rgba(100,116,139,0.3)] bg-[rgba(100,116,139,0.1)] p-4">
-          <p className="mb-2 text-xs font-semibold text-[rgba(255,255,255,0.9)]">📊 Allocation Details</p>
+          <p className="mb-2 flex items-center gap-2 text-xs font-semibold text-[rgba(255,255,255,0.9)]">
+            <ChartIcon className="h-4 w-4" />
+            Allocation Details
+          </p>
           <div className="grid grid-cols-2 gap-2 text-xs text-[rgba(255,255,255,0.7)]">
             <div>
               <span className="font-semibold">Revealed Qty:</span> {formatTokenUnits(userData.revealedQty || 0n)}
@@ -437,7 +459,12 @@ const ClaimPanel = ({
             </div>
           </div>
           <div className="mt-3 rounded-lg bg-[rgba(0,0,0,0.3)] p-2">
-            <p className="mb-1 text-xs font-semibold text-[rgba(255,255,255,0.9)]">🔍 Raw Values (for debugging):</p>
+            <p className="mb-1 flex items-center gap-2 text-xs font-semibold text-[rgba(255,255,255,0.9)]">
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              Raw Values (for debugging):
+            </p>
             <div className="grid grid-cols-2 gap-1 text-xs font-mono text-[rgba(255,255,255,0.6)]">
               <div>revealedQty: {(userData.revealedQty || 0n).toString()}</div>
               <div>allocatedQty: {(allocation.totalQty || 0n).toString()}</div>
@@ -468,7 +495,10 @@ const ClaimPanel = ({
       {/* Show info about bonus Merkle root status */}
       {auctionData?.bonusReserve > 0n && (
         <div className="mb-4 rounded-xl border border-[rgba(251,191,36,0.3)] bg-[rgba(251,191,36,0.1)] p-4">
-          <p className="mb-2 text-sm font-semibold text-[rgb(251,191,36)]">🎁 Early Incentives</p>
+          <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-[rgb(251,191,36)]">
+            <GiftIcon className="h-5 w-5" />
+            Early Incentives
+          </p>
           {bonusMerkleRootSet && ipfsCID && isValidCID(ipfsCID) && (
             <div className="mb-3 rounded-lg border border-[rgba(59,130,246,0.3)] bg-[rgba(59,130,246,0.05)] p-3">
               <p className="mb-1 text-xs font-semibold text-[rgb(59,130,246)]">📡 Bonus Proofs Source: IPFS</p>
@@ -490,7 +520,10 @@ const ClaimPanel = ({
           {userData?.bonusClaimed ? (
             <div>
               <p className="text-sm text-[rgba(255,255,255,0.8)] mb-2">
-                ✅ Your bonus tokens have already been claimed and are included in your total allocation.
+                <span className="flex items-center gap-2">
+                  <CheckIcon className="h-4 w-4" />
+                  Your bonus tokens have already been claimed and are included in your total allocation.
+                </span>
               </p>
               {allocation?.bonusQty > 0n && (
                 <p className="text-sm font-semibold text-[rgb(251,191,36)]">
@@ -503,7 +536,10 @@ const ClaimPanel = ({
               <p className="text-sm text-[rgba(255,255,255,0.8)] mb-3">
                 Bonus Merkle root is set. {ipfsCID && isValidCID(ipfsCID) 
                   ? "If you're an early participant, your bonus will be verified and included when you claim."
-                  : "⚠️ IPFS CID not yet published. Please wait for the owner to publish bonus allocations before claiming, or you may forfeit your bonus."}
+                  : <span className="flex items-center gap-2">
+                      <WarningIcon className="h-4 w-4" />
+                      IPFS CID not yet published. Please wait for the owner to publish bonus allocations before claiming, or you may forfeit your bonus.
+                    </span>}
               </p>
               
               {/* Your Allocation Breakdown - Only when root is set */}
@@ -564,9 +600,15 @@ const ClaimPanel = ({
                               <p className="text-xs text-[rgba(255,255,255,0.5)] italic">Checking early participant status...</p>
                             ) : isEarlyParticipant === true ? (
                               <div className="mt-2 rounded border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.1)] p-2">
-                                <p className="text-xs text-[rgb(239,68,68)] font-semibold">⚠️ Status Check:</p>
+                                <p className="flex items-center gap-2 text-xs text-[rgb(239,68,68)] font-semibold">
+                                  <WarningIcon className="h-4 w-4" />
+                                  Status Check:
+                                </p>
                                 <p className="text-xs text-[rgba(255,255,255,0.8)] mt-1">
-                                  ✅ You ARE registered as an early participant on the contract
+                                  <span className="flex items-center gap-2">
+                                    <CheckIcon className="h-4 w-4" />
+                                    You ARE registered as an early participant on the contract
+                                  </span>
                                 </p>
                                 <p className="text-xs text-[rgba(255,255,255,0.6)] mt-1">
                                   However, your address was not found in the IPFS allocations.
@@ -589,7 +631,10 @@ const ClaimPanel = ({
                             ) : isEarlyParticipant === false ? (
                               <div className="mt-2 rounded border border-[rgba(100,116,139,0.3)] bg-[rgba(100,116,139,0.1)] p-2">
                                 <p className="text-xs text-[rgba(255,255,255,0.7)]">
-                                  ℹ️ You are not registered as an early participant on the contract.
+                                  <span className="flex items-center gap-2">
+                                    <InfoIcon className="h-4 w-4" />
+                                    You are not registered as an early participant on the contract.
+                                  </span>
                                 </p>
                                 <p className="text-xs text-[rgba(255,255,255,0.5)] mt-1">
                                   This means your commit was made after the early bonus window closed.

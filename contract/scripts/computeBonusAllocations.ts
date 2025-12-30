@@ -139,7 +139,7 @@ function isIPFSDaemonRunning(): boolean {
  */
 async function uploadToIPFS(filePath: string): Promise<string | null> {
     if (!isIPFSDaemonRunning()) {
-        console.warn("⚠️  IPFS daemon is not running.");
+        console.warn("[WARNING] IPFS daemon is not running.");
         console.warn("   Please start it in a separate terminal: npx ipfs daemon");
         console.warn("   Then run this script again.");
         console.warn("   Continuing without IPFS upload...");
@@ -215,7 +215,7 @@ async function computeBonusAllocations(
     auctionAddress: string,
     outputPath?: string
 ): Promise<BonusOutput> {
-    console.log(`\n🔍 Computing bonus allocations for auction: ${auctionAddress}\n`);
+    console.log(`\n[INFO] Computing bonus allocations for auction: ${auctionAddress}\n`);
 
     const auctionFactory = await ethers.getContractFactory("DutchAuction");
     const auction = auctionFactory.attach(auctionAddress);
@@ -226,7 +226,7 @@ async function computeBonusAllocations(
     const finalized = await auction.finalized();
     const successful = await auction.successful();
 
-    console.log(`📊 Auction Configuration:`);
+    console.log(`[INFO] Auction Configuration:`);
     console.log(`   Early Bonus %: ${earlyBonusPct} (${Number(earlyBonusPct) / 100}%)`);
     console.log(`   Bonus Reserve: ${ethers.formatEther(bonusReserve)} tokens`);
     console.log(`   Bonus Reserve Remaining: ${ethers.formatEther(bonusReserveRemaining)} tokens`);
@@ -238,7 +238,7 @@ async function computeBonusAllocations(
     }
 
     if (!successful) {
-        console.log("⚠️  Auction was not successful - no bonuses to compute");
+        console.log("[WARNING] Auction was not successful - no bonuses to compute");
         return {
             merkleRoot: ethers.ZeroHash,
             allocations: {},
@@ -253,7 +253,7 @@ async function computeBonusAllocations(
     }
 
     const earlyParticipantsCount = await auction.earlyParticipantsCount();
-    console.log(`👥 Found ${earlyParticipantsCount} early participant(s)\n`);
+    console.log(`[INFO] Found ${earlyParticipantsCount} early participant(s)\n`);
     
     const earlyParticipants: string[] = [];
     for (let i = 0; i < earlyParticipantsCount; i++) {
@@ -262,7 +262,7 @@ async function computeBonusAllocations(
     }
 
     if (earlyParticipantsCount === 0 || earlyBonusPct === 0n || bonusReserveRemaining === 0n) {
-        console.log("⚠️  No early participants or bonus disabled - returning empty allocation");
+        console.log("[WARNING] No early participants or bonus disabled - returning empty allocation");
         return {
             merkleRoot: ethers.ZeroHash,
             allocations: {},
@@ -372,7 +372,7 @@ async function computeBonusAllocations(
     const allocations: BonusAllocation[] = [];
     let totalRequestedBonus = 0n;
 
-    console.log(`📋 Computing allocations for early participants:\n`);
+    console.log(`[INFO] Computing allocations for early participants:\n`);
 
     for (const participant of earlyParticipants) {
         console.log(`   Computing early allocation for ${participant}...`);
@@ -408,18 +408,18 @@ async function computeBonusAllocations(
         console.log(`     Requested Bonus: ${ethers.formatEther(requestedBonus)} tokens`);
     }
 
-    console.log(`\n📊 Total Statistics:`);
+    console.log(`\n[INFO] Total Statistics:`);
     console.log(`   Total Requested Bonus: ${ethers.formatEther(totalRequestedBonus)} tokens`);
     console.log(`   Bonus Reserve: ${ethers.formatEther(bonusReserveRemaining)} tokens\n`);
 
     let scalingFactor = BPS_DENOMINATOR; // 100% = no scaling
     if (totalRequestedBonus > bonusReserveRemaining && totalRequestedBonus > 0n) {
         scalingFactor = (bonusReserveRemaining * BPS_DENOMINATOR) / totalRequestedBonus;
-        console.log(`⚖️  Scaling required:`);
+        console.log(`[INFO] Scaling required:`);
         console.log(`   Scaling Factor: ${Number(scalingFactor) / 100}%`);
         console.log(`   (Reserve insufficient - applying proportional scaling)\n`);
     } else {
-        console.log(`✅ No scaling needed - reserve sufficient\n`);
+        console.log(`[SUCCESS] No scaling needed - reserve sufficient\n`);
     }
 
     const leaves: string[] = [];
@@ -441,7 +441,7 @@ async function computeBonusAllocations(
         console.log(`     Final Bonus: ${ethers.formatEther(finalBonus)} tokens`);
     }
 
-    console.log(`\n🌳 Building Merkle tree...\n`);
+    console.log(`\n[INFO] Building Merkle tree...\n`);
     const { root, proofs } = buildMerkleTree(leaves);
 
     for (const allocation of allocations) {
@@ -469,8 +469,8 @@ async function computeBonusAllocations(
         }
     };
 
-    console.log(`✅ Bonus computation complete!\n`);
-    console.log(`📊 Summary:`);
+    console.log(`[SUCCESS] Bonus computation complete!\n`);
+    console.log(`[SUMMARY]`);
     console.log(`   Merkle Root: ${root}`);
     console.log(`   Total Early Participants: ${allocations.length}`);
     console.log(`   Total Final Bonus: ${ethers.formatEther(totalFinalBonus)} tokens`);
@@ -478,19 +478,19 @@ async function computeBonusAllocations(
 
     if (outputPath) {
         writeFileSync(outputPath, JSON.stringify(output, null, 2));
-        console.log(`💾 Output written to: ${outputPath}\n`);
-        console.log(`📤 Uploading to IPFS...\n`);
+        console.log(`[SUCCESS] Output written to: ${outputPath}\n`);
+        console.log(`[INFO] Uploading to IPFS...\n`);
         const ipfsCID = await uploadToIPFS(outputPath);
         
         if (ipfsCID) {
             output.ipfsCID = ipfsCID;
             writeFileSync(outputPath, JSON.stringify(output, null, 2));
-            console.log(`✅ Uploaded to IPFS successfully!`);
+            console.log(`[SUCCESS] Uploaded to IPFS successfully!`);
             console.log(`   CID: ${ipfsCID}`);
             console.log(`   IPFS URL: https://ipfs.io/ipfs/${ipfsCID}`);
             console.log(`   Gateway URL: https://gateway.ipfs.io/ipfs/${ipfsCID}\n`);
         } else {
-            console.log(`⚠️  IPFS upload skipped (IPFS not available)\n`);
+            console.log(`[WARNING] IPFS upload skipped (IPFS not available)\n`);
         }
     }
 
@@ -526,7 +526,7 @@ async function main() {
     outputPath = outputPath || process.env.OUTPUT_PATH || join(process.cwd(), "bonus-allocations.json");
     
     if (!auctionAddress) {
-        console.error("❌ Error: Auction address is required");
+        console.error("[ERROR] Auction address is required");
         console.error("");
         console.error("Usage (method 1 - environment variable):");
         console.error("  AUCTION_ADDRESS=0x... npx hardhat run scripts/computeBonusAllocations.ts --network localhost");
@@ -542,7 +542,7 @@ async function main() {
     try {
         await computeBonusAllocations(auctionAddress, outputPath);
     } catch (error) {
-        console.error("❌ Error computing bonus allocations:", error);
+        console.error("[ERROR] Computing bonus allocations:", error);
         process.exit(1);
     }
 }

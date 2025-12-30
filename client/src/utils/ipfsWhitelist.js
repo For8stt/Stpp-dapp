@@ -167,33 +167,4 @@ export const loadWhitelistProofFromIPFS = async (cid, address, auctionAddress, m
     }
 };
 
-/**
- * Clears whitelist cache for a specific auction
- * @param {string} auctionAddress - Auction contract address
- * @param {string} merkleRoot - Merkle root (optional, clears all if not provided)
- */
-export const clearWhitelistCache = (auctionAddress, merkleRoot = null) => {
-    if (typeof window === 'undefined' || !window.localStorage) {
-        return;
-    }
-
-    try {
-        if (merkleRoot) {
-            const cacheKey = getCacheKey(auctionAddress, merkleRoot);
-            window.localStorage.removeItem(cacheKey);
-        } else {
-            const prefix = `${CACHE_PREFIX}${auctionAddress.toLowerCase()}:`;
-            const keysToRemove = [];
-            for (let i = 0; i < window.localStorage.length; i++) {
-                const key = window.localStorage.key(i);
-                if (key && key.startsWith(prefix)) {
-                    keysToRemove.push(key);
-                }
-            }
-            keysToRemove.forEach(key => window.localStorage.removeItem(key));
-        }
-    } catch (error) {
-        console.warn('[IPFS Whitelist] Error clearing cache:', error);
-    }
-};
 
