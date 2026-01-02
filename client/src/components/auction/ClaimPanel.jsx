@@ -230,12 +230,32 @@ const ClaimPanel = ({
   }
 
   if (!allocation || !allocation.computed) {
+    // Check if user has revealed deposit - if so, they might have refund to claim
+    const hasRevealedDeposit = userData?.revealedDeposit && BigInt(userData.revealedDeposit) > 0n;
+    const hasRefundedAmount = userData?.refundedAmount && BigInt(userData.refundedAmount) > 0n;
+    const mightHaveRefund = hasRevealedDeposit && (!hasRefundedAmount || BigInt(userData.revealedDeposit) > BigInt(userData.refundedAmount));
+    
+    // Check if vesting is active
+    const vestingStart = auctionData?.vestingStart ? Number(auctionData.vestingStart) : null;
+    const vestingDuration = auctionData?.vestingDuration !== undefined ? Number(auctionData.vestingDuration) : null;
+    const now = currentTime !== null && currentTime !== undefined 
+      ? currentTime 
+      : Math.floor(Date.now() / 1000);
+    const isVestingActive = vestingStart && vestingDuration && now >= vestingStart && now < (vestingStart + vestingDuration);
+    
     return (
       <div className="mb-8 rounded-2xl border border-[rgba(255,255,255,0.1)] bg-[rgba(15,23,42,0.6)] p-8">
         <p className="mb-4 text-xl font-bold text-white">Claim Tokens</p>
         <p className="text-sm text-[rgba(255,255,255,0.7)]">
           Your allocation will be computed when you claim. Click the button below to claim your tokens and any refunds.
         </p>
+        {isVestingActive && mightHaveRefund && (
+          <div className="mt-3 rounded-xl border border-[rgba(16,185,129,0.4)] bg-[rgba(16,185,129,0.1)] p-3">
+            <p className="text-xs text-[rgba(255,255,255,0.8)]">
+              <span className="font-semibold text-[rgb(110,231,183)]">Note:</span> Tokens are currently locked in vesting, but you may still be able to claim your refund if you deposited more than the clearing price.
+            </p>
+          </div>
+        )}
         {!isConnected ? (
           <div className="mt-4 rounded-xl border border-[rgba(255,193,7,0.3)] bg-[rgba(255,193,7,0.1)] p-4">
             <p className="mb-3 text-[rgba(255,255,255,0.9)]">
@@ -329,15 +349,41 @@ const ClaimPanel = ({
       )}
 
       {/* Show when vesting is active but tokens not unlocked yet (cliff vesting) */}
-      {claimableInfo.isVestingActive && claimableInfo.unlockedPercent === 0 && claimableInfo.vestingEndsAt && (
-        <div className="mb-4 rounded-xl border border-[rgba(245,158,11,0.4)] bg-[rgba(245,158,11,0.1)] p-4">
-          <p className="mb-2 text-sm font-semibold text-[rgb(251,191,36)]">⏰ Vesting In Progress (Cliff)</p>
-          <p className="text-sm text-[rgba(255,255,255,0.8)]">
-            Tokens are locked until {new Date(claimableInfo.vestingEndsAt * 1000).toLocaleString()}. 
-            All tokens will unlock at once when vesting completes (cliff vesting, not gradual).
-          </p>
-        </div>
-      )}
+      {claimableInfo.isVestingActive && claimableInfo.unlockedPercent === 0 && claimableInfo.vestingEndsAt && (() => {
+        const now = currentTime !== null && currentTime !== undefined 
+          ? currentTime 
+          : Math.floor(Date.now() / 1000);
+        const vestingEnd = claimableInfo.vestingEndsAt;
+        const timeRemaining = vestingEnd - now;
+        
+        let timeText = "";
+        if (timeRemaining > 0) {
+          const days = Math.floor(timeRemaining / (3600 * 24));
+          const hours = Math.floor((timeRemaining % (3600 * 24)) / 3600);
+          const minutes = Math.floor((timeRemaining % 3600) / 60);
+          
+          if (days > 0) {
+            timeText = `${days} day${days !== 1 ? 's' : ''} ${hours} hour${hours !== 1 ? 's' : ''} ${minutes} minute${minutes !== 1 ? 's' : ''}`;
+          } else if (hours > 0) {
+            timeText = `${hours} hour${hours !== 1 ? 's' : ''} ${minutes} minute${minutes !== 1 ? 's' : ''}`;
+          } else {
+            timeText = `${minutes} minute${minutes !== 1 ? 's' : ''}`;
+          }
+        }
+        
+        return (
+          <div className="mb-4 rounded-xl border border-[rgba(245,158,11,0.4)] bg-[rgba(245,158,11,0.1)] p-4">
+            <p className="mb-2 text-sm font-semibold text-[rgb(251,191,36)]"> Vesting In Progress (Cliff)</p>
+            <p className="text-sm text-[rgba(255,255,255,0.8)]">
+              Tokens are locked until {new Date(claimableInfo.vestingEndsAt * 1000).toLocaleString()}. 
+              {timeText && (
+                <> <span className="font-semibold text-[rgb(251,191,36)]">Time remaining: {timeText}.</span></>
+              )}
+              {" "}All tokens will unlock at once when vesting completes (cliff vesting, not gradual).
+            </p>
+          </div>
+        );
+      })()}
 
       {/* Show refund available message when vesting hasn't started */}
       {claimableInfo.vestingStartsAt && refundAmount > 0n && !refundAlreadyClaimed && (
@@ -368,22 +414,6 @@ const ClaimPanel = ({
         </div>
       )}
 
-      {/* Show warning if vesting might have ended but UI shows it hasn't */}
-      {vestingEnd !== null && mightBeVestingComplete && claimableInfo.claimableTokens === 0n && !refundAlreadyClaimed && (
-        <div className="mb-4 rounded-xl border border-[rgba(16,185,129,0.4)] bg-[rgba(16,185,129,0.1)] p-4">
-          <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-[rgb(110,231,183)]">
-            <LightBulbIcon className="h-5 w-5" />
-            Vesting May Have Ended
-          </p>
-          <p className="text-sm text-[rgba(255,255,255,0.8)]">
-            Based on the vesting schedule, tokens may now be unlocked. The contract will verify the exact blockchain time when you claim.
-            {vestingDebug && (
-              <> Expected vesting end: {new Date(vestingDebug.vestingEnd * 1000).toLocaleString()}</>
-            )}
-          </p>
-        </div>
-      )}
-
       {/* Only show "Nothing to Claim" if refund is already claimed AND no tokens available AND vesting definitely hasn't ended */}
       {refundAlreadyClaimed && claimableInfo.claimableTokens === 0n && !hasUnclaimedTokens && (
         <div className="mb-4 rounded-xl border border-[rgba(100,116,139,0.4)] bg-[rgba(100,116,139,0.1)] p-4">
@@ -399,8 +429,8 @@ const ClaimPanel = ({
         </div>
       )}
 
-      {/* Show message if vesting might have ended but UI shows it hasn't */}
-      {hasUnclaimedTokens && claimableInfo.claimableTokens === 0n && vestingEnd !== null && (
+      {/* Show message if vesting might have ended but UI shows it hasn't - only show if vesting is NOT active */}
+      {hasUnclaimedTokens && claimableInfo.claimableTokens === 0n && vestingEnd !== null && !claimableInfo.isVestingActive && (
         <div className="mb-4 rounded-xl border border-[rgba(16,185,129,0.4)] bg-[rgba(16,185,129,0.1)] p-4">
           <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-[rgb(110,231,183)]">
             <LightBulbIcon className="h-5 w-5" />
@@ -456,37 +486,6 @@ const ClaimPanel = ({
               <span className="font-semibold">Vesting End:</span> {claimableInfo.vestingEndsAt 
                 ? new Date(claimableInfo.vestingEndsAt * 1000).toLocaleString()
                 : "N/A"}
-            </div>
-          </div>
-          <div className="mt-3 rounded-lg bg-[rgba(0,0,0,0.3)] p-2">
-            <p className="mb-1 flex items-center gap-2 text-xs font-semibold text-[rgba(255,255,255,0.9)]">
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-              Raw Values (for debugging):
-            </p>
-            <div className="grid grid-cols-2 gap-1 text-xs font-mono text-[rgba(255,255,255,0.6)]">
-              <div>revealedQty: {(userData.revealedQty || 0n).toString()}</div>
-              <div>allocatedQty: {(allocation.totalQty || 0n).toString()}</div>
-              <div>bonusQty: {(allocation.bonusQty || 0n).toString()}</div>
-              <div>totalTokens: {totalTokens.toString()}</div>
-              <div>paymentDue: {(allocation.paymentDue || 0n).toString()}</div>
-              <div>revealedDeposit: {(userData.revealedDeposit || 0n).toString()}</div>
-              <div>refundAmount (calc): {refundAmount.toString()}</div>
-              <div>refundedAmount (on-chain): {(userData.refundedAmount || 0n).toString()}</div>
-              <div>refundAlreadyClaimed: {refundAlreadyClaimed ? "true" : "false"}</div>
-              <div>claimableTokens: {claimableInfo.claimableTokens.toString()}</div>
-              <div>hasClaimable: {hasClaimable ? "true" : "false"}</div>
-              {vestingDebug && (
-                <>
-                  <div>currentTime (hook): {vestingDebug.currentTimeFromHook || "null"}</div>
-                  <div>currentTime (Date): {vestingDebug.currentTimeFromDate}</div>
-                  <div>vestingStart: {vestingDebug.vestingStart}</div>
-                  <div>vestingEnd: {vestingDebug.vestingEnd}</div>
-                  <div>isVestingComplete: {vestingDebug.isVestingComplete ? "true" : "false"}</div>
-                  <div>unlockedPercent: {claimableInfo.unlockedPercent.toFixed(2)}%</div>
-                </>
-              )}
             </div>
           </div>
         </div>

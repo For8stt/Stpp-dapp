@@ -24,21 +24,21 @@ const getTestTokenAddress = () => {
   return "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853";
 };
 
-const getInitialValues = () => ({
+const getInitialValues = (account = null) => ({
   saleToken: getTestTokenAddress(),
-  treasury: "0x1CBd3b2770909D4e10f157cABC84C7264073C9Ec",
-  tokensForSale: "100000",
-  bonusReserve: "5000",
-  perAddressCap: "1000",
-  softCap: "50", //50000
+  treasury: account || "0x1CBd3b2770909D4e10f157cABC84C7264073C9Ec",
+  tokensForSale: "10000",
+  bonusReserve: "1000",
+  perAddressCap: "500",
+  softCap: "100", //50000
   startTime: toDateInput(3600),
   commitDuration: "3600",
   revealDuration: "3600",
   demandCheckDelay: "600",
-  earlyBonusWindow: "600",
+  earlyBonusWindow: "900",
   earlyBonusPct: "500",
-  nonRevealPenaltyBps: "0",
-  lbpStableShareBps: "4000",
+  nonRevealPenaltyBps: "1000",
+  lbpStableShareBps: "8000",
   thresholdLow: "100",
   maxDecayMultiplier: "1",
   minCommitDuration: "600",
@@ -46,7 +46,7 @@ const getInitialValues = () => ({
   whitelistCID: "",
   vestingStart: toDateInput(7200), // Will be calculated as startTime + 1 hour in buildAuctionInput
   vestingDuration: "10800", // 3 hours (3 * 60 * 60 = 10800 seconds)
-  priceTicks: "1,0.9,0.8",
+  priceTicks: "0.3,0.25,0.20,0.15,0.10,0.05",
   lbpStart: toDateInput(7200),
   lbpEnd: toDateInput(17200),
   poolStartWeightToken: "80",
@@ -79,13 +79,23 @@ const persistPresale = (entry) => {
 
 const CreatePresale = ({ account, onConnect }) => {
   const navigate = useNavigate();
-  const [formValues, setFormValues] = useState(getInitialValues);
+  const [formValues, setFormValues] = useState(() => getInitialValues(account));
   const [submitting, setSubmitting] = useState(false);
   const [tokenBalance, setTokenBalance] = useState(null);
   const [balanceLoading, setBalanceLoading] = useState(false);
   const [balanceError, setBalanceError] = useState(null);
 
   const connectedAccount = account;
+
+  // Update treasury address when account becomes available
+  useEffect(() => {
+    if (account && account !== formValues.treasury) {
+      setFormValues((prev) => ({
+        ...prev,
+        treasury: account,
+      }));
+    }
+  }, [account]);
 
   const handleChange = (field, value) => {
     setFormValues((prev) => {

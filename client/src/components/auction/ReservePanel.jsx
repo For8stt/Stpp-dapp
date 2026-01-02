@@ -4,6 +4,7 @@ import { formatEth } from "../../utils/auctionUtils";
 
 const ReservePanel = React.memo(({ auctionData, onDemandCheck, isOwner }) => {
   if (!auctionData || auctionData.thresholdLow <= 0n) return null;
+  if (!isOwner) return null;
 
   return (
     <div className="mb-8 rounded-2xl border border-[rgba(255,255,255,0.1)] bg-[rgba(15,23,42,0.6)] p-8">
@@ -11,7 +12,7 @@ const ReservePanel = React.memo(({ auctionData, onDemandCheck, isOwner }) => {
       <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-6">
         <div className="flex flex-col gap-2">
           <p className="text-sm uppercase tracking-wider text-[rgba(255,255,255,0.7)]">Demand Check Time</p>
-          <p className="font-mono text-lg font-semibold text-white">Available in UpkeepController</p>
+          <p className="text-xs text-white/70 leading-relaxed">Can be triggered by owner or Chainlink Keepers (automated). Time stored in UpkeepController.</p>
         </div>
         <div className="flex flex-col gap-2">
           <p className="text-sm uppercase tracking-wider text-[rgba(255,255,255,0.7)]">Adjustments Triggered</p>
@@ -24,9 +25,6 @@ const ReservePanel = React.memo(({ auctionData, onDemandCheck, isOwner }) => {
         <div className="flex flex-col gap-2">
           <p className="text-sm uppercase tracking-wider text-[rgba(255,255,255,0.7)]">Threshold Low</p>
           <p className="font-mono text-lg font-semibold text-white">{formatEth(auctionData.thresholdLow || 0n)} ETH</p>
-          {process.env.NODE_ENV === "development" && (
-            <p className="text-xs text-[rgba(255,255,255,0.5)] font-mono">(raw: {auctionData.thresholdLow?.toString()})</p>
-          )}
         </div>
         {process.env.NODE_ENV === "development" && onDemandCheck && isOwner && (
           <div className="col-span-2">

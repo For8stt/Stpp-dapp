@@ -1,5 +1,5 @@
 import React from "react";
-import { formatToken, formatTimeRemaining } from "./vesting.utils";
+import { formatToken, formatTokenRounded, formatTimeRemaining } from "./vesting.utils";
 
 const VestingTimeline = ({
   vestingConfigured,
@@ -33,7 +33,7 @@ const VestingTimeline = ({
           />
         </div>
         <div className="mt-2 text-xs text-slate-400/80">
-          <span>{formatToken(userVested, tokenDecimals)} / {formatToken(userAllocation, tokenDecimals)} {tokenSymbol}</span>
+          <span>{formatTokenRounded(userVested, tokenDecimals)} / {formatTokenRounded(userAllocation, tokenDecimals)} {tokenSymbol}</span>
         </div>
       </div>
 

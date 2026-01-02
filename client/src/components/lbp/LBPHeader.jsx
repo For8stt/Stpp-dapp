@@ -83,7 +83,7 @@ const LBPHeader = ({ lbpAddress, lbpData, status, timeUntilEnd, timeUntilPauseEn
           <div className="relative overflow-hidden rounded-xl border border-[rgba(71,85,105,0.3)] bg-gradient-to-br from-[rgba(51,65,85,0.4)] to-[rgba(30,41,59,0.5)] p-5 transition-all duration-300 before:absolute before:inset-0 before:bg-gradient-to-br before:from-[rgba(34,197,94,0.05)] before:to-transparent before:opacity-0 before:transition-opacity before:duration-300 hover:-translate-y-0.5 hover:border-[rgba(71,85,105,0.6)] hover:shadow-[0_10px_20px_-5px_rgba(0,0,0,0.3)] hover:before:opacity-100">
             <h3 className="relative z-10 mb-2 text-[0.8125rem] font-semibold uppercase tracking-wider text-[rgb(148,163,184)]">Time Until End</h3>
             <p className="relative z-10 text-base font-bold text-white">
-              {timeUntilEnd.hours}h {timeUntilEnd.minutes}m {timeUntilEnd.seconds}s
+              {timeUntilEnd.hours}h {timeUntilEnd.minutes}m
             </p>
           </div>
         )}
@@ -94,17 +94,12 @@ const LBPHeader = ({ lbpAddress, lbpData, status, timeUntilEnd, timeUntilPauseEn
         } before:absolute before:inset-0 before:bg-gradient-to-br before:from-[rgba(34,197,94,0.05)] before:to-transparent before:opacity-0 before:transition-opacity before:duration-300 hover:-translate-y-0.5 hover:border-[rgba(71,85,105,0.6)] hover:shadow-[0_10px_20px_-5px_rgba(0,0,0,0.3)] hover:before:opacity-100`}>
           <h3 className="relative z-10 mb-2 text-[0.8125rem] font-semibold uppercase tracking-wider text-[rgb(148,163,184)]">Oracle Pause</h3>
           {timeUntilPauseEnd ? (
-            <div>
-              <p className="relative z-10 flex items-center gap-2 text-sm font-bold text-[rgb(239,68,68)] mb-1">
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Yes
-              </p>
-              <p className="relative z-10 text-base font-bold text-white">
-                Resumes in: {timeUntilPauseEnd.hours}h {timeUntilPauseEnd.minutes}m {timeUntilPauseEnd.seconds}s
-              </p>
-            </div>
+            <p className="relative z-10 flex items-center gap-2 text-sm font-bold text-[rgb(239,68,68)]">
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Yes
+            </p>
           ) : (
             <p className="relative z-10 break-all font-mono text-sm font-medium text-white">No</p>
           )}

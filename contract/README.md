@@ -67,6 +67,7 @@ contract/
 │   ├── SecureLBP/          # SecureLBP tests (11 test files)
 │   ├── TokenVestingEscrow/ # Vesting tests (5 test files)
 │   ├── PresaleManager/     # Manager tests
+│   ├── PublicPresaleFactory/ # PublicPresaleFactory tests
 │   ├── Scenarios/          # Integration scenario tests
 │   ├── test-WeightedAMM/   # WeightedAMM unit tests
 │   └── utils/              # Test utilities and fixtures
@@ -143,6 +144,7 @@ npm run test:securelbp      # SecureLBP tests
 npm run test:weightedamm    # WeightedAMM tests
 npm run test:dutchauction   # DutchAuction tests
 npm run test:presalemanager # PresaleManager tests
+npm run test:publicpresalefactory # PublicPresaleFactory tests
 npm run test:lbp            # LBP tests
 npm run test:vesting        # Vesting tests
 npm run test:scenarios      # Scenario tests
@@ -407,6 +409,16 @@ The test suite is organized by contract and covers:
 - **Security tests**: Reentrancy, access control, edge cases
 - **Scenario tests**: End-to-end presale lifecycle
 - **Gas optimization tests**: Performance benchmarks
+
+### Test Coverage by Contract
+
+**PublicPresaleFactory** (`test/PublicPresaleFactory/`):
+- Constructor validation (valid and invalid implementation addresses)
+- `createPresale` function (happy path, insufficient balance/allowance, token transfer validation)
+- `setLbpOracle` function (initial set, updates, access control)
+- `getPresales` function (empty array, multiple presales tracking)
+- Event emissions verification
+- Integration with PresaleManager (clone creation, initialization, ownership)
 
 Run specific test suites as documented in the [Available Commands](#available-commands) section.
 

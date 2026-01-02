@@ -21,7 +21,7 @@ contract UpkeepController is
     UpkeepControllerEvents,
     UpkeepControllerErrors
 {
-    uint256 private constant DEMAND_CHECK_GRACE = 30 minutes;
+    uint256 private constant DEMAND_CHECK_GRACE = 15 minutes;
 
     struct DemandConfig {
         uint256 checkTime;

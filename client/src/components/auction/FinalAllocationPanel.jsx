@@ -65,36 +65,6 @@ const FinalAllocationPanel = ({ auctionData, userData }) => {
         )}
       </div>
 
-      {/* Debug: Raw values for diagnosis */}
-      <div className="mb-4 rounded-xl border border-[rgba(100,116,139,0.3)] bg-[rgba(100,116,139,0.1)] p-4">
-        <p className="mb-2 flex items-center gap-2 text-xs font-semibold text-[rgba(255,255,255,0.9)]">
-          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-          Raw Values (for debugging)
-        </p>
-        <div className="grid grid-cols-2 gap-2 text-xs font-mono text-[rgba(255,255,255,0.7)]">
-          <div>
-            <span className="font-semibold">revealedQty (raw):</span> {revealedQty.toString()}
-          </div>
-          <div>
-            <span className="font-semibold">allocatedQty (raw):</span> {allocatedQty.toString()}
-          </div>
-          <div>
-            <span className="font-semibold">bonusQty (raw):</span> {(allocation.bonusQty || 0n).toString()}
-          </div>
-          <div>
-            <span className="font-semibold">totalTokens (raw):</span> {totalTokens.toString()}
-          </div>
-          <div>
-            <span className="font-semibold">paymentDue (raw):</span> {(allocation.paymentDue || 0n).toString()}
-          </div>
-          <div>
-            <span className="font-semibold">revealedDeposit (raw):</span> {(userData?.revealedDeposit || 0n).toString()}
-          </div>
-        </div>
-      </div>
-
       {/* Explanation text */}
       <div className="rounded-xl border border-[rgba(255,255,255,0.1)] bg-[rgba(15,23,42,0.8)] p-4">
         {wasProRated && (

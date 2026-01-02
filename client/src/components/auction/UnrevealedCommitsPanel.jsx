@@ -2,6 +2,7 @@ import React, { useMemo } from "react";
 import { formatEth } from "../../utils/auctionUtils";
 import { useAccount } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { WarningIcon } from "../common/Icons";
 
 const BPS_DENOMINATOR = 10000n;
 

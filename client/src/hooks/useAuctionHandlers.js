@@ -336,10 +336,52 @@ export const useAuctionHandlers = ({
     runAction("Accelerate auction", () => managerContract.checkAndAdjustAuction(info.auction), preCheck, true);
   }, [managerContract, info, auctionData, currentTime, auctionContract, runAction]);
 
+  const handleWithdrawTreasury = useCallback(async () => {
+    if (!managerContract || !info?.auction) return;
+
+    try {
+      const { BrowserProvider } = await import("ethers");
+      if (!window.ethereum) {
+        throw new Error("No wallet provider");
+      }
+      const provider = new BrowserProvider(window.ethereum);
+      const allAbis = await import("../abi/allAbis.json");
+      const auctionAbi = allAbis.DutchAuction || [];
+      const auctionContract = new ethers.Contract(info.auction, auctionAbi, provider);
+      
+      // Get treasury address from auction
+      const treasury = await auctionContract.treasury().catch(() => null);
+      if (!treasury || treasury === ethers.ZeroAddress) {
+        handleTxError(new Error("Treasury address is not set in auction contract"));
+        return;
+      }
+
+      // Get ETH for treasury (based on clearing price, excluding refunds)
+      const ethForTreasury = await auctionContract.ethForTreasury().catch(() => 0n);
+      if (ethForTreasury === 0n) {
+        handleTxError(new Error("No ETH available to withdraw from auction (ethForTreasury is 0)"));
+        return;
+      }
+
+      await executeTransaction({
+        txPromise: managerContract.auctionWithdrawTreasury(info.auction, treasury),
+        pendingMessage: `Withdrawing ${ethers.formatEther(ethForTreasury)} ETH to treasury…`,
+        successMessage: `Successfully withdrew ${ethers.formatEther(ethForTreasury)} ETH to treasury!`,
+        setTxStatus,
+        onSuccess: async () => {
+          await refreshInfo();
+        },
+      });
+    } catch (err) {
+      handleTransactionError(err, "Failed to withdraw ETH from auction", setTxStatus);
+    }
+  }, [managerContract, info?.auction, setTxStatus, refreshInfo]);
+
   return {
     submitAuction,
     handleFinalizeAuction,
     handleAccelerateAuction,
+    handleWithdrawTreasury,
     runAction,
   };
 };

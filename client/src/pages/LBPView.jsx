@@ -183,6 +183,8 @@ const LbpView = () => {
             isPending={isPending}
             account={account}
             timeUntilPauseEnd={timeUntilPauseEnd}
+            spotPrice={spotPrice}
+            adaptiveFee={adaptiveFee}
           />
         )}
 

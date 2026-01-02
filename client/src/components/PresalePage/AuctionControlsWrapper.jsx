@@ -9,6 +9,7 @@ const AuctionControlsWrapper = ({
   onFinalizeLbp,
   onUnwind,
   onAccelerateAuction,
+  onWithdrawTreasury,
   lbpConfig,
   onLbpConfigChange,
   auctionData,
@@ -29,6 +30,7 @@ const AuctionControlsWrapper = ({
         onFinalizeLbp={onFinalizeLbp}
         onUnwind={onUnwind}
         onAccelerateAuction={onAccelerateAuction}
+        onWithdrawTreasury={onWithdrawTreasury}
         lbpConfig={lbpConfig}
         onLbpConfigChange={onLbpConfigChange}
         disabled={disabled}

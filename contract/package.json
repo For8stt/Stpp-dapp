@@ -9,6 +9,7 @@
     "test:weightedamm": "npx hardhat test test/test-WeightedAMM/WeightedAMM.economic.test.ts test/test-WeightedAMM/WeightedAMM.gas.test.ts test/test-WeightedAMM/WeightedAMM.property.test.ts test/test-WeightedAMM/WeightedAMM.test.ts",
     "test:dutchauction": "npx hardhat test test/DutchAuction/CommitRevealFlow.test.ts test/DutchAuction/ExtendedBehaviors.test.ts",
     "test:presalemanager": "npx hardhat test test/PresaleManager/PresaleManagerManager.test.ts",
+    "test:publicpresalefactory": "npx hardhat test test/PublicPresaleFactory/PublicPresaleFactory.test.ts",
     "test:lbp": "npx hardhat test test/LBPWeightedAMM.test.ts",
     "test:vesting": "npx hardhat test test/TokenVestingEscrow",
     "test:scenarios": "npx hardhat test test/Scenarios",

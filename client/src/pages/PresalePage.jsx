@@ -67,6 +67,7 @@ const PresalePage = ({ account }) => {
     submitAuction: handleSubmitAuction,
     handleFinalizeAuction,
     handleAccelerateAuction,
+    handleWithdrawTreasury,
   } = useAuctionHandlers({
     managerContract,
     info,
@@ -259,6 +260,7 @@ const PresalePage = ({ account }) => {
             onFinalizeLbp={handleFinalizeLbp}
             onUnwind={handleUnwind}
             onAccelerateAuction={handleAccelerateAuction}
+            onWithdrawTreasury={handleWithdrawTreasury}
             lbpConfig={lbpConfig}
             onLbpConfigChange={handleLbpConfigChange}
             disabled={!info?.auction}

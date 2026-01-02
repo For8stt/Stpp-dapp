@@ -126,4 +126,103 @@ describe("WeightedAMM", function () {
         expect(wETH).to.be.closeTo(ethers.parseEther("0.5"), ethers.parseEther("0.001"));
         expect(wToken + wETH).to.equal(SCALE);
     });
+
+    it("should handle increasing weights (startWeightToken < endWeightToken)", async function () {
+        // Test the branch in currentWeights when weights increase
+        const AMMFactory = await ethers.getContractFactory("LBPWeightedAMM");
+        const block = await ethers.provider.getBlock("latest");
+        const increasingAmm = await AMMFactory.deploy(
+            await token.getAddress(),
+            ethers.parseEther("0.3"), // start
+            ethers.parseEther("0.7"), // end (increasing)
+            block!.timestamp,
+            block!.timestamp + 3600,
+            ethers.parseEther("0.003")
+        );
+        await increasingAmm.waitForDeployment();
+
+        let [wToken, wETH] = await increasingAmm.currentWeights();
+        expect(wToken).to.be.closeTo(ethers.parseEther("0.3"), ethers.parseEther("0.001"));
+
+        // Fast forward halfway
+        await ethers.provider.send("evm_increaseTime", [1800]);
+        await ethers.provider.send("evm_mine", []);
+
+        [wToken, wETH] = await increasingAmm.currentWeights();
+        expect(wToken).to.be.closeTo(ethers.parseEther("0.5"), ethers.parseEther("0.001"));
+        expect(wToken + wETH).to.equal(SCALE);
+    });
+
+    it("should use liqFromEth when liqFromEth < liqFromToken", async function () {
+        // Test the branch in addLiquidity: liqFromEth < liqFromToken
+        await amm.connect(alice).addLiquidity(ethers.parseEther("1000"), { value: ethers.parseEther("10") });
+
+        // Add liquidity where ETH proportion is smaller
+        // This should use liqFromEth branch
+        const aliceLPBefore = await amm.balanceLP(alice.address);
+        await amm.connect(alice).addLiquidity(ethers.parseEther("2000"), { value: ethers.parseEther("5") }); // More tokens, less ETH
+        const aliceLPAfter = await amm.balanceLP(alice.address);
+        
+        expect(aliceLPAfter).to.be.gt(aliceLPBefore);
+    });
+
+    it("should revert on invalid constructor parameters", async function () {
+        const AMMFactory = await ethers.getContractFactory("LBPWeightedAMM");
+        const block = await ethers.provider.getBlock("latest");
+
+        await expect(
+            AMMFactory.deploy(
+                ethers.ZeroAddress, // zero token
+                ethers.parseEther("0.7"),
+                ethers.parseEther("0.3"),
+                block!.timestamp,
+                block!.timestamp + 3600,
+                ethers.parseEther("0.003")
+            )
+        ).to.be.revertedWithCustomError(AMMFactory, "ZeroToken");
+
+        await expect(
+            AMMFactory.deploy(
+                await token.getAddress(),
+                ethers.parseEther("0.7"),
+                ethers.parseEther("0.3"),
+                block!.timestamp + 3600, // start >= end
+                block!.timestamp,
+                ethers.parseEther("0.003")
+            )
+        ).to.be.revertedWithCustomError(AMMFactory, "InvalidTimes");
+
+        await expect(
+            AMMFactory.deploy(
+                await token.getAddress(),
+                0n, // zero weight
+                ethers.parseEther("0.3"),
+                block!.timestamp,
+                block!.timestamp + 3600,
+                ethers.parseEther("0.003")
+            )
+        ).to.be.revertedWithCustomError(AMMFactory, "WeightsZero");
+
+        await expect(
+            AMMFactory.deploy(
+                await token.getAddress(),
+                ethers.parseEther("1.1"), // > SCALE
+                ethers.parseEther("0.3"),
+                block!.timestamp,
+                block!.timestamp + 3600,
+                ethers.parseEther("0.003")
+            )
+        ).to.be.revertedWithCustomError(AMMFactory, "WeightAboveMax");
+
+        await expect(
+            AMMFactory.deploy(
+                await token.getAddress(),
+                ethers.parseEther("0.7"),
+                ethers.parseEther("0.3"),
+                block!.timestamp,
+                block!.timestamp + 3600,
+                ethers.parseEther("0.003")
+            )
+        ).to.not.be.reverted; // Valid deployment
+    });
 });

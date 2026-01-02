@@ -545,9 +545,9 @@ const AuctionView = () => {
         return;
       }
 
-      const DEMAND_CHECK_GRACE = 30 * 60; // 30 minutes in seconds
+      const DEMAND_CHECK_GRACE = 15 * 60; // 15 minutes in seconds
       if (currentTimeBigInt > demandCheckTime + BigInt(DEMAND_CHECK_GRACE)) {
-        handleTxError(new Error("Demand check grace period (30 minutes) has expired. Cannot trigger demand check."));
+        handleTxError(new Error("Demand check grace period (15 minutes) has expired. Cannot trigger demand check."));
         return;
       }
     } catch (preCheckError) {
@@ -1087,7 +1087,6 @@ const AuctionView = () => {
           userData={userData}
           onClaim={handleClaim}
           txState={tx.state}
-          auctionAddress={auctionAddress}
         />
       )}
 

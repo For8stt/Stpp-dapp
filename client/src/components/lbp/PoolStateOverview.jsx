@@ -75,9 +75,9 @@ const PoolStateOverview = ({
           <h4 className="relative z-10 mb-3 text-[0.8125rem] font-semibold uppercase tracking-wider text-[rgb(148,163,184)]">Token Reserve</h4>
           <p className="relative z-10 text-2xl font-extrabold leading-tight text-white text-shadow-[0_2px_4px_rgba(0,0,0,0.3)]">
             {reserves?.token !== null && reserves?.token !== undefined
-              ? formatToken(reserves.token, lbpData.tokenInfo?.decimals || 18)
+              ? Number(formatToken(reserves.token, lbpData.tokenInfo?.decimals || 18)).toFixed(4)
               : poolData?.reserveToken
-              ? formatToken(poolData.reserveToken, lbpData.tokenInfo?.decimals || 18)
+              ? Number(formatToken(poolData.reserveToken, lbpData.tokenInfo?.decimals || 18)).toFixed(4)
               : "0"}{" "}
             {lbpData.tokenInfo?.symbol || "tokens"}
           </p>
@@ -127,9 +127,9 @@ const PoolStateOverview = ({
           <h4 className="relative z-10 mb-3 text-[0.8125rem] font-semibold uppercase tracking-wider text-[rgb(148,163,184)]">Total Tokens Allocated</h4>
           <p className="relative z-10 text-2xl font-extrabold leading-tight text-white text-shadow-[0_2px_4px_rgba(0,0,0,0.3)]">
             {totalTokensAllocated !== null && totalTokensAllocated !== undefined
-              ? formatToken(totalTokensAllocated, lbpData.tokenInfo?.decimals || 18)
+              ? Number(formatToken(totalTokensAllocated, lbpData.tokenInfo?.decimals || 18)).toFixed(4)
               : lbpData?.totalTokensAllocated
-              ? formatToken(lbpData.totalTokensAllocated, lbpData.tokenInfo?.decimals || 18)
+              ? Number(formatToken(lbpData.totalTokensAllocated, lbpData.tokenInfo?.decimals || 18)).toFixed(4)
               : "0"}{" "}
             {lbpData.tokenInfo?.symbol || "tokens"}
           </p>
@@ -188,10 +188,10 @@ const PoolStateOverview = ({
             <div className="relative overflow-hidden rounded-xl border border-[rgba(71,85,105,0.4)] bg-gradient-to-br from-[rgba(51,65,85,0.4)] to-[rgba(30,41,59,0.5)] p-6 backdrop-blur-[8px] shadow-[0_4px_15px_-3px_rgba(0,0,0,0.2)] transition-all duration-300 before:absolute before:inset-0 before:opacity-0 before:transition-opacity before:duration-300 before:bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.1)_0%,transparent_70%)] hover:-translate-y-1 hover:scale-[1.02] hover:shadow-[0_20px_25px_-5px_rgba(0,0,0,0.4),0_10px_10px_-5px_rgba(0,0,0,0.3)] hover:before:opacity-100">
               <h4 className="relative z-10 mb-3 text-[0.8125rem] font-semibold uppercase tracking-wider text-[rgb(148,163,184)]">Your Allocation</h4>
               <p className="relative z-10 text-2xl font-extrabold leading-tight text-white text-shadow-[0_2px_4px_rgba(0,0,0,0.3)]">
-                {formatToken(
+                {Number(formatToken(
                   userData.allocation,
                   lbpData.tokenInfo?.decimals || 18
-                )}{" "}
+                )).toFixed(4)}{" "}
                 {lbpData.tokenInfo?.symbol || "tokens"}
               </p>
             </div>

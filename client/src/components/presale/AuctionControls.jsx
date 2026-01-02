@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
 import { ethers } from "ethers";
+import { formatTokenUnits, formatEth } from "../../utils/auctionUtils";
 
 const ControlButton = ({ label, onClick, disabled }) => (
   <button
@@ -53,40 +54,67 @@ const AuctionControls = ({
   onFinalizeLbp,
   onUnwind,
   onAccelerateAuction,
+  onWithdrawTreasury,
   lbpConfig,
   onLbpConfigChange,
   disabled,
   auctionData,
   currentTime,
 }) => {
+  // Check if all tokens were sold
+  const allTokensSold = useMemo(() => {
+    if (!auctionData) return false;
+    const tokensSold = auctionData.tokensSold || 0n;
+    const tokensForSale = auctionData.tokensForSale || 0n;
+    return tokensForSale > 0n && tokensSold >= tokensForSale;
+  }, [auctionData]);
+
   const accelerateButtonState = useMemo(() => {
     if (!auctionData || !currentTime || !auctionAddress) {
-      return { enabled: false, tooltip: "Auction data not available" };
+      return { enabled: false, tooltip: "Auction data not available", timeRemaining: null };
     }
 
+    const DEMAND_CHECK_GRACE = 15 * 60; // 15 minutes in seconds
     const demandCheckTime = auctionData.demandCheckTime || 0;
     const commitEndTime = auctionData.commitEndTime || 0;
     const finalized = auctionData.finalized || false;
+    const gracePeriodEnd = demandCheckTime + DEMAND_CHECK_GRACE;
 
     if (finalized) {
-      return { enabled: false, tooltip: "Auction is already finalized" };
+      return { enabled: false, tooltip: "Auction is already finalized", timeRemaining: null };
     }
 
     if (currentTime < demandCheckTime) {
       const timeUntilCheck = demandCheckTime - currentTime;
       const hours = Math.floor(timeUntilCheck / 3600);
       const minutes = Math.floor((timeUntilCheck % 3600) / 60);
+      const seconds = timeUntilCheck % 60;
       return {
         enabled: false,
-        tooltip: `Acceleration can only be triggered after the demand check time (${hours}h ${minutes}m remaining)`,
+        tooltip: `Acceleration can only be triggered after the demand check time`,
+        timeRemaining: { hours, minutes, seconds, total: timeUntilCheck },
       };
     }
 
-    if (currentTime >= commitEndTime) {
-      return { enabled: false, tooltip: "Commit phase has ended. Cannot accelerate auction." };
+    if (currentTime > gracePeriodEnd) {
+      return { enabled: false, tooltip: "Demand check grace period (15 minutes) has expired. Cannot accelerate auction.", timeRemaining: null };
     }
 
-    return { enabled: true, tooltip: null };
+    if (currentTime >= commitEndTime) {
+      return { enabled: false, tooltip: "Commit phase has ended. Cannot accelerate auction.", timeRemaining: null };
+    }
+
+    // Calculate time remaining until grace period ends
+    const timeUntilGraceEnd = gracePeriodEnd - currentTime;
+    const hours = Math.floor(timeUntilGraceEnd / 3600);
+    const minutes = Math.floor((timeUntilGraceEnd % 3600) / 60);
+    const seconds = timeUntilGraceEnd % 60;
+
+    return { 
+      enabled: true, 
+      tooltip: null,
+      timeRemaining: { hours, minutes, seconds, total: timeUntilGraceEnd }
+    };
   }, [auctionData, currentTime, auctionAddress]);
 
   const demandStatus = useMemo(() => {
@@ -121,12 +149,63 @@ const AuctionControls = ({
           <p className="mt-1 mb-0 text-sm text-white/65">Manage the Dutch auction and downstream LBP deployment.</p>
         </div>
         <div className="flex flex-wrap gap-3">
+          {allTokensSold && auctionData?.finalized ? (
+            // Show only withdraw button when all tokens are sold
+            onWithdrawTreasury && (
+              <ControlButton 
+                label="Withdraw ETH" 
+                onClick={onWithdrawTreasury} 
+                disabled={disabled || !auctionAddress}
+                title="Withdraw earned ETH from auction to treasury"
+              />
+            )
+          ) : (
+            // Show all normal buttons when tokens are not all sold
+            <>
           <ControlButton label="Finalize auction" onClick={onFinalizeAuction} disabled={disabled || !auctionAddress} />
           <ControlButton label="Launch LBP" onClick={onLaunchLbp} disabled={disabled || !auctionAddress} />
           <ControlButton label="Finalize LBP" onClick={onFinalizeLbp} disabled={disabled} />
           <ControlButton label="Unwind LBP" onClick={onUnwind} disabled={disabled} />
+            </>
+          )}
         </div>
       </div>
+
+      {/* Show info message when all tokens are sold */}
+      {allTokensSold && auctionData?.finalized && (
+        <div className="rounded-xl border border-green-500/30 bg-gradient-to-br from-green-900/20 to-green-800/10 p-4 shadow-[0_4px_12px_rgba(34,197,94,0.1),inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-[10px]">
+          <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-green-200">
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            All tokens sold
+          </p>
+          <div className="mb-3 space-y-2 text-xs text-white/70">
+            <p className="leading-relaxed">
+              All tokens from the auction have been sold. You can withdraw the earned ETH proceeds to the treasury address using the button above.
+            </p>
+            <div className="mt-3 rounded-lg border border-white/10 bg-slate-900/50 p-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-wider text-white/60">Tokens Sold</p>
+                  <p className="mt-1 font-mono text-base font-semibold text-green-200">
+                    {formatTokenUnits(auctionData.tokensSold || 0n)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wider text-white/60">ETH Available</p>
+                  <p className="mt-1 font-mono text-base font-semibold text-green-200">
+                    {formatEth(auctionData.ethForTreasury || 0n)} ETH
+                  </p>
+                  <p className="mt-1 text-xs text-white/50">
+                    (Based on clearing price, excluding refunds)
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Accelerate Auction Section */}
       {isOwner && auctionAddress && auctionData && (
@@ -181,7 +260,19 @@ const AuctionControls = ({
               Accelerate Auction (Low Demand)
             </button>
           </div>
-          {accelerateButtonState.tooltip && (
+          {accelerateButtonState.timeRemaining && (
+            <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-900/20 p-3">
+              <p className="text-xs font-semibold text-amber-200 mb-1">
+                {currentTime < (auctionData.demandCheckTime || 0) 
+                  ? "Time until acceleration becomes available:" 
+                  : "Time remaining to accelerate (15 min window):"}
+              </p>
+              <p className="text-lg font-bold text-amber-100 font-mono">
+                {accelerateButtonState.timeRemaining.hours}h {accelerateButtonState.timeRemaining.minutes}m {accelerateButtonState.timeRemaining.seconds}s
+              </p>
+            </div>
+          )}
+          {accelerateButtonState.tooltip && !accelerateButtonState.timeRemaining && (
             <p className="mt-2 text-xs text-amber-300/70">{accelerateButtonState.tooltip}</p>
           )}
         </div>
@@ -297,3 +388,4 @@ const AuctionControls = ({
 };
 
 export default AuctionControls;
+

@@ -128,7 +128,7 @@ async function deploy(
   label?: string
 ): Promise<any> {
   const displayName = label || contractName;
-  console.log(`\n📦 Deploying ${displayName}...`);
+  console.log(`\nDeploying ${displayName}...`);
   
   try {
     const ContractFactory = await ethers.getContractFactory(contractName);
@@ -272,7 +272,7 @@ function writeAddressesFile(addresses: DeploymentAddresses): void {
  * Collects ABIs for all deployed contracts and saves them to allAbis.json
  */
 function collectAndSaveAbis(): void {
-  console.log("\n📚 Collecting ABIs from artifacts...");
+  console.log("\nCollecting ABIs from artifacts...");
 
   const abis: Record<string, any> = {};
 
@@ -310,9 +310,9 @@ function collectAndSaveAbis(): void {
  */
 function printSummary(addresses: DeploymentAddresses): void {
   console.log("\n" + "=".repeat(80));
-  console.log("🎉 DEPLOYMENT COMPLETE!");
+  console.log("DEPLOYMENT COMPLETE!");
   console.log("=".repeat(80));
-  console.log(`\n🌐 Network: ${network.name} (Chain ID: ${network.config.chainId || "31337"})`);
+  console.log(`\nNetwork: ${network.name} (Chain ID: ${network.config.chainId || "31337"})`);
   
   console.log("\n[INFO] Deployed Contract Addresses:");
   console.log("─".repeat(80));
@@ -332,7 +332,7 @@ function printSummary(addresses: DeploymentAddresses): void {
   }
   console.log("─".repeat(80));
 
-  console.log("\n📁 Configuration Files Updated:");
+  console.log("\nConfiguration Files Updated:");
   console.log(`   client/src/abi/data/stppDeployments.json`);
   console.log(`   client/src/abi/addresses.json`);
   console.log(`   client/public/abi/addresses.json`);
@@ -341,7 +341,7 @@ function printSummary(addresses: DeploymentAddresses): void {
     console.log(`   client/src/abi/uniswapV3Addresses.json`);
   }
 
-  console.log("\n🚀 Next Steps:");
+  console.log("\nNext Steps:");
   console.log("─".repeat(80));
   console.log("1. Start Hardhat node:");
   console.log("   npx hardhat node");
@@ -367,11 +367,11 @@ function printSummary(addresses: DeploymentAddresses): void {
 async function main() {
   const [deployer] = await ethers.getSigners();
   console.log("\n" + "=".repeat(80));
-  console.log("🚀 STPP Protocol Deployment");
+  console.log("STPP Protocol Deployment");
   console.log("=".repeat(80));
-  console.log(`🌐 Network: ${network.name}`);
-  console.log(`👤 Deployer: ${deployer.address}`);
-  console.log(`💰 Balance: ${ethers.formatEther(await ethers.provider.getBalance(deployer.address))} ETH`);
+  console.log(`Network: ${network.name}`);
+  console.log(`Deployer: ${deployer.address}`);
+  console.log(`Balance: ${ethers.formatEther(await ethers.provider.getBalance(deployer.address))} ETH`);
 
   const addresses: Partial<DeploymentAddresses> = {};
 
@@ -453,7 +453,7 @@ async function main() {
     }
 
     // 7. Set oracle in PublicPresaleFactory (for automatic injection into new clones)
-    console.log(`\n🔗 Setting LBP Oracle in PublicPresaleFactory...`);
+    console.log(`\nSetting LBP Oracle in PublicPresaleFactory...`);
     try {
       if (!addresses.publicFactory || !addresses.feeOracle) {
         throw new Error("Missing required addresses for oracle setup");
@@ -482,7 +482,7 @@ async function main() {
     
     // Transfer tokens to owner wallet (0x1CBd3b2770909D4e10f157cABC84C7264073C9Ec)
     const ownerAddress = "0x1CBd3b2770909D4e10f157cABC84C7264073C9Ec";
-    console.log(`\n💰 Transferring tokens to owner wallet: ${ownerAddress}`);
+    console.log(`\nTransferring tokens to owner wallet: ${ownerAddress}`);
     try {
       const transferTx = await testToken.transfer(ownerAddress, initialSupply);
       await transferTx.wait();
@@ -553,7 +553,7 @@ async function main() {
     addresses.lbpAmmImpl = await lbpAmmImpl.getAddress();
 
     // 11. Deploy Uniswap V3 Mocks (for localhost/testing)
-    console.log(`\n📦 Deploying Uniswap V3 Mocks...`);
+    console.log(`\nDeploying Uniswap V3 Mocks...`);
     const mockFactory = await deploy("MockUniswapV3Factory", [], "MockUniswapV3Factory");
     addresses.uniswapV3Factory = await mockFactory.getAddress();
 

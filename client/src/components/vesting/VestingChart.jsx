@@ -12,6 +12,65 @@ import {
 } from "recharts";
 import { formatToken } from "./vesting.utils";
 
+/**
+ * Format large numbers for Y-axis display
+ * Converts wei/smallest unit to readable format
+ */
+const formatYAxisValue = (value, tokenDecimals = 18) => {
+  if (!value || value === 0 || isNaN(value)) return "0";
+  
+  try {
+    // Convert to BigInt to handle large numbers safely
+    // Use Math.floor to avoid precision issues with very large numbers
+    let bigIntValue;
+    if (typeof value === 'bigint') {
+      bigIntValue = value;
+    } else {
+      // For very large numbers, we need to be careful with conversion
+      const valueStr = value.toString();
+      if (valueStr.includes('e') || valueStr.includes('E')) {
+        // Handle scientific notation
+        const [base, exp] = valueStr.split(/[eE]/);
+        const exponent = parseInt(exp, 10);
+        const baseNum = parseFloat(base);
+        bigIntValue = BigInt(Math.floor(baseNum * Math.pow(10, exponent)));
+      } else {
+        bigIntValue = BigInt(Math.floor(Number(value)));
+      }
+    }
+    
+    // Format using ethers to get proper decimal formatting
+    const formatted = formatToken(bigIntValue, tokenDecimals);
+    const num = parseFloat(formatted);
+    
+    if (isNaN(num) || num === 0) return "0";
+    
+    // For very large numbers, use compact notation
+    if (num >= 1000000000) {
+      return `${(num / 1000000000).toFixed(1)}B`;
+    }
+    if (num >= 1000000) {
+      return `${(num / 1000000).toFixed(1)}M`;
+    }
+    if (num >= 1000) {
+      return `${(num / 1000).toFixed(1)}K`;
+    }
+    
+    // For numbers less than 1000, show up to 2 decimals, but remove trailing zeros
+    const fixed = num.toFixed(2);
+    return parseFloat(fixed).toString();
+  } catch (error) {
+    // Fallback: try to format as number with locale string
+    try {
+      const num = Number(value);
+      if (isNaN(num)) return "0";
+      return num.toLocaleString('en-US', { maximumFractionDigits: 2 });
+    } catch {
+      return "0";
+    }
+  }
+};
+
 const VestingChart = ({
   vestingCurveData,
   vestingStart,
@@ -73,6 +132,9 @@ const VestingChart = ({
           <YAxis
             stroke="rgba(255, 255, 255, 0.6)"
             style={{ fontSize: "0.75rem" }}
+            tickFormatter={(value) => formatYAxisValue(value, tokenDecimals)}
+            allowDecimals={false}
+            domain={['auto', 'auto']}
             label={{
               value: `Vested Amount (${tokenSymbol})`,
               angle: -90,
@@ -87,10 +149,25 @@ const VestingChart = ({
               borderRadius: "0.5rem",
               color: "white",
             }}
-            formatter={(value) => [
-              `${formatToken(BigInt(value), tokenDecimals)} ${tokenSymbol}`,
-              "Vested",
-            ]}
+            formatter={(value) => {
+              try {
+                // Handle both Number and BigInt values
+                let bigIntValue;
+                if (typeof value === 'bigint') {
+                  bigIntValue = value;
+                } else {
+                  const numValue = Number(value);
+                  if (isNaN(numValue)) return ["0", "Vested"];
+                  bigIntValue = BigInt(Math.floor(numValue));
+                }
+                return [
+                  `${formatToken(bigIntValue, tokenDecimals)} ${tokenSymbol}`,
+                  "Vested",
+                ];
+              } catch (error) {
+                return ["0", "Vested"];
+              }
+            }}
             labelFormatter={(label) => {
               const date = new Date(Number(label) * 1000);
               return `Time: ${date.toLocaleString()}`;

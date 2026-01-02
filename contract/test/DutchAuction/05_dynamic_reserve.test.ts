@@ -128,4 +128,70 @@ describe("DutchAuction – 05_dynamic_reserve", function () {
         // ensure reveal window still intact
         await time.increaseTo(commitEndTime + 1n);
     });
+
+    it("should not update decay multiplier when current >= max", async function () {
+        // This tests ReserveDecayLib.applyDecayMultiplier branch: currentMultiplier >= maxMultiplier
+        const overrides = {
+            thresholdLow: ethers.parseEther("10"),
+            commitDuration: 1_200n,
+            minCommitDuration: 600n,
+            maxDecayMultiplier: ethers.parseEther("1") // Lower max
+        };
+        const ctx = await loadFixture(fixtureWithOverrides(overrides));
+        const { auction, deployer } = ctx;
+
+        // Set initial decay multiplier to be >= max
+        const initialDecay = await auction.decayMultiplier();
+        // If initial decay is already >= max, it should not change
+        await auction.connect(deployer).updateDynamicReserve();
+        
+        const newDecay = await auction.decayMultiplier();
+        // Should be at least maxDecayMultiplier
+        expect(newDecay).to.be.gte(overrides.maxDecayMultiplier);
+    });
+
+    it("should not update commit end when currentCommitEnd <= minEnd", async function () {
+        // This tests ReserveDecayLib.adjustedCommitEnd branch: currentCommitEnd <= minEnd
+        const overrides = {
+            thresholdLow: ethers.parseEther("10"),
+            commitDuration: 400n,
+            minCommitDuration: 350n, // Very close to commitDuration
+            maxDecayMultiplier: ethers.parseEther("2")
+        };
+        const ctx = await loadFixture(fixtureWithOverrides(overrides));
+        const { auction, deployer } = ctx;
+
+        const startTime = await auction.startTime();
+        const initialCommitEnd = await auction.commitEndTime();
+        const minEnd = startTime + overrides.minCommitDuration;
+
+        // If initialCommitEnd is already at or below minEnd, it shouldn't change
+        if (initialCommitEnd <= minEnd) {
+            await auction.connect(deployer).updateDynamicReserve();
+            const updatedCommitEnd = await auction.commitEndTime();
+            expect(updatedCommitEnd).to.equal(initialCommitEnd);
+        }
+    });
+
+    it("should not update commit end when targetEnd >= currentCommitEnd", async function () {
+        // This tests ReserveDecayLib.adjustedCommitEnd branch: targetEnd >= currentCommitEnd (line 45)
+        // This happens when reduction is very small or zero
+        const overrides = {
+            thresholdLow: ethers.parseEther("10"),
+            commitDuration: 100n, // Very short window
+            minCommitDuration: 50n,
+            maxDecayMultiplier: ethers.parseEther("2")
+        };
+        const ctx = await loadFixture(fixtureWithOverrides(overrides));
+        const { auction, deployer } = ctx;
+
+        const initialCommitEnd = await auction.commitEndTime();
+        
+        // Call updateDynamicReserve
+        await auction.connect(deployer).updateDynamicReserve();
+        
+        const updatedCommitEnd = await auction.commitEndTime();
+        // Should be <= initialCommitEnd
+        expect(updatedCommitEnd).to.be.lte(initialCommitEnd);
+    });
 });

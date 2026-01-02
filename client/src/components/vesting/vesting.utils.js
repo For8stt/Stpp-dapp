@@ -13,6 +13,24 @@ export const formatToken = (amount, decimals = 18) => {
 };
 
 /**
+ * Format token amount with rounding to 3 decimal places
+ */
+export const formatTokenRounded = (amount, decimals = 18) => {
+  if (!amount || amount === 0n) return "0";
+  try {
+    const formatted = formatToken(amount, decimals);
+    const num = parseFloat(formatted);
+    if (isNaN(num)) return "0";
+    // Round to 3 decimal places
+    const rounded = Math.round(num * 1000) / 1000;
+    // Format to show up to 3 decimal places, removing trailing zeros
+    return rounded.toFixed(3).replace(/\.?0+$/, '');
+  } catch {
+    return "0";
+  }
+};
+
+/**
  * Format time remaining
  */
 export const formatTimeRemaining = (seconds) => {
