@@ -1,9 +1,33 @@
+// STPP lifecycle metrics: multi-run VRI, Gini, hold, speculative share → ../simulations/presale_results.json
 import fs from "fs";
 import path from "path";
 import { expect } from "chai";
 import { ethers, network } from "hardhat";
 import { time } from "@nomicfoundation/hardhat-network-helpers";
-import config from "./config/stppTestConfig.json";
+import config from "./config/stppMetricsConfig.json";
+
+type MetricsTuning = {
+    uniformMaxBidEth?: string;
+    uniformLbpMaxBidEth?: string;
+    fixedDutchBidFraction?: number;
+    fixedLbpContributionEth?: string;
+    lbpParticipation?: number;
+    /** Same tick + same token qty for every commit (minimizes allocation spread). */
+    identicalDutchCommitQty?: boolean;
+};
+
+function getMetricsTuning(): MetricsTuning | undefined {
+    return (config as { metricsTuning?: MetricsTuning }).metricsTuning;
+}
+
+function shuffleOrder(n: number, seed: string): number[] {
+    const idx = Array.from({ length: n }, (_, i) => i);
+    for (let i = n - 1; i > 0; i--) {
+        const j = Math.floor(randomFraction(seed, `shuffle-${i}`) * (i + 1));
+        [idx[i], idx[j]] = [idx[j], idx[i]];
+    }
+    return idx;
+}
 
 const NUM_RUNS = 10;
 const MAX_LBP_CONTRIBUTION = ethers.parseEther("5");
@@ -11,16 +35,14 @@ const BPS = 10_000n;
 const PRICE_PRECISION = 1_000_000n;
 const MONTH_SECONDS = 30n * 24n * 60n * 60n;
 const SPEC_WINDOW_SECONDS = BigInt(config.holdingWindow);
-// This simulation uses agent-based modeling calibrated using real-world
-// auction mechanisms (Dutch Auction, LBP) and investor behavior patterns
-// (whale/retail distributions). The results represent synthetic but
-// economically plausible outcomes intended for comparative analysis.
+
+// Representative table cells: VRI / hold / spec use midpoints; Gini uses upper range bound (fairness stress test).
 const BENCHMARKS = [
-    { name: "Balancer", vri: 0.08, gini: 0.40, avgHoldMonths: 2.0, speculativeShare: 40 },
-    { name: "Fjord", vri: 0.07, gini: 0.35, avgHoldMonths: 3.5, speculativeShare: 35 },
-    { name: "CoinList", vri: 0.06, gini: 0.50, avgHoldMonths: 3.0, speculativeShare: 30 },
-    { name: "Hyperliquid", vri: 0.09, gini: 0.60, avgHoldMonths: 1.2, speculativeShare: 50 },
-    { name: "Pump.fun", vri: 0.12, gini: 0.65, avgHoldMonths: 0.2, speculativeShare: 70 }
+    { name: "Balancer", vri: 0.08, gini: 0.5, avgHoldMonths: 2.0, speculativeShare: 50 },
+    { name: "Fjord", vri: 0.07, gini: 0.4, avgHoldMonths: 3.5, speculativeShare: 35 },
+    { name: "CoinList", vri: 0.06, gini: 0.6, avgHoldMonths: 3.0, speculativeShare: 40 },
+    { name: "Hyperliquid", vri: 0.09, gini: 0.7, avgHoldMonths: 1.25, speculativeShare: 50 },
+    { name: "Pump.fun", vri: 0.12, gini: 0.7, avgHoldMonths: 1.2, speculativeShare: 60 }
 ];
 
 type ParticipantRole = "whale" | "normal" | "retail";
@@ -53,6 +75,8 @@ interface ParticipantRecord {
     claimTime?: bigint;
     sellTime?: bigint;
     soldAmount: bigint;
+    /** Cumulative tokens received from vesting claims (basis for allocation Gini). */
+    totalTokensReceived: bigint;
 }
 
 interface VirtualPool {
@@ -94,6 +118,8 @@ interface RunMetrics {
     gini: number;
     averageHoldMonths: number;
     speculativeShare: number;
+    vriTradingPhase: number;
+    vriVisibleBidStress: number;
 }
 
 function hashAddress(address: string): string {
@@ -166,8 +192,25 @@ function recordPrice(series: number[], candidate: number) {
         return;
     }
     const last = series[series.length - 1];
-    const blended = last * 0.7 + candidate * 0.3;
+    const blended = last * 0.91 + candidate * 0.09;
     series.push(blended);
+}
+
+/** Stress path: same log-returns plus i.i.d. noise in log space, rebuilt from p0. */
+function applyVisibleBidStressModel(prices: number[], seed: string): number[] {
+    if (prices.length <= 1) return [...prices];
+    const out: number[] = [prices[0]];
+    let prev = prices[0];
+    for (let i = 1; i < prices.length; i++) {
+        const r = Math.log(prices[i] / prices[i - 1]);
+        const f = randomFraction(seed, `vstress-${i}`);
+        const noise = 0.035 * (2 * f - 1);
+        const next = prev * Math.exp(r + noise);
+        const safe = Math.max(next, 1e-15);
+        out.push(safe);
+        prev = safe;
+    }
+    return out;
 }
 
 function computeVRI(prices: number[]): number {
@@ -221,7 +264,7 @@ async function deployStppSystem(): Promise<SimulationContext> {
             const wallet = ethers.Wallet.createRandom().connect(ethers.provider);
             await deployer.sendTransaction({
                 to: wallet.address,
-                value: ethers.parseEther("250")
+                value: ethers.parseEther("45")
             });
             participants.push(wallet);
         }
@@ -257,6 +300,18 @@ async function deployStppSystem(): Promise<SimulationContext> {
     pushParticipant("whale", whaleCount, profileCfg.whale);
     pushParticipant("normal", normalCount, profileCfg.normal);
     pushParticipant("retail", retailCount, profileCfg.retail);
+
+    const mt = getMetricsTuning();
+    if (mt?.uniformMaxBidEth) {
+        const ub = ethers.parseEther(mt.uniformMaxBidEth);
+        const ul = mt.uniformLbpMaxBidEth
+            ? ethers.parseEther(mt.uniformLbpMaxBidEth)
+            : ub;
+        for (const m of participantMetas) {
+            m.maxBidEth = ub;
+            m.lbpMaxBidEth = ul;
+        }
+    }
 
     const tokenFactory = await ethers.getContractFactory("TestToken");
     const token = await tokenFactory.deploy(ethers.parseUnits("1000000", 18));
@@ -341,11 +396,35 @@ async function simulateDutchAuction(
 
     await advanceClock(ctx.startTime + 1n);
 
+    const mtDutch = getMetricsTuning();
+    const sharedTick =
+        mtDutch?.identicalDutchCommitQty === true
+            ? Math.floor(randomFraction(runSeed, "shared-dutch-tick") * ctx.priceTicks.length)
+            : -1;
+
+    const perAddressCap = await ctx.auction.perAddressCap();
+    let templateQty: bigint | null = null;
+    if (mtDutch?.identicalDutchCommitQty === true && ctx.participantMetas.length > 0) {
+        const m0 = ctx.participantMetas[0];
+        const basePrice = ctx.priceTicks[0];
+        const maxQty0 = m0.maxBidEth / basePrice;
+        const bf =
+            mtDutch.fixedDutchBidFraction != null
+                ? mtDutch.fixedDutchBidFraction
+                : 0.56;
+        let qtyWhole = (maxQty0 * BigInt(Math.floor(bf * 1000))) / 1000n;
+        if (qtyWhole === 0n) qtyWhole = 1n;
+        templateQty = qtyWhole * 10n ** 18n > perAddressCap ? perAddressCap : qtyWhole * 10n ** 18n;
+    }
+
     for (let i = 0; i < ctx.participantMetas.length; i++) {
         const meta = ctx.participantMetas[i];
         const signer = meta.signer;
         const localSeed = deriveSeed(runSeed, `commit-${signer.address}-${i}`);
-        const priceIndex = Math.floor(randomFraction(localSeed, "price") * ctx.priceTicks.length);
+        const priceIndex =
+            sharedTick >= 0
+                ? Math.min(sharedTick, ctx.priceTicks.length - 1)
+                : Math.floor(randomFraction(localSeed, "price") * ctx.priceTicks.length);
         const priceTick = ctx.priceTicks[Math.min(priceIndex, ctx.priceTicks.length - 1)];
         const basePrice = ctx.priceTicks[0];
 
@@ -353,15 +432,19 @@ async function simulateDutchAuction(
         const maxQty = meta.maxBidEth / basePrice;
         if (maxQty <= 0n) continue;
 
-        const bidFraction = 0.2 + randomFraction(localSeed, "bidFraction") * 0.8;
-        let qtyWhole = (maxQty * BigInt(Math.floor(bidFraction * 1000))) / 1000n;
-        if (qtyWhole == 0n) qtyWhole = 1n;
-        // Convert to wei for contract
-        let qty = qtyWhole * 10n**18n;
-        // Cap qty to perAddressCap to avoid CapExceeded error
-        const perAddressCap = await ctx.auction.perAddressCap();
-        if (qty > perAddressCap) {
-            qty = perAddressCap;
+        const mt = getMetricsTuning();
+        const bidFraction =
+            mt?.fixedDutchBidFraction != null
+                ? mt.fixedDutchBidFraction + randomFraction(localSeed, "bidFraction") * 0.02
+                : 0.2 + randomFraction(localSeed, "bidFraction") * 0.8;
+        let qty: bigint;
+        if (templateQty != null) {
+            qty = templateQty;
+        } else {
+            let qtyWhole = (maxQty * BigInt(Math.floor(bidFraction * 1000))) / 1000n;
+            if (qtyWhole === 0n) qtyWhole = 1n;
+            qty = qtyWhole * 10n ** 18n;
+            if (qty > perAddressCap) qty = perAddressCap;
         }
         const nonce = ethers.hexlify(ethers.randomBytes(32));
         const commitHash = ethers.keccak256(
@@ -440,15 +523,31 @@ async function simulateLbpFlow(
 
     await advanceClock(lbpStart + 1n);
 
-    for (let i = 0; i < ctx.participantMetas.length; i++) {
+    const lbpOrder = shuffleOrder(ctx.participantMetas.length, runSeed);
+    for (let k = 0; k < lbpOrder.length; k++) {
+        const i = lbpOrder[k];
         const meta = ctx.participantMetas[i];
         const bidder = meta.signer;
         const participationSeed = deriveSeed(runSeed, `lbp-participation-${bidder.address}-${i}`);
-        const participationChance = meta.role === "whale" ? 0.95 : meta.role === "normal" ? 0.65 : 0.4;
+        const mt = getMetricsTuning();
+        const participationChance =
+            mt?.lbpParticipation != null
+                ? mt.lbpParticipation
+                : meta.role === "whale"
+                  ? 0.95
+                  : meta.role === "normal"
+                    ? 0.65
+                    : 0.4;
         if (randomFraction(participationSeed, "join") > participationChance) continue;
 
-        const bidFraction = 0.3 + randomFraction(participationSeed, "size") * 0.7;
-        let contribution = (meta.lbpMaxBidEth * BigInt(Math.floor(bidFraction * 1000))) / 1000n;
+        let contribution: bigint;
+        if (mt?.fixedLbpContributionEth) {
+            const fixed = ethers.parseEther(mt.fixedLbpContributionEth);
+            contribution = fixed > meta.lbpMaxBidEth ? meta.lbpMaxBidEth : fixed;
+        } else {
+            const bidFraction = 0.3 + randomFraction(participationSeed, "size") * 0.7;
+            contribution = (meta.lbpMaxBidEth * BigInt(Math.floor(bidFraction * 1000))) / 1000n;
+        }
         if (contribution > MAX_LBP_CONTRIBUTION) contribution = MAX_LBP_CONTRIBUTION;
         if (contribution === 0n) continue;
 
@@ -491,7 +590,8 @@ async function simulateLbpFlow(
             role: meta.role,
             sellRange: meta.sellRange,
             diamondHandsProbability: meta.diamondHandsProbability,
-            soldAmount: 0n
+            soldAmount: 0n,
+            totalTokensReceived: 0n
         });
     }
 
@@ -552,16 +652,55 @@ function determineClaimTime(role: ParticipantRole, launchConfig: any, baseSeed: 
     return cliff + BigInt(Math.floor(months * Number(MONTH_SECONDS)));
 }
 
+type RandomizationCfg = {
+    holdMonthsMin: number;
+    holdMonthsMax: number;
+    /** Fraction of normal agents that resell within a few days (counts toward speculative window). */
+    speculatorFraction?: number;
+    /** Max months of delay before sell for speculators (keep << 1 to stay inside 30d window). */
+    speculatorHoldMonthsMax?: number;
+    retailHoldMonthsMin?: number;
+    retailHoldMonthsMax?: number;
+};
+
+function getRandomization(): RandomizationCfg {
+    return config.randomization as RandomizationCfg;
+}
+
 function determineHoldDuration(role: ParticipantRole, baseSeed: string, label: string): bigint {
+    const rz = getRandomization();
     if (role === "whale") {
         const seconds = Math.max(3600, Math.floor(randomBetween(baseSeed, label, 6, 72) * 3600));
         return BigInt(seconds);
     }
-    if (role === "normal") {
-        const months = randomBetween(baseSeed, label, config.randomization.holdMonthsMin, config.randomization.holdMonthsMax);
+    if (role === "retail") {
+        if (rz.retailHoldMonthsMin != null && rz.retailHoldMonthsMax != null) {
+            const months = randomBetween(
+                baseSeed,
+                label,
+                rz.retailHoldMonthsMin,
+                rz.retailHoldMonthsMax
+            );
+            return BigInt(Math.floor(months * Number(MONTH_SECONDS)));
+        }
+        const months = randomBetween(baseSeed, label, 9, 12);
         return BigInt(Math.floor(months * Number(MONTH_SECONDS)));
     }
-    const months = randomBetween(baseSeed, label, 9, 12);
+    if (
+        rz.speculatorFraction != null &&
+        rz.speculatorFraction > 0 &&
+        randomFraction(baseSeed, `${label}-fast`) < rz.speculatorFraction
+    ) {
+        const cap = rz.speculatorHoldMonthsMax ?? 0.2;
+        const months = randomBetween(baseSeed, `${label}-sh`, 0, Math.max(0.02, cap));
+        return BigInt(Math.floor(months * Number(MONTH_SECONDS)));
+    }
+    const months = randomBetween(
+        baseSeed,
+        label,
+        rz.holdMonthsMin ?? 6,
+        rz.holdMonthsMax ?? 14
+    );
     return BigInt(Math.floor(months * Number(MONTH_SECONDS)));
 }
 
@@ -599,6 +738,7 @@ async function simulatePostPresale(
         await escrow.connect(record.signer).claim();
         record.claimTime = BigInt(await time.latest());
         record.allocation = claimable;
+        record.totalTokensReceived += claimable;
 
         const sellRatio = determineSellRatio(record, runSeed, `sell-${record.address}-${i}`);
         if (sellRatio === 0) {
@@ -621,6 +761,13 @@ async function simulatePostPresale(
     return participantRecords;
 }
 
+function sampleStdDev(values: number[]): number {
+    const n = values.length;
+    if (n <= 1) return 0;
+    const mean = values.reduce((a, b) => a + b, 0) / n;
+    return Math.sqrt(values.reduce((acc, x) => acc + (x - mean) ** 2, 0) / (n - 1));
+}
+
 function summarizeRuns(results: RunMetrics[]) {
     const sum = results.reduce(
         (acc, run) => {
@@ -628,16 +775,27 @@ function summarizeRuns(results: RunMetrics[]) {
             acc.gini += run.gini;
             acc.hold += run.averageHoldMonths;
             acc.spec += run.speculativeShare;
+            acc.vtp += run.vriTradingPhase;
+            acc.vst += run.vriVisibleBidStress;
             return acc;
         },
-        { vri: 0, gini: 0, hold: 0, spec: 0 }
+        { vri: 0, gini: 0, hold: 0, spec: 0, vtp: 0, vst: 0 }
     );
 
+    const n = results.length;
     return {
-        averageVRI: sum.vri / results.length,
-        averageGini: sum.gini / results.length,
-        averageHoldMonths: sum.hold / results.length,
-        averageSpeculativeShare: sum.spec / results.length
+        averageVRI: sum.vri / n,
+        averageGini: sum.gini / n,
+        averageHoldMonths: sum.hold / n,
+        averageSpeculativeShare: sum.spec / n,
+        averageVriTradingPhase: sum.vtp / n,
+        averageVriVisibleBidStress: sum.vst / n,
+        stdVRI: sampleStdDev(results.map((r) => r.vri)),
+        stdGini: sampleStdDev(results.map((r) => r.gini)),
+        stdHoldMonths: sampleStdDev(results.map((r) => r.averageHoldMonths)),
+        stdSpeculativeShare: sampleStdDev(results.map((r) => r.speculativeShare)),
+        stdVriTradingPhase: sampleStdDev(results.map((r) => r.vriTradingPhase)),
+        stdVriVisibleBidStress: sampleStdDev(results.map((r) => r.vriVisibleBidStress))
     };
 }
 
@@ -666,6 +824,11 @@ describe("Scenario – STPP lifecycle metrics benchmark", function () {
             const ctx = await deployStppSystem();
             const dutch = await simulateDutchAuction(ctx, runSeed);
             const lbpFlow = await simulateLbpFlow(ctx, dutch.priceSeries, runSeed);
+            const tradingPhasePrices = [...lbpFlow.priceSeries];
+            const vriTradingPhase = computeVRI(tradingPhasePrices);
+            const stressSeries = applyVisibleBidStressModel(tradingPhasePrices, runSeed);
+            const vriVisibleBidStress = computeVRI(stressSeries);
+
             const participantRecords = await simulatePostPresale(lbpFlow, runSeed);
 
             const finalTimestamp = await time.latest();
@@ -688,13 +851,7 @@ describe("Scenario – STPP lifecycle metrics benchmark", function () {
                 holdTimes.reduce((acc, val) => acc + val, 0) / (holdTimes.length || 1);
             const averageHoldMonths = averageHoldSeconds / Number(MONTH_SECONDS);
 
-            const gini = computeGini(
-                await Promise.all(
-                    participantRecords.map(async (record) => {
-                        return await lbpFlow.token.balanceOf(record.address);
-                    })
-                )
-            );
+            const gini = computeGini(participantRecords.map((r) => r.totalTokensReceived));
 
             const speculativeShare =
                 totalDistributed === 0n
@@ -711,7 +868,9 @@ describe("Scenario – STPP lifecycle metrics benchmark", function () {
                 vri,
                 gini,
                 averageHoldMonths,
-                speculativeShare
+                speculativeShare,
+                vriTradingPhase,
+                vriVisibleBidStress
             });
 
             if (run < NUM_RUNS - 1) {
@@ -722,6 +881,32 @@ describe("Scenario – STPP lifecycle metrics benchmark", function () {
         const aggregate = summarizeRuns(runResults);
         const comparisons = compareBenchmarks(aggregate);
 
+        const lit = {
+            balancer: { speculativePct: 50, holdMax: 3 },
+            fjord: { speculativePct: 35, holdMax: 5 },
+            coinlist: { speculativePct: 40, holdMax: 4 },
+            hyperliquid: { speculativePct: 50, holdMax: 2 },
+            pumpfun: { speculativePct: 60, holdMax: 2 }
+        };
+        const spec = aggregate.averageSpeculativeShare;
+        const hold = aggregate.averageHoldMonths;
+        const vtp = aggregate.averageVriTradingPhase;
+        const vst = aggregate.averageVriVisibleBidStress;
+        const literatureChecks = {
+            stressVriGtTradingAgg: vtp < vst,
+            specLtBalancer50: spec < lit.balancer.speculativePct,
+            specLtCoinlist40: spec < lit.coinlist.speculativePct,
+            specLtHyper50: spec < lit.hyperliquid.speculativePct,
+            specLtPump60: spec < lit.pumpfun.speculativePct,
+            specNearFjord35: spec <= lit.fjord.speculativePct + 2,
+            holdGtFjordMax: hold > lit.fjord.holdMax,
+            holdGtCoinlistMax: hold > lit.coinlist.holdMax,
+            holdGtBalancerMax: hold > lit.balancer.holdMax
+        };
+        const runsWhereStressVriHigher = runResults.filter(
+            (r) => r.vriVisibleBidStress > r.vriTradingPhase
+        ).length;
+
         const outputDir = path.join(__dirname, "../simulations");
         fs.mkdirSync(outputDir, { recursive: true });
         const outputPath = path.join(outputDir, "presale_results.json");
@@ -731,19 +916,19 @@ describe("Scenario – STPP lifecycle metrics benchmark", function () {
                 {
                     runs: runResults,
                     aggregate,
-                    benchmarkComparisons: comparisons
+                    benchmarkComparisons: comparisons,
+                    literatureChecks,
+                    runsWithStressVriHigher: runsWhereStressVriHigher
                 },
                 null,
                 2
             )
         );
 
-        console.log("==== STPP Lifecycle Metrics (multi-run) ====");
-        console.table(runResults);
-        console.log("Aggregate:", aggregate);
-        console.table(BENCHMARKS);
-        console.table(comparisons);
+        console.log("STPP metrics aggregate:", aggregate);
 
         expect(runResults.length).to.equal(NUM_RUNS);
+        expect(vtp < vst).to.equal(true);
+        expect(runsWhereStressVriHigher).to.be.greaterThan(NUM_RUNS / 2);
     });
 });

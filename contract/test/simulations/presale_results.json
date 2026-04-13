@@ -2,126 +2,166 @@
   "runs": [
     {
       "run": 0,
-      "participants": 40,
-      "vri": 0.18187573242004879,
-      "gini": 0.6390801000490314,
-      "averageHoldMonths": 7.764892636684302,
-      "speculativeShare": 38.95411014574965
+      "participants": 48,
+      "vri": 0.04445629118188564,
+      "gini": 0.3959506504486272,
+      "averageHoldMonths": 4.122668354552469,
+      "speculativeShare": 12.773897138808971,
+      "vriTradingPhase": 0.04740287602820978,
+      "vriVisibleBidStress": 0.04919915531978118
     },
     {
       "run": 1,
-      "participants": 40,
-      "vri": 0.183083077444717,
-      "gini": 0.5873513610984165,
-      "averageHoldMonths": 8.23306920702754,
-      "speculativeShare": 34.07949273950749
+      "participants": 48,
+      "vri": 0.04469715275116823,
+      "gini": 0.3430890746221591,
+      "averageHoldMonths": 5.165469505529836,
+      "speculativeShare": 9.615641123177708,
+      "vriTradingPhase": 0.047402876028209764,
+      "vriVisibleBidStress": 0.05407651195278192
     },
     {
       "run": 2,
-      "participants": 40,
-      "vri": 0.17952563399645322,
-      "gini": 0.5429757890704074,
-      "averageHoldMonths": 8.05855274691358,
-      "speculativeShare": 34.348953762976016
+      "participants": 48,
+      "vri": 0.044697152751168236,
+      "gini": 0.3349793150220619,
+      "averageHoldMonths": 5.411522505144033,
+      "speculativeShare": 11.661139088962912,
+      "vriTradingPhase": 0.047402876028209785,
+      "vriVisibleBidStress": 0.0499513921156035
     },
     {
       "run": 3,
-      "participants": 40,
-      "vri": 0.18291566078890795,
-      "gini": 0.5839268918535185,
-      "averageHoldMonths": 8.146064546430487,
-      "speculativeShare": 35.68555549183351
+      "participants": 48,
+      "vri": 0.04469715275116823,
+      "gini": 0.3404500020943617,
+      "averageHoldMonths": 6.111602727944959,
+      "speculativeShare": 8.895763892115385,
+      "vriTradingPhase": 0.04740287602820979,
+      "vriVisibleBidStress": 0.05339196088517059
     },
     {
       "run": 4,
-      "participants": 40,
-      "vri": 0.18099565936255246,
-      "gini": 0.5870477169216322,
-      "averageHoldMonths": 7.551696502057613,
-      "speculativeShare": 35.660460978854566
+      "participants": 48,
+      "vri": 0.044857046188090464,
+      "gini": 0.3490261835610242,
+      "averageHoldMonths": 5.0014005192258235,
+      "speculativeShare": 9.831581310495473,
+      "vriTradingPhase": 0.047402876028209744,
+      "vriVisibleBidStress": 0.051977416133342856
     },
     {
       "run": 5,
-      "participants": 40,
-      "vri": 0.18264793835915244,
-      "gini": 0.59623589708325,
-      "averageHoldMonths": 7.822080938143005,
-      "speculativeShare": 37.27921167522861
+      "participants": 48,
+      "vri": 0.04469715275116823,
+      "gini": 0.3323566060933152,
+      "averageHoldMonths": 5.44160664223251,
+      "speculativeShare": 10.975267619297949,
+      "vriTradingPhase": 0.04740287602820976,
+      "vriVisibleBidStress": 0.05016057258409723
     },
     {
       "run": 6,
-      "participants": 40,
-      "vri": 0.18773759779278812,
-      "gini": 0.5143920769125663,
-      "averageHoldMonths": 7.874225401766709,
-      "speculativeShare": 37.38899377724825
+      "participants": 48,
+      "vri": 0.04477718352743169,
+      "gini": 0.34496881700524895,
+      "averageHoldMonths": 4.382370868698559,
+      "speculativeShare": 9.430907714225919,
+      "vriTradingPhase": 0.047402876028209785,
+      "vriVisibleBidStress": 0.05037952137827485
     },
     {
       "run": 7,
-      "participants": 40,
-      "vri": 0.18499430438779937,
-      "gini": 0.6280060681094148,
-      "averageHoldMonths": 8.05329606832211,
-      "speculativeShare": 37.657978253763574
+      "participants": 48,
+      "vri": 0.044536683854267275,
+      "gini": 0.3621256691611905,
+      "averageHoldMonths": 4.856262530542695,
+      "speculativeShare": 12.760805974363512,
+      "vriTradingPhase": 0.047402876028209785,
+      "vriVisibleBidStress": 0.05101740067407185
     },
     {
       "run": 8,
-      "participants": 40,
-      "vri": 0.1873033727596348,
-      "gini": 0.6170059669727437,
-      "averageHoldMonths": 7.547515633387009,
-      "speculativeShare": 36.76450402037961
+      "participants": 48,
+      "vri": 0.044697152751168236,
+      "gini": 0.3362137526131659,
+      "averageHoldMonths": 5.0187183722350825,
+      "speculativeShare": 11.455686418377871,
+      "vriTradingPhase": 0.047402876028209785,
+      "vriVisibleBidStress": 0.05425364418866986
     },
     {
       "run": 9,
-      "participants": 40,
-      "vri": 0.17937519907543983,
-      "gini": 0.6107983163925872,
-      "averageHoldMonths": 7.991804257856342,
-      "speculativeShare": 36.49965332165511
+      "participants": 48,
+      "vri": 0.04453668385426727,
+      "gini": 0.323836409363655,
+      "averageHoldMonths": 5.538463284465021,
+      "speculativeShare": 8.51872619497443,
+      "vriTradingPhase": 0.047402876028209785,
+      "vriVisibleBidStress": 0.051255932485109665
     }
   ],
   "aggregate": {
-    "averageVRI": 0.1830454176387494,
-    "averageGini": 0.5906820184463568,
-    "averageHoldMonths": 7.904319793858869,
-    "averageSpeculativeShare": 36.43189141671964
+    "averageVRI": 0.04466496523617836,
+    "averageGini": 0.3462996479984809,
+    "averageHoldMonths": 5.105008531057099,
+    "averageSpeculativeShare": 10.591941647480013,
+    "averageVriTradingPhase": 0.047402876028209785,
+    "averageVriVisibleBidStress": 0.05156635077169035,
+    "stdVRI": 0.00012070409383206998,
+    "stdGini": 0.02027120828503244,
+    "stdHoldMonths": 0.5753522720408469,
+    "stdSpeculativeShare": 1.5476014012244501,
+    "stdVriTradingPhase": 1.8358587643600646e-17,
+    "stdVriVisibleBidStress": 0.0017956264736083431
   },
   "benchmarkComparisons": [
     {
       "platform": "Balancer",
-      "deltaVRI": 0.1030454176387494,
-      "deltaGini": 0.1906820184463568,
-      "deltaHoldMonths": 5.904319793858869,
-      "deltaSpeculativeShare": -3.568108583280363
+      "deltaVRI": -0.03533503476382164,
+      "deltaGini": -0.1537003520015191,
+      "deltaHoldMonths": 3.1050085310570994,
+      "deltaSpeculativeShare": -39.40805835251999
     },
     {
       "platform": "Fjord",
-      "deltaVRI": 0.1130454176387494,
-      "deltaGini": 0.24068201844635684,
-      "deltaHoldMonths": 4.404319793858869,
-      "deltaSpeculativeShare": 1.4318914167196368
+      "deltaVRI": -0.025335034763821644,
+      "deltaGini": -0.053700352001519125,
+      "deltaHoldMonths": 1.6050085310570994,
+      "deltaSpeculativeShare": -24.408058352519987
     },
     {
       "platform": "CoinList",
-      "deltaVRI": 0.1230454176387494,
-      "deltaGini": 0.09068201844635682,
-      "deltaHoldMonths": 4.904319793858869,
-      "deltaSpeculativeShare": 6.431891416719637
+      "deltaVRI": -0.015335034763821635,
+      "deltaGini": -0.2537003520015191,
+      "deltaHoldMonths": 2.1050085310570994,
+      "deltaSpeculativeShare": -29.408058352519987
     },
     {
       "platform": "Hyperliquid",
-      "deltaVRI": 0.0930454176387494,
-      "deltaGini": -0.009317981553643162,
-      "deltaHoldMonths": 6.704319793858869,
-      "deltaSpeculativeShare": -13.568108583280363
+      "deltaVRI": -0.045335034763821634,
+      "deltaGini": -0.35370035200151906,
+      "deltaHoldMonths": 3.8550085310570994,
+      "deltaSpeculativeShare": -39.40805835251999
     },
     {
       "platform": "Pump.fun",
-      "deltaVRI": 0.06304541763874941,
-      "deltaGini": -0.059317981553643206,
-      "deltaHoldMonths": 7.704319793858869,
-      "deltaSpeculativeShare": -33.56810858328036
+      "deltaVRI": -0.07533503476382164,
+      "deltaGini": -0.35370035200151906,
+      "deltaHoldMonths": 3.905008531057099,
+      "deltaSpeculativeShare": -49.40805835251999
     }
-  ]
+  ],
+  "literatureChecks": {
+    "stressVriGtTradingAgg": true,
+    "specLtBalancer50": true,
+    "specLtCoinlist40": true,
+    "specLtHyper50": true,
+    "specLtPump60": true,
+    "specNearFjord35": true,
+    "holdGtFjordMax": true,
+    "holdGtCoinlistMax": true,
+    "holdGtBalancerMax": true
+  },
+  "runsWithStressVriHigher": 10
 }

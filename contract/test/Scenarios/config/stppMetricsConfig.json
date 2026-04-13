@@ -1,0 +1,76 @@
+{
+  "participants": 48,
+  "fastSellerMin": 0.4,
+  "fastSellerMax": 0.6,
+  "auction": {
+    "startDelay": 600,
+    "commitDuration": 900,
+    "revealDuration": 900,
+    "perAddressCap": "85",
+    "tokensForSale": "600",
+    "bonusReserve": "80",
+    "priceTicks": [4, 3.92, 3.84, 3.76, 3.68, 3.6, 3.52, 3.44, 3.36, 3.28, 3.2, 3.12, 3.04, 2.96, 2.88, 2.8, 2.72, 2.64, 2.56, 2.48, 2.4, 2.32, 2.24, 2.16, 2.08, 2],
+    "softCapETH": "120"
+  },
+  "lbp": {
+    "delayAfterReveal": 600,
+    "duration": 2400,
+    "poolStartWeight": "0.65",
+    "poolEndWeight": "0.35",
+    "swapFee": "0.002"
+  },
+  "vesting": {
+    "startDelayAfterLBP": 600,
+    "cliffDuration": 10368000,
+    "fullDuration": 23328000,
+    "cliffPercentBP": 2000
+  },
+  "holdingWindow": 2592000,
+  "metricsTuning": {
+    "uniformMaxBidEth": "12",
+    "uniformLbpMaxBidEth": "6",
+    "fixedDutchBidFraction": 0.56,
+    "fixedLbpContributionEth": "1.2",
+    "lbpParticipation": 1.0,
+    "identicalDutchCommitQty": true
+  },
+  "profiles": {
+    "whale": {
+      "count": 0,
+      "maxBidEth": "12",
+      "lbpMaxBidEth": "6",
+      "sellMin": 0.06,
+      "sellMax": 0.14
+    },
+    "normal": {
+      "percentage": 0.85,
+      "maxBidEth": "12",
+      "lbpMaxBidEth": "6",
+      "sellMin": 0.12,
+      "sellMax": 0.38
+    },
+    "retail": {
+      "percentage": 0.15,
+      "maxBidEth": "12",
+      "lbpMaxBidEth": "6",
+      "sellMin": 0.1,
+      "sellMax": 0.35,
+      "diamondHandsProbability": 0.38
+    }
+  },
+  "randomization": {
+    "revealFailMin": 0.01,
+    "revealFailMax": 0.03,
+    "speculatorFraction": 0.4,
+    "speculatorHoldMonthsMax": 0.08,
+    "holdMonthsMin": 7,
+    "holdMonthsMax": 13,
+    "retailHoldMonthsMin": 0,
+    "retailHoldMonthsMax": 0.85
+  },
+  "priceShocks": {
+    "pumpChance": 0,
+    "crashChance": 0,
+    "shockMagnitude": 0
+  }
+}

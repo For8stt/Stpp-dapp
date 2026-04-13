@@ -1332,4 +1332,91 @@ describe("PresaleManager", function () {
         });
     });
 
+    describe("Coverage — PresaleManager success paths", function () {
+        it("auctionWithdrawTreasury forwards auction ETH to recipient", async function () {
+            const { manager, auction, treasury, alice, config } = await loadFixture(deployFixture);
+            const commitQty = ethers.parseUnits("10", 18);
+            const priceTicks = await Promise.all([auction.priceTicks(0), auction.priceTicks(1)]);
+            const deposit = (commitQty * priceTicks[0]) / 10n**18n;
+            const nonce = ethers.hexlify(ethers.randomBytes(32));
+            const commitHash = ethers.keccak256(
+                ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256", "bytes32"], [0, commitQty, nonce])
+            );
+            await time.increaseTo(config.startTime + 1n);
+            await auction.connect(alice).commit(commitHash, [], { value: deposit });
+            await time.increaseTo(config.startTime + config.commitDuration + 1n);
+            await auction.connect(alice).reveal(0, commitQty, nonce, 0);
+            await time.increaseTo(config.startTime + config.commitDuration + config.revealDuration + 1n);
+            await manager.finalizeAuction(await auction.getAddress());
+            const before = await ethers.provider.getBalance(treasury.address);
+            await manager.auctionWithdrawTreasury(await auction.getAddress(), treasury.address);
+            expect(await ethers.provider.getBalance(treasury.address)).to.be.gt(before);
+        });
+
+        it("forwards LBP admin calls after launch", async function () {
+            const { manager, auction, treasury, alice, config } = await loadFixture(deployFixture);
+            const commitQty = ethers.parseUnits("10", 18);
+            const priceTicks = await Promise.all([auction.priceTicks(0), auction.priceTicks(1)]);
+            const deposit = (commitQty * priceTicks[0]) / 10n**18n;
+            const nonce = ethers.hexlify(ethers.randomBytes(32));
+            const commitHash = ethers.keccak256(
+                ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256", "bytes32"], [0, commitQty, nonce])
+            );
+            await time.increaseTo(config.startTime + 1n);
+            await auction.connect(alice).commit(commitHash, [], { value: deposit });
+            await time.increaseTo(config.startTime + config.commitDuration + 1n);
+            await auction.connect(alice).reveal(0, commitQty, nonce, 0);
+            await time.increaseTo(config.startTime + config.commitDuration + config.revealDuration + 1n);
+            await manager.finalizeAuction(await auction.getAddress());
+            const lbpStart = config.startTime + config.commitDuration + config.revealDuration + 600n;
+            const launchConfig = {
+                startTime: lbpStart,
+                endTime: config.startTime + config.commitDuration + config.revealDuration + 1_200n,
+                poolStartWeightToken: 70n * 10n ** 16n,
+                poolEndWeightToken: 30n * 10n ** 16n,
+                poolSwapFee: 3n * 10n ** 15n,
+                vestingStartTime: lbpStart,
+                vestingCliffDuration: 0n,
+                vestingFinalDuration: 0n,
+                vestingCliffPercentBP: 0n,
+                initialFeePreset: 1,
+                feeDecayDurationPreset: 1,
+                maxContributionPerAddress: 0n
+            };
+            await manager.launchLBP(await auction.getAddress(), launchConfig);
+            const rec = await manager.getAuctionRecord(await auction.getAddress());
+            const lbp = await ethers.getContractAt("SecureLBP", rec.lbp);
+            const oracleAddr = (await ethers.getSigners())[5].address;
+            await manager.setLbpTreasury(await auction.getAddress(), treasury.address);
+            await manager.setLbpMaxContribution(await auction.getAddress(), ethers.parseEther("4"));
+            await manager.setLbpOracleForAuction(await auction.getAddress(), oracleAddr);
+            expect(await lbp.treasury()).to.equal(treasury.address);
+            expect(await lbp.maxContributionPerAddress()).to.equal(ethers.parseEther("4"));
+        });
+
+        it("manager owner EOA may set bonus merkle and whitelist CID on the auction (static owner() path)", async function () {
+            const { manager, auction, owner, alice, config } = await loadFixture(deployFixture);
+            const commitQty = ethers.parseUnits("10", 18);
+            const priceTicks = await Promise.all([auction.priceTicks(0), auction.priceTicks(1)]);
+            const deposit = (commitQty * priceTicks[0]) / 10n**18n;
+            const nonce = ethers.hexlify(ethers.randomBytes(32));
+            const commitHash = ethers.keccak256(
+                ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256", "bytes32"], [0, commitQty, nonce])
+            );
+            await time.increaseTo(config.startTime + 1n);
+            await auction.connect(alice).commit(commitHash, [], { value: deposit });
+            await time.increaseTo(config.startTime + config.commitDuration + 1n);
+            await auction.connect(alice).reveal(0, commitQty, nonce, 0);
+            await time.increaseTo(config.startTime + config.commitDuration + config.revealDuration + 1n);
+            await manager.finalizeAuction(await auction.getAddress());
+
+            const root = ethers.keccak256(ethers.toUtf8Bytes("bonus-root"));
+            await auction.connect(owner).setBonusMerkleRoot(root, "ipfs://bonus");
+            expect(await auction.bonusMerkleRoot()).to.equal(root);
+
+            await auction.connect(owner).setWhitelistCID("ipfs://wl");
+            expect(await auction.whitelistCID()).to.equal("ipfs://wl");
+        });
+    });
+
 });
