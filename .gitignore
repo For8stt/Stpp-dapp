@@ -1,0 +1,14 @@
+# Local / secrets
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+
+# IDE (avoid committing machine-specific paths)
+.idea/
+
+# Solidity-coverage: coverage.json embeds absolute filesystem paths — never commit
+contract/coverage.json
+contract/coverage/
